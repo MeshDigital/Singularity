@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
 import queue
 import sys
 import threading
 import traceback
+from typing import Iterable
 
 from pydantic import ValidationError
 
@@ -24,7 +26,7 @@ from .pipeline import Backend, Cancelled, create_backend, plan_stages, run_task
 
 
 class Worker:
-    def __init__(self, backend: Backend, stdin: io.TextIOBase, stdout: io.TextIOBase) -> None:
+    def __init__(self, backend: Backend, stdin: Iterable[str], stdout: io.TextIOBase) -> None:
         self._backend = backend
         self._stdin = stdin
         self._stdout = stdout
@@ -102,6 +104,28 @@ class Worker:
                 self._cancelled.discard(cmd.task_id)
 
 
+def take_stdin() -> io.TextIOBase:
+    """Takes the command pipe for the worker and points the process's standard input at NUL.
+
+    On Windows the pipe is a synchronous handle, and Windows serialises every operation on it: while
+    the reader thread waits in ReadFile, any other call on that handle waits too. A DLL that brings
+    its own C runtime (numpy's and scipy's OpenBLAS, CUDA libraries, ...) queries the standard handles
+    while it loads, under the loader lock. With stdin still pointing at the pipe, that query queues
+    behind the pending read and the whole process hangs until the app happens to send another line.
+    The first real run hung this way in the tempo stage, importing scipy through librosa. Reading
+    from a private duplicate and leaving NUL as standard input keeps those queries off the pipe.
+    """
+    fd = sys.stdin.fileno()
+    if os.name == "nt":
+        private = os.dup(fd)
+        nul = os.open(os.devnull, os.O_RDONLY)
+        os.dup2(nul, fd)  # the CRT also re-points STD_INPUT_HANDLE for fd 0
+        os.close(nul)
+        fd = private
+    sys.stdin = open(os.devnull, encoding="utf-8")
+    return io.TextIOWrapper(io.FileIO(fd, "rb"), encoding="utf-8-sig")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m singularity_inference")
     parser.add_argument("--backend", choices=["ml", "fake"], default=None)
@@ -109,7 +133,6 @@ def main(argv: list[str] | None = None) -> int:
 
     protocol_out = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", newline="\n", line_buffering=True)
     sys.stdout = sys.stderr  # stray prints from libraries must not corrupt the protocol stream
-    stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8-sig")
 
     try:
         backend = create_backend(args.backend)
@@ -119,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         protocol_out.flush()
         return 2
 
-    return Worker(backend, stdin, protocol_out).run()
+    return Worker(backend, take_stdin(), protocol_out).run()
 
 
 if __name__ == "__main__":

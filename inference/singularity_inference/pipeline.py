@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import gc
 import os
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,8 @@ from . import schemas as s
 from .assemble import PitchTrack, build_lines
 from .lyrics import (
     AlignedWord,
+    lrc_offset,
+    shift_lines,
     LyricLineText,
     Window,
     line_windows_from_transcript,
@@ -28,6 +31,10 @@ from .lyrics import (
     windows_from_lrc,
     words_of,
 )
+
+
+# Below this, LRC line times don't describe this recording (another edit or arrangement).
+MIN_LRC_FIT = 0.5
 
 
 class Cancelled(Exception):
@@ -53,6 +60,9 @@ class Backend(Protocol):
     def separate(self, audio_path: Path, vocals: Path, instrumental: Path, ctx: "StageContext") -> None: ...
     def transcribe(self, vocals: Path, language: str | None, prompt: str | None, ctx: "StageContext") -> Transcript: ...
     def align(self, vocals: Path, windows: list[Window], language: str | None, ctx: "StageContext") -> list[list[AlignedWord]]: ...
+    def vocal_activity(self, vocals: Path) -> list[bool]:
+        """Whether the vocal stem is sung in each lyrics.ACTIVITY_FRAME_MS frame."""
+        ...
     def track_pitch(self, vocals: Path, ctx: "StageContext") -> PitchTrack: ...
     def estimate_tempo(self, instrumental: Path, ctx: "StageContext") -> float: ...
     def model_names(self) -> dict[str, str]: ...
@@ -79,11 +89,8 @@ class StageContext:
 def release_gpu_memory() -> None:
     """Drops the previous stage's model before the next loads (8 GB cards can't hold two)."""
     gc.collect()
-    try:
-        import torch
-    except ImportError:
-        return
-    if torch.cuda.is_available():
+    torch = sys.modules.get("torch")  # no stage imported torch: nothing on the GPU, and importing it costs ~1.5 s
+    if torch is not None and torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
 
@@ -138,12 +145,30 @@ def run_task(cmd: s.ProcessTrackCommand, backend: Backend, emit: Callable[[s.Con
 
     run_stage(s.PipelineStage.SEPARATION, separate)
 
+    def log(level: s.WorkerLogLevel, message: str) -> None:
+        emit(s.LogEvent(level=level, message=message, task_id=cmd.task_id))
+
     language = cmd.language
+    windows: list[Window] = []
+    reference: list[LyricLineText] | None = None
     if cmd.lyrics and cmd.lyrics_kind is s.LyricsKind.SYNCED:
         lines = parse_lrc(cmd.lyrics, duration)
-        windows = windows_from_lrc(lines, duration)
-    else:
-        reference = parse_plain(cmd.lyrics) if cmd.lyrics else []
+        sync = lrc_offset(lines, backend.vocal_activity(vocals))
+        if sync.fit >= MIN_LRC_FIT:
+            if sync.offset_ms:
+                log(s.WorkerLogLevel.INFO, f"LRC timing shifted by {sync.offset_ms:+} ms to match the vocals (fit {sync.fit:.2f})")
+            windows = windows_from_lrc(shift_lines(lines, sync.offset_ms), duration)
+        elif backend.missing_models([s.PipelineStage.TRANSCRIPTION]):
+            log(s.WorkerLogLevel.WARNING, f"LRC timing doesn't fit the vocals (fit {sync.fit:.2f}) and Whisper isn't downloaded; using it anyway")
+            windows = windows_from_lrc(shift_lines(lines, sync.offset_ms), duration)
+        else:
+            # Probably another arrangement of the song: keep the words, let Whisper find where they go.
+            log(s.WorkerLogLevel.WARNING, f"LRC timing doesn't fit the vocals (fit {sync.fit:.2f}); placing its lines by transcription")
+            reference = [LyricLineText(l.text) for l in lines]
+
+    if not windows:
+        if reference is None:
+            reference = parse_plain(cmd.lyrics) if cmd.lyrics else []
         prompt = whisper_prompt(reference) if reference else None
         transcript: Transcript = run_stage(
             s.PipelineStage.TRANSCRIPTION, lambda ctx: backend.transcribe(vocals, language, prompt, ctx))

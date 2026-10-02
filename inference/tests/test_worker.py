@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -119,4 +120,24 @@ def test_closing_stdin_exits_cleanly(tmp_path):
     w.proc.stdin.close()  # the app died
     events = w.until("task_finished")
     assert events[-1]["outcome"] == "cancelled"
+    assert w.close() == 0
+
+
+def test_loading_a_dll_mid_task_does_not_deadlock_with_the_stdin_reader(tmp_path):
+    # Regression: the first real run hung importing scipy (OpenBLAS) in the tempo stage, because
+    # OpenBLAS's DllMain waits on the C runtime lock that a CRT read() of stdin holds while blocked.
+    pytest.importorskip("scipy")
+    w = WorkerProcess(tmp_path, SINGULARITY_FAKE_IMPORT="scipy.linalg")
+    w.next_event()
+    w.send(process(tmp_path, "dll"))
+
+    result = {}
+    reader = threading.Thread(target=lambda: result.update(done=w.until("task_finished")[-1]), daemon=True)
+    reader.start()
+    reader.join(timeout=60)
+    if reader.is_alive():
+        w.proc.kill()
+        pytest.fail("worker deadlocked loading scipy while the stdin reader was blocked")
+    assert result["done"]["outcome"] == "succeeded"
+    w.send(s.ShutdownCommand())
     assert w.close() == 0

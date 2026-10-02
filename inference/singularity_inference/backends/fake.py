@@ -4,17 +4,19 @@ end to end without models or a GPU. Selected with SINGULARITY_INFERENCE_BACKEND=
 Test knobs (environment):
   SINGULARITY_FAKE_STAGE_DELAY_MS   time each stage takes; cancellation is checked every 10 ms
   SINGULARITY_FAKE_IGNORE_CANCEL=1  stages sleep without checking, like a long CUDA call that can't be interrupted
+  SINGULARITY_FAKE_IMPORT=<module>  imported during separation, like a real stage loading its libraries mid-task
 """
 
 from __future__ import annotations
 
+import importlib
 import os
 import time
 from pathlib import Path
 
 from .. import schemas as s
 from ..assemble import PitchTrack
-from ..lyrics import AlignedWord, Window, distribute_evenly
+from ..lyrics import ACTIVITY_FRAME_MS, AlignedWord, Window, distribute_evenly
 from ..pipeline import StageContext, Transcript
 
 FAKE_DURATION_MS = 60_000
@@ -43,6 +45,8 @@ class FakeBackend:
         return FAKE_DURATION_MS
 
     def separate(self, audio_path: Path, vocals: Path, instrumental: Path, ctx: StageContext) -> None:
+        if module := os.environ.get("SINGULARITY_FAKE_IMPORT"):
+            importlib.import_module(module)
         self._work(ctx)
         vocals.write_bytes(b"fake vocals")
         instrumental.write_bytes(b"fake instrumental")
@@ -60,6 +64,9 @@ class FakeBackend:
     def align(self, vocals: Path, windows: list[Window], language: str | None, ctx: StageContext) -> list[list[AlignedWord]]:
         self._work(ctx)
         return [distribute_evenly(w.words, w.start_ms, w.end_ms, 0.9) for w in windows]
+
+    def vocal_activity(self, vocals: Path) -> list[bool]:
+        return [True] * (FAKE_DURATION_MS // ACTIVITY_FRAME_MS)
 
     def track_pitch(self, vocals: Path, ctx: StageContext) -> PitchTrack:
         self._work(ctx)

@@ -144,3 +144,30 @@ def test_default_model_dir_is_local_appdata(monkeypatch, tmp_path):
     monkeypatch.delenv("SINGULARITY_MODEL_DIR", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     assert model_dir() == tmp_path / "Singularity" / "models"
+
+
+class ShiftedVocals(FakeBackend):
+    """Vocals sung 15 s later than the LRC says, as with a longer album intro."""
+
+    def vocal_activity(self, vocals):
+        return [10 * 16 <= i < 10 * 19 or 10 * 25 <= i < 10 * 28 for i in range(600)]
+
+
+def test_lrc_is_shifted_to_match_the_vocals(tmp_path):
+    lrc = "[00:01.00] Is this the real life\n[00:04.00]\n[00:10.00] fantasy\n[00:13.00]"
+    result, events = run(cmd(tmp_path, lyrics=lrc, lyrics_kind=s.LyricsKind.SYNCED, language="en"), ShiftedVocals())
+    assert result.lines[0].syllables[0].start_ms >= 15_000 - 300  # window padding
+    assert any(isinstance(e, s.LogEvent) and "+15000 ms" in e.message for e in events)
+    assert STAGES.TRANSCRIPTION not in [e.stage for e in events if isinstance(e, s.StageStartedEvent)]
+
+
+class SilentVocals(FakeBackend):
+    def vocal_activity(self, vocals):
+        return [i % 50 == 0 for i in range(600)]  # nothing lines up with the LRC
+
+
+def test_lrc_that_fits_nowhere_falls_back_to_transcription(tmp_path):
+    lrc = "[00:01.00] la la\n[00:04.00] na na"
+    result, events = run(cmd(tmp_path, lyrics=lrc, lyrics_kind=s.LyricsKind.SYNCED, language="en"), SilentVocals())
+    assert STAGES.TRANSCRIPTION in [e.stage for e in events if isinstance(e, s.StageStartedEvent)]
+    assert [[x.text for x in l.syllables] for l in result.lines] == [["la", "la"], ["na", "na"]]

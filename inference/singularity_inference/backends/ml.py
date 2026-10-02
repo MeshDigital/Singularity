@@ -11,11 +11,12 @@ from pathlib import Path
 from .. import audio_io
 from .. import schemas as s
 from ..assemble import PitchTrack
-from ..lyrics import AlignedWord, Window, distribute_evenly, fill_unaligned
+from ..lyrics import ACTIVITY_FRAME_MS, AlignedWord, Window, distribute_evenly, fill_unaligned
 from ..models import configure_cache_env, missing_models, model_dir, model_names, whisper_model_name
 from ..pipeline import StageContext, Transcript
 
 ALIGN_SAMPLE_RATE = 16_000
+VOCAL_ACTIVITY_RANGE_DB = 12
 
 # Which model each stage needs, for the up-front "are the weights downloaded?" check.
 _STAGE_MODELS = {
@@ -138,6 +139,17 @@ class MlBackend:
             out.append(fill_unaligned(window.words, aligned, window.start_ms, window.end_ms))
         del model
         return out
+
+    def vocal_activity(self, vocals: Path) -> list[bool]:
+        import numpy as np
+
+        frame = ALIGN_SAMPLE_RATE * ACTIVITY_FRAME_MS // 1000
+        audio = audio_io.load(vocals, ALIGN_SAMPLE_RATE)
+        frames = audio[: len(audio) // frame * frame].reshape(-1, frame)
+        db = 20 * np.log10(np.sqrt((frames ** 2).mean(axis=1)) + 1e-9)
+        # Relative to the loud end of the stem: instrument bleed sits well below sung phrases.
+        threshold = np.percentile(db, 99) - VOCAL_ACTIVITY_RANGE_DB
+        return [bool(x) for x in db > threshold]
 
     def track_pitch(self, vocals: Path, ctx: StageContext) -> PitchTrack:
         from swift_f0 import SwiftF0

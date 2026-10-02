@@ -1,6 +1,11 @@
+import pytest
+
 from singularity_inference.lyrics import (
     AlignedWord,
+    LrcSync,
     LyricLineText,
+    lrc_offset,
+    shift_lines,
     Word,
     distribute_evenly,
     fill_unaligned,
@@ -102,3 +107,34 @@ def test_transcript_windows_with_no_matches_split_the_whole_song():
     lines = [LyricLineText("a"), LyricLineText("b")]
     windows = line_windows_from_transcript(lines, [], duration_ms=1000, pad_ms=0)
     assert [(w.start_ms, w.end_ms) for w in windows] == [(0, 500), (500, 1000)]
+
+
+def _activity(spans_s, total_s=120):
+    """100 ms frames, sung inside the given (start, end) second spans."""
+    return [any(a <= i / 10 < b for a, b in spans_s) for i in range(total_s * 10)]
+
+
+def test_lrc_offset_finds_a_longer_intro():
+    # The LRC was timed for a release whose intro is 15 s shorter than this recording's.
+    lines = parse_lrc("[00:10.00] one\n[00:14.00]\n[00:20.00] two\n[00:23.00]\n[00:40.00] three\n[00:45.00]")
+    sung = _activity([(25, 29), (35, 38), (55, 60)])
+    sync = lrc_offset(lines, sung)
+    assert sync.offset_ms == 15_000
+    assert sync.fit == pytest.approx(1.0)
+    assert lrc_offset(lines, sung, max_shift_ms=0).fit < 0.2
+
+
+def test_lrc_offset_prefers_no_shift_when_it_already_fits():
+    lines = parse_lrc("[00:05.00] a\n[00:08.00]")
+    assert lrc_offset(lines, _activity([(5, 8)])) == LrcSync(0, 1.0)
+    assert lrc_offset(lines, [True] * 600).offset_ms == 0  # always sung: every shift ties
+
+
+def test_lrc_offset_with_nothing_to_compare():
+    assert lrc_offset([], [True]) == LrcSync(0, 0.0)
+    assert lrc_offset(parse_lrc("[00:01.00] a"), []) == LrcSync(0, 0.0)
+
+
+def test_shift_lines_clamps_at_zero():
+    shifted = shift_lines([LyricLineText("a", 1000, 3000)], -2000)
+    assert (shifted[0].start_ms, shifted[0].end_ms) == (0, 1000)
