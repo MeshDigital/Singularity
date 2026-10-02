@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="SLSKDONET.Views.Avalonia.Dialogs.ExportPlaylistChoiceDialog"
+        x:Class="Singularity.Views.Avalonia.Dialogs.ExportPlaylistChoiceDialog"
         Title="Export Playlist" Width="440" Height="260"
         WindowStartupLocation="CenterOwner"
         CanResize="False"

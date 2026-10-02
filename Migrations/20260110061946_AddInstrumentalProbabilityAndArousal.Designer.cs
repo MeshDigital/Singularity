@@ -4,11 +4,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using SLSKDONET.Data;
+using Singularity.Data;
 
 #nullable disable
 
-namespace SLSKDONET.Migrations
+namespace Singularity.Migrations
 {
     [DbContext(typeof(AppDbContext))]
     [Migration("20260110061946_AddInstrumentalProbabilityAndArousal")]
@@ -20,7 +20,7 @@ namespace SLSKDONET.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.0");
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.AudioAnalysisEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.AudioAnalysisEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -100,7 +100,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("audio_analysis");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.AudioFeaturesEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.AudioFeaturesEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -273,7 +273,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("audio_features");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.BlacklistedItemEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.BlacklistedItemEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -303,7 +303,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("BlacklistedItems");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.EnrichmentTaskEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.EnrichmentTaskEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -342,7 +342,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("EnrichmentTasks");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.ForensicLogEntry", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.ForensicLogEntry", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -385,7 +385,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("ForensicLogs");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.GenreCueTemplateEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.GenreCueTemplateEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -524,7 +524,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("GenreCueTemplates");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.LibraryActionLogEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.LibraryActionLogEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -558,7 +558,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("LibraryActionLogs");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.LibraryFolderEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.LibraryFolderEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -585,7 +585,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("LibraryFolders");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.PendingOrchestrationEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.PendingOrchestrationEntity", b =>
                 {
                     b.Property<string>("TrackUniqueHash")
                         .HasColumnType("TEXT");
@@ -598,7 +598,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("PendingOrchestrations");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.SpotifyMetadataCacheEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.SpotifyMetadataCacheEntity", b =>
                 {
                     b.Property<string>("SpotifyId")
                         .HasColumnType("TEXT");
@@ -618,7 +618,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("SpotifyMetadataCache");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.StyleDefinitionEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.StyleDefinitionEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -649,7 +649,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("style_definitions");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.TrackPhraseEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.TrackPhraseEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -685,7 +685,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("TrackPhrases");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.TrackTechnicalEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.TrackTechnicalEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -747,7 +747,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("TechnicalDetails");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.LibraryEntryEntity", b =>
+            modelBuilder.Entity("Singularity.Data.LibraryEntryEntity", b =>
                 {
                     b.Property<string>("UniqueHash")
                         .HasColumnType("TEXT");
@@ -906,7 +906,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("LibraryEntries");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.LibraryHealthEntity", b =>
+            modelBuilder.Entity("Singularity.Data.LibraryHealthEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -950,7 +950,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("LibraryHealth");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.PlaylistActivityLogEntity", b =>
+            modelBuilder.Entity("Singularity.Data.PlaylistActivityLogEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -977,7 +977,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("ActivityLogs");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.PlaylistJobEntity", b =>
+            modelBuilder.Entity("Singularity.Data.PlaylistJobEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1048,7 +1048,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("Projects", (string)null);
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.PlaylistTrackEntity", b =>
+            modelBuilder.Entity("Singularity.Data.PlaylistTrackEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1252,7 +1252,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("PlaylistTracks");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.QueueItemEntity", b =>
+            modelBuilder.Entity("Singularity.Data.QueueItemEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1275,7 +1275,7 @@ namespace SLSKDONET.Migrations
                     b.ToTable("QueueItems");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.TrackEntity", b =>
+            modelBuilder.Entity("Singularity.Data.TrackEntity", b =>
                 {
                     b.Property<string>("GlobalId")
                         .HasColumnType("TEXT");
@@ -1455,29 +1455,29 @@ namespace SLSKDONET.Migrations
                     b.ToTable("Tracks");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.AudioFeaturesEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.AudioFeaturesEntity", b =>
                 {
-                    b.HasOne("SLSKDONET.Data.LibraryEntryEntity", null)
+                    b.HasOne("Singularity.Data.LibraryEntryEntity", null)
                         .WithOne("AudioFeatures")
-                        .HasForeignKey("SLSKDONET.Data.Entities.AudioFeaturesEntity", "TrackUniqueHash")
+                        .HasForeignKey("Singularity.Data.Entities.AudioFeaturesEntity", "TrackUniqueHash")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.Entities.TrackTechnicalEntity", b =>
+            modelBuilder.Entity("Singularity.Data.Entities.TrackTechnicalEntity", b =>
                 {
-                    b.HasOne("SLSKDONET.Data.PlaylistTrackEntity", "PlaylistTrack")
+                    b.HasOne("Singularity.Data.PlaylistTrackEntity", "PlaylistTrack")
                         .WithOne("TechnicalDetails")
-                        .HasForeignKey("SLSKDONET.Data.Entities.TrackTechnicalEntity", "PlaylistTrackId")
+                        .HasForeignKey("Singularity.Data.Entities.TrackTechnicalEntity", "PlaylistTrackId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("PlaylistTrack");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.PlaylistActivityLogEntity", b =>
+            modelBuilder.Entity("Singularity.Data.PlaylistActivityLogEntity", b =>
                 {
-                    b.HasOne("SLSKDONET.Data.PlaylistJobEntity", "Job")
+                    b.HasOne("Singularity.Data.PlaylistJobEntity", "Job")
                         .WithMany()
                         .HasForeignKey("PlaylistId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1486,15 +1486,15 @@ namespace SLSKDONET.Migrations
                     b.Navigation("Job");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.PlaylistTrackEntity", b =>
+            modelBuilder.Entity("Singularity.Data.PlaylistTrackEntity", b =>
                 {
-                    b.HasOne("SLSKDONET.Data.PlaylistJobEntity", "Job")
+                    b.HasOne("Singularity.Data.PlaylistJobEntity", "Job")
                         .WithMany("Tracks")
                         .HasForeignKey("PlaylistId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("SLSKDONET.Data.Entities.AudioFeaturesEntity", "AudioFeatures")
+                    b.HasOne("Singularity.Data.Entities.AudioFeaturesEntity", "AudioFeatures")
                         .WithMany()
                         .HasForeignKey("TrackUniqueHash")
                         .HasPrincipalKey("TrackUniqueHash");
@@ -1504,17 +1504,17 @@ namespace SLSKDONET.Migrations
                     b.Navigation("Job");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.LibraryEntryEntity", b =>
+            modelBuilder.Entity("Singularity.Data.LibraryEntryEntity", b =>
                 {
                     b.Navigation("AudioFeatures");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.PlaylistJobEntity", b =>
+            modelBuilder.Entity("Singularity.Data.PlaylistJobEntity", b =>
                 {
                     b.Navigation("Tracks");
                 });
 
-            modelBuilder.Entity("SLSKDONET.Data.PlaylistTrackEntity", b =>
+            modelBuilder.Entity("Singularity.Data.PlaylistTrackEntity", b =>
                 {
                     b.Navigation("TechnicalDetails");
                 });

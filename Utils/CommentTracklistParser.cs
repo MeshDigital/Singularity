@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Utils;
+namespace Singularity.Utils;
 
 /// <summary>
 /// Utility for parsing tracklists from YouTube comments, SoundCloud descriptions, etc.

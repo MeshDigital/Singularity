@@ -1,8 +1,8 @@
 using Avalonia.Media;
 using ReactiveUI;
-using SLSKDONET.Data.Entities;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public class StyleFilterItem : ReactiveObject
 {

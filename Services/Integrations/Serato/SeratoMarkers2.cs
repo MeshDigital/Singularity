@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace SLSKDONET.Services.Integrations.Serato;
+namespace Singularity.Services.Integrations.Serato;
 
 /// <summary>One entry of a Serato Markers2 tag ("CUE", "LOOP", "COLOR", "BPMLOCK", "FLIP", …).
 /// Entries ORBIT doesn't edit are carried through byte for byte.</summary>

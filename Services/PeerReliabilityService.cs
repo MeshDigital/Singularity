@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using SLSKDONET.Data.Entities;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public sealed class PeerReliabilityService
 {

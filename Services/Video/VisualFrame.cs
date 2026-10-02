@@ -1,6 +1,6 @@
 using SkiaSharp;
 
-namespace SLSKDONET.Services.Video;
+namespace Singularity.Services.Video;
 
 /// <summary>
 /// Per-frame audio feature snapshot consumed by <see cref="VisualEngine"/>.

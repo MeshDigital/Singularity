@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// States in the deterministic connection lifecycle state machine.

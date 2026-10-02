@@ -3,7 +3,7 @@ using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 
-namespace SLSKDONET.Converters;
+namespace Singularity.Converters;
 
 /// <summary>
 /// Converts energy/arousal value (0-1 or 1-9) to a color gradient.

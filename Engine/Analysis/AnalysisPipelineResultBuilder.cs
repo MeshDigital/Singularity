@@ -2,15 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
+using Singularity.Data.Entities;
+using Singularity.Models;
 
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// Reconstructs an <see cref="AnalysisPipelineResult"/> from a persisted <see cref="AudioFeaturesEntity"/>
-/// (the fast path — no audio re-decode required). Shared by <see cref="SLSKDONET.ViewModels.CueForgeViewModel"/>'s
-/// manual Auto-Generate button and <see cref="SLSKDONET.Services.AnalyzeTrackStructureJob"/>'s automatic
+/// (the fast path — no audio re-decode required). Shared by <see cref="Singularity.ViewModels.CueForgeViewModel"/>'s
+/// manual Auto-Generate button and <see cref="Singularity.Services.AnalyzeTrackStructureJob"/>'s automatic
 /// background pipeline, so both routes score cues against the exact same signals.
 /// </summary>
 public static class AnalysisPipelineResultBuilder

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace SLSKDONET.Services.Inputs;
+namespace Singularity.Services.Inputs;
 
 /// <summary>
 /// Provides advanced token matching logic for the Search Gatekeeper.

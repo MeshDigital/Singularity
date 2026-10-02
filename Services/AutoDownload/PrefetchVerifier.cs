@@ -4,12 +4,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Configuration;
+using Singularity.Data;
+using Singularity.Models;
+using Singularity.Services;
 
-namespace SLSKDONET.Services.AutoDownload;
+namespace Singularity.Services.AutoDownload;
 
 /// <summary>
 /// PrefetchVerifier — Downloads to staging, verifies, and fingerprints automatically downloaded tracks.
@@ -165,7 +165,7 @@ public class PrefetchVerifier
     {
         try
         {
-            bool formatValid = await SLSKDONET.Services.IO.FileVerificationHelper
+            bool formatValid = await Singularity.Services.IO.FileVerificationHelper
                 .VerifyAudioFormatAsync(localFilePath)
                 .ConfigureAwait(false);
 
@@ -186,7 +186,7 @@ public class PrefetchVerifier
 
             if (string.Equals(Path.GetExtension(localFilePath), ".mp3", StringComparison.OrdinalIgnoreCase))
             {
-                var (frameCount, mp3Error) = await SLSKDONET.Services.IO.FileVerificationHelper
+                var (frameCount, mp3Error) = await Singularity.Services.IO.FileVerificationHelper
                     .VerifyMp3FramesAsync(localFilePath)
                     .ConfigureAwait(false);
 

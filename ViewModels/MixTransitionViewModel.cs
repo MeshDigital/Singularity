@@ -6,16 +6,16 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Models.Timeline;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Audio;
-using SLSKDONET.Services.Playlist;
-using SLSKDONET.Services.Repositories;
-using SLSKDONET.Services.Timeline;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Models.Timeline;
+using Singularity.Services;
+using Singularity.Services.Audio;
+using Singularity.Services.Playlist;
+using Singularity.Services.Repositories;
+using Singularity.Services.Timeline;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Backs both the "Mix" CONTEXT-sidepanel tab (preset picker, bar-length selector, Custom-mode
@@ -32,7 +32,7 @@ public class MixTransitionViewModel : ReactiveObject, IDisposable
     private readonly ArtworkCacheService _artworkCache;
     private readonly ITransitionRepository _transitionRepository;
     private readonly ITransitionPreviewPlayer _previewPlayer;
-    private readonly SLSKDONET.Services.Repositories.ITrackRepository _trackRepository;
+    private readonly Singularity.Services.Repositories.ITrackRepository _trackRepository;
     private readonly ICuePointService _cuePointService;
     // Resolved lazily via IServiceProvider, not constructor-injected: CueForgeViewModel itself
     // depends on PlayerViewModel, which depends on this ViewModel (MixTransitionViewModel is part
@@ -47,8 +47,8 @@ public class MixTransitionViewModel : ReactiveObject, IDisposable
     // rendered crossfade between both tracks, not either one alone. Nullable/optional (matching
     // FlowBuilderViewModel's own trailing-optional injection of the same service) so this never
     // becomes a hard DI dependency for a "nice to have" audition feature.
-    private readonly SLSKDONET.Services.Audio.ILibraryPreviewPlayer? _libraryPreviewPlayer;
-    private static readonly SLSKDONET.Engine.Transitions.TransitionEngine _pointSuggestionEngine = new();
+    private readonly Singularity.Services.Audio.ILibraryPreviewPlayer? _libraryPreviewPlayer;
+    private static readonly Singularity.Engine.Transitions.TransitionEngine _pointSuggestionEngine = new();
 
     public MixTransitionViewModel(
         ILogger<MixTransitionViewModel> logger,
@@ -57,10 +57,10 @@ public class MixTransitionViewModel : ReactiveObject, IDisposable
         ArtworkCacheService artworkCache,
         ITransitionRepository transitionRepository,
         ITransitionPreviewPlayer previewPlayer,
-        SLSKDONET.Services.Repositories.ITrackRepository trackRepository,
+        Singularity.Services.Repositories.ITrackRepository trackRepository,
         ICuePointService cuePointService,
         IServiceProvider serviceProvider,
-        SLSKDONET.Services.Audio.ILibraryPreviewPlayer? libraryPreviewPlayer = null)
+        Singularity.Services.Audio.ILibraryPreviewPlayer? libraryPreviewPlayer = null)
     {
         _logger = logger;
         _libraryService = libraryService;
@@ -95,8 +95,8 @@ public class MixTransitionViewModel : ReactiveObject, IDisposable
         }
 
         // Cue template — one app-wide choice, shared by both decks, Cue Forge and cue generation.
-        var configManager = (SLSKDONET.Configuration.ConfigManager?)serviceProvider.GetService(typeof(SLSKDONET.Configuration.ConfigManager));
-        var mode = configManager?.GetCurrent().DropCountdownMode ?? SLSKDONET.Engine.Cueing.DropCountdownCues.Auto;
+        var configManager = (Singularity.Configuration.ConfigManager?)serviceProvider.GetService(typeof(Singularity.Configuration.ConfigManager));
+        var mode = configManager?.GetCurrent().DropCountdownMode ?? Singularity.Engine.Cueing.DropCountdownCues.Auto;
         var customBars = configManager?.GetCurrent().CustomCountdownBars;
         foreach (var editor in new[] { OutgoingEditor, IncomingEditor })
         {
@@ -386,7 +386,7 @@ public class MixTransitionViewModel : ReactiveObject, IDisposable
 
     // Structure of both decks (sections, drops, vocals), for the planned presets. Null until
     // loaded or when a track isn't analysed — then those presets fall back to the old suggestion.
-    private SLSKDONET.Engine.Transitions.TrackStructure? _outStructure, _inStructure;
+    private Singularity.Engine.Transitions.TrackStructure? _outStructure, _inStructure;
 
     private string _selectedPreset = "Auto";
     public string SelectedPreset
@@ -431,7 +431,7 @@ public class MixTransitionViewModel : ReactiveObject, IDisposable
 
     private double _sourceTriggerSeconds;
     /// <summary>Where in the outgoing track (seconds) the mix-out begins — from
-    /// <see cref="SLSKDONET.Engine.Transitions.TransitionEngine.OptimizeTransition"/>'s
+    /// <see cref="Singularity.Engine.Transitions.TransitionEngine.OptimizeTransition"/>'s
     /// cue/tempo/key/vocal-aware suggestion, or a saved override.</summary>
     public double SourceTriggerSeconds
     {
@@ -708,7 +708,7 @@ public class MixTransitionViewModel : ReactiveObject, IDisposable
         _customEqHighCrossoverHz = saved?.EqHighCrossoverHz;
         // LoopEnabled isn't its own saved field — Type=="DoubleDrop" IS the saved "loop was on"
         // signal, same as every other preset here.
-        _customLoopEnabled = saved?.Type == SLSKDONET.Models.Timeline.TransitionType.DoubleDrop;
+        _customLoopEnabled = saved?.Type == Singularity.Models.Timeline.TransitionType.DoubleDrop;
         _customLoopBars = saved?.LoopBars;
         _customLoopRepeats = saved?.LoopRepeats;
         this.RaisePropertyChanged(nameof(CustomWaveDuckDepth));
@@ -730,7 +730,7 @@ public class MixTransitionViewModel : ReactiveObject, IDisposable
         this.RaisePropertyChanged(nameof(NudgeSeconds));
 
         _outStructure = _inStructure = null;
-        if (_serviceProvider.GetService(typeof(SLSKDONET.Services.Transitions.TransitionPlanService)) is SLSKDONET.Services.Transitions.TransitionPlanService planService)
+        if (_serviceProvider.GetService(typeof(Singularity.Services.Transitions.TransitionPlanService)) is Singularity.Services.Transitions.TransitionPlanService planService)
         {
             try
             {
@@ -817,16 +817,16 @@ public class MixTransitionViewModel : ReactiveObject, IDisposable
         }
     }
 
-    private async Task<(bool Ok, string Message)> GenerateCuesForDeckAsync(string hash, string? filePath, SLSKDONET.Engine.Analysis.CueDetr.CueSourceMode mode)
+    private async Task<(bool Ok, string Message)> GenerateCuesForDeckAsync(string hash, string? filePath, Singularity.Engine.Analysis.CueDetr.CueSourceMode mode)
     {
-        if (_serviceProvider.GetService(typeof(SLSKDONET.Services.AudioAnalysis.CueDetrCueService)) is not SLSKDONET.Services.AudioAnalysis.CueDetrCueService service)
+        if (_serviceProvider.GetService(typeof(Singularity.Services.AudioAnalysis.CueDetrCueService)) is not Singularity.Services.AudioAnalysis.CueDetrCueService service)
             return (false, "Cue generation isn't available");
         var r = await Task.Run(() => service.RegenerateAsync(hash, filePath, mode));
         if (!r.Success) return (false, $"✗ {r.Error}");
         return (true, mode switch
         {
-            SLSKDONET.Engine.Analysis.CueDetr.CueSourceMode.Compare => $"✓ {r.CueCount} cues · {r.Agreed} confirmed by CUE-DETR (✓AI), its other points in cyan",
-            SLSKDONET.Engine.Analysis.CueDetr.CueSourceMode.AiOnly => $"✓ {r.CueCount} CUE-DETR cues (cyan)",
+            Singularity.Engine.Analysis.CueDetr.CueSourceMode.Compare => $"✓ {r.CueCount} cues · {r.Agreed} confirmed by CUE-DETR (✓AI), its other points in cyan",
+            Singularity.Engine.Analysis.CueDetr.CueSourceMode.AiOnly => $"✓ {r.CueCount} CUE-DETR cues (cyan)",
             _ => $"✓ Generated {r.CueCount} cues",
         });
     }
@@ -837,7 +837,7 @@ public class MixTransitionViewModel : ReactiveObject, IDisposable
     {
         string? outHash = OutgoingEditor.TrackHash, inHash = IncomingEditor.TrackHash;
         if (outHash == null || inHash == null) return;
-        if (_serviceProvider.GetService(typeof(SLSKDONET.Services.Transitions.TransitionPlanService)) is not SLSKDONET.Services.Transitions.TransitionPlanService planService) return;
+        if (_serviceProvider.GetService(typeof(Singularity.Services.Transitions.TransitionPlanService)) is not Singularity.Services.Transitions.TransitionPlanService planService) return;
         try
         {
             var outStructure = await planService.LoadStructureAsync(outHash);
@@ -864,10 +864,10 @@ public class MixTransitionViewModel : ReactiveObject, IDisposable
     private bool ApplyStructurePlan(string presetName)
     {
         if (_outStructure == null || _inStructure == null) return false;
-        var kind = SLSKDONET.Engine.Transitions.TransitionPlanner.KindFromPresetName(presetName);
+        var kind = Singularity.Engine.Transitions.TransitionPlanner.KindFromPresetName(presetName);
         var plan = kind is { } k
-            ? SLSKDONET.Engine.Transitions.TransitionPlanner.PlanKind(_outStructure, _inStructure, k)
-            : SLSKDONET.Engine.Transitions.TransitionPlanner.Plan(_outStructure, _inStructure, _pairScore?.CombinedScore ?? 50);
+            ? Singularity.Engine.Transitions.TransitionPlanner.PlanKind(_outStructure, _inStructure, k)
+            : Singularity.Engine.Transitions.TransitionPlanner.Plan(_outStructure, _inStructure, _pairScore?.CombinedScore ?? 50);
         if (plan == null)
         {
             TransitionPointReasoning = $"{presetName} doesn't fit these tracks (needs a drop with enough build-up before it).";
@@ -940,7 +940,7 @@ public class MixTransitionViewModel : ReactiveObject, IDisposable
             StartSample = 0,
             EndSample = samplePoints,
             Type = LiveModel.Type.ToAutomationType(),
-            Curve = SLSKDONET.Services.Audio.TransitionCurve.SCurve,
+            Curve = Singularity.Services.Audio.TransitionCurve.SCurve,
             WaveDuckDepth = LiveModel.WaveDuckDepth,
             EchoDecayFactor = LiveModel.EchoDecayFactor,
             EqConfig = new EqBandSwapConfig

@@ -12,14 +12,14 @@ using DynamicData;
 using DynamicData.Binding;
 using ReactiveUI;
 using Microsoft.EntityFrameworkCore;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Configuration;
-using SLSKDONET.ViewModels;
-using SLSKDONET.Views;
+using Singularity.Data;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Configuration;
+using Singularity.ViewModels;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels.Downloads;
+namespace Singularity.ViewModels.Downloads;
 
 /// <summary>
 /// Phase 2.5: Global Download Center - Singleton observer that tracks all downloads.
@@ -446,7 +446,7 @@ public class DownloadCenterViewModel : ReactiveObject, IDisposable
             this.RaiseAndSetIfChanged(ref _selectedTrack, value);
             if (value != null)
             {
-                ReactiveUI.MessageBus.Current.SendMessage(SLSKDONET.Events.OpenInspectorEvent.Create(value, "Downloads.Selection.Single"));
+                ReactiveUI.MessageBus.Current.SendMessage(Singularity.Events.OpenInspectorEvent.Create(value, "Downloads.Selection.Single"));
             }
         }
     }

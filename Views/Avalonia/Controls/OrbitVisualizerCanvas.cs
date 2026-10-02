@@ -7,10 +7,10 @@ using Avalonia.Skia;
 using SkiaSharp;
 using System;
 using System.Collections.Generic;
-using SLSKDONET.Models.Entertainment;
-using SLSKDONET.Services.Audio;
+using Singularity.Models.Entertainment;
+using Singularity.Services.Audio;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 /// <summary>
 /// ORBIT's full-screen visualizer: SkiaSharp, 12 presets, driven by a log-band spectrum
@@ -174,11 +174,11 @@ public sealed class OrbitVisualizerCanvas : Control
         else player?.NotifyVisualizerDetached();
     }
 
-    private static SLSKDONET.Services.IAudioPlayerService? ResolvePlayerService()
+    private static Singularity.Services.IAudioPlayerService? ResolvePlayerService()
     {
         if (Design.IsDesignMode) return null;
-        if (Application.Current is not SLSKDONET.App app || app.Services == null) return null;
-        return app.Services.GetService(typeof(SLSKDONET.Services.IAudioPlayerService)) as SLSKDONET.Services.IAudioPlayerService;
+        if (Application.Current is not Singularity.App app || app.Services == null) return null;
+        return app.Services.GetService(typeof(Singularity.Services.IAudioPlayerService)) as Singularity.Services.IAudioPlayerService;
     }
 
     // ── Per-frame update (UI thread) ─────────────────────────────────────────

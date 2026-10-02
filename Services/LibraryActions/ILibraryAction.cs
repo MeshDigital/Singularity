@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Services.LibraryActions;
+namespace Singularity.Services.LibraryActions;
 
 /// <summary>
 /// Interface for Library action plugins.

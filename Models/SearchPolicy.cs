@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Defines the high-level strategy for searching and ranking tracks.

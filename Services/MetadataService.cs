@@ -5,10 +5,10 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
+using Singularity.Configuration;
 using SpotifyAPI.Web;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public interface IMetadataService
 {

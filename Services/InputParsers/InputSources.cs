@@ -2,9 +2,9 @@ using System.IO;
 using CsvHelper;
 using CsvHelper.Configuration;
 using System.Globalization;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.InputParsers;
+namespace Singularity.Services.InputParsers;
 
 /// <summary>
 /// Interface for input sources.

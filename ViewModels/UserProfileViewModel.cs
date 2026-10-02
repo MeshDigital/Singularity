@@ -8,11 +8,11 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Services;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Per-user profile: Overview (presence + stats + Soulseek user info), Browse Shares (reuses a

@@ -2,8 +2,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Reactive.Subjects;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
+using Singularity.Configuration;
+using Singularity.Models;
 using Soulseek;
 using System.Linq;
 using System.Collections.Concurrent;
@@ -16,7 +16,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using Open.Nat;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public sealed class SearchLimitExceededException : Exception
 {

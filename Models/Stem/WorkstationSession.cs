@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SLSKDONET.Models.Stem;
+namespace Singularity.Models.Stem;
 
 /// <summary>
 /// Snapshot of the full Workstation state, persisted to disk so the session

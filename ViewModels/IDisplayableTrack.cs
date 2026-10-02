@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public interface IDisplayableTrack : INotifyPropertyChanged
 {

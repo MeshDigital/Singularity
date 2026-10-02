@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 
-namespace SLSKDONET.Converters;
+namespace Singularity.Converters;
 
 /// <summary>
 /// Multiplies a numeric value by a factor provided in the ConverterParameter.

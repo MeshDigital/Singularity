@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// A10.1 fingerprint schema used as the data backbone for similarity and optimizer slices.

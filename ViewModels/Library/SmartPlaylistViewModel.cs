@@ -4,15 +4,15 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Models;
+using Singularity.Services;
 using System.Text.Json;
-using SLSKDONET.Views;
+using Singularity.Views;
 using Avalonia.Threading;
 using System.Reactive;
 using ReactiveUI;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 /// <summary>
 /// Manages smart playlists (Recently Added, Most Played, High Quality, Failed Downloads, Liked Tracks).
@@ -118,7 +118,7 @@ public class SmartPlaylistViewModel : INotifyPropertyChanged
             var (name, criteria) = result.Value;
             if (string.IsNullOrWhiteSpace(name)) return;
 
-            var entity = new SLSKDONET.Data.PlaylistJobEntity
+            var entity = new Singularity.Data.PlaylistJobEntity
             {
                 Id = Guid.NewGuid(),
                 SourceTitle = name,

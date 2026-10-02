@@ -7,7 +7,7 @@ using DynamicData;
 using DynamicData.Binding;
 using ReactiveUI;
 
-namespace SLSKDONET.ViewModels.Downloads;
+namespace Singularity.ViewModels.Downloads;
 
 /// <summary>
 /// Beta 2026 — Lane Dashboard.

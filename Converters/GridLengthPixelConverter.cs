@@ -3,7 +3,7 @@ using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Data.Converters;
 
-namespace SLSKDONET.Converters;
+namespace Singularity.Converters;
 
 /// <summary>
 /// Two-way double &lt;-&gt; pixel GridLength converter, for binding a drag-resizable

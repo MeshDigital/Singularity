@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Linq;
 using Avalonia.Data.Converters;
 
-namespace SLSKDONET.Views.Avalonia.Converters;
+namespace Singularity.Views.Avalonia.Converters;
 
 public class RelativePositionConverter : IMultiValueConverter
 {

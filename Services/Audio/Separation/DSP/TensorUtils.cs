@@ -4,7 +4,7 @@ using MathNet.Numerics;
 using System.Numerics;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
-namespace SLSKDONET.Services.Audio.Separation.DSP;
+namespace Singularity.Services.Audio.Separation.DSP;
 
 public static class TensorUtils
 {

@@ -4,12 +4,12 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ReactiveUI;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Audio;
+using Singularity.Models;
+using Singularity.Services.Audio;
 using System;
 using System.Linq;
 
-namespace SLSKDONET.Views.Avalonia.Controls
+namespace Singularity.Views.Avalonia.Controls
 {
     public partial class DualWaveformDeck : UserControl
     {

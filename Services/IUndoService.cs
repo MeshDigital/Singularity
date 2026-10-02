@@ -1,4 +1,4 @@
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public interface IUndoService
 {

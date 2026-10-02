@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Produces stable dedup keys for incoming Soulseek results.

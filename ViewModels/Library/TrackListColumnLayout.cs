@@ -1,4 +1,4 @@
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 /// <summary>Which optional track-list columns are shown.</summary>
 public readonly record struct TrackListColumns(bool Energy, bool Format, bool Forensics, bool Duration, bool Rating);

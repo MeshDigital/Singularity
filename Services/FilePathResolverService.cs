@@ -4,11 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Utils;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Utils;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Concrete implementation of IFilePathResolverService.

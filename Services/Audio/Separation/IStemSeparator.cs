@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using SLSKDONET.Models.Stem;
+using Singularity.Models.Stem;
 
-namespace SLSKDONET.Services.Audio.Separation;
+namespace Singularity.Services.Audio.Separation;
 
 public interface IStemSeparator
 {

@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Models
+namespace Singularity.Models
 {
     public class SetlistTrackItem
     {

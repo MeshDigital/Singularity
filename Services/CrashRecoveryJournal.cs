@@ -1,7 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
+using Singularity.Data;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -11,7 +11,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public enum OperationType
 {
@@ -111,7 +111,7 @@ public class CrashRecoveryJournal : IDisposable, IAsyncDisposable
         {
             // Get database path
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var dbPath = SLSKDONET.Data.OrbitPaths.LibraryDbPath;
+            var dbPath = Singularity.Data.OrbitPaths.LibraryDbPath;
             
             // Create table using main context
             using var context = new AppDbContext();

@@ -1,4 +1,4 @@
-namespace SLSKDONET.Engine.Snapping;
+namespace Singularity.Engine.Snapping;
 
 /// <summary>
 /// Model representing a detected transient point with its clustered acoustic class.

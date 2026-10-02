@@ -4,7 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services.Platform;
+namespace Singularity.Services.Platform;
 
 /// <summary>
 /// macOS-specific secure token storage using Keychain.

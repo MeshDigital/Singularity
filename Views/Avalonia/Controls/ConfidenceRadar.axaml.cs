@@ -5,7 +5,7 @@ using Avalonia.Media;
 using Avalonia.Data;
 using System;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 public partial class ConfidenceRadar : UserControl
 {

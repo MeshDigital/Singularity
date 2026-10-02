@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
-namespace SLSKDONET.Services.Audio;
+namespace Singularity.Services.Audio;
 
 public interface ILibraryPreviewPlayer : IDisposable
 {
@@ -68,9 +68,9 @@ public sealed class LibraryPreviewPlayer : ILibraryPreviewPlayer
     public event EventHandler<float[]>? SpectrumChanged;
     public event EventHandler? PreviewStopped;
 
-    private readonly SLSKDONET.Configuration.AppConfig? _config;
+    private readonly Singularity.Configuration.AppConfig? _config;
 
-    public LibraryPreviewPlayer(ILogger<LibraryPreviewPlayer> logger, SLSKDONET.Configuration.AppConfig? config = null)
+    public LibraryPreviewPlayer(ILogger<LibraryPreviewPlayer> logger, Singularity.Configuration.AppConfig? config = null)
     {
         _logger = logger;
         _config = config;

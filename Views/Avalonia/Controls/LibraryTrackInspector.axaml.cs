@@ -3,10 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
-using SLSKDONET.ViewModels;
-using SLSKDONET.Models;
+using Singularity.ViewModels;
+using Singularity.Models;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 public partial class LibraryTrackInspector : UserControl
 {

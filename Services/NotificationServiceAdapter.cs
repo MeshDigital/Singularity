@@ -1,8 +1,8 @@
 using System;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Views;
+using Singularity.Views;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Published whenever <see cref="NotificationServiceAdapter.Show"/> is called, so the UI layer
@@ -14,7 +14,7 @@ public record ToastRequestedEvent(string Title, string Message, NotificationType
 /// Adapter that implements the view-level INotificationService for Avalonia.
 /// Publishes a <see cref="ToastRequestedEvent"/> for the UI to render, and always logs too.
 /// </summary>
-public class NotificationServiceAdapter : global::SLSKDONET.Views.INotificationService
+public class NotificationServiceAdapter : global::Singularity.Views.INotificationService
 {
     private readonly ILogger<NotificationServiceAdapter> _logger;
     private readonly IEventBus _eventBus;

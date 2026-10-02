@@ -4,10 +4,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Database.Enums;
+using Singularity.Data;
+using Singularity.Database.Enums;
 
-namespace SLSKDONET.Database.Services;
+namespace Singularity.Database.Services;
 
 /// <summary>
 /// Handles two-pass disk and database synchronization, healing and cleaning up download states.

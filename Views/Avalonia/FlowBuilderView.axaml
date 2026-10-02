@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:controls="clr-namespace:SLSKDONET.Views.Avalonia.Controls"
-             x:Class="SLSKDONET.Views.Avalonia.FlowBuilderView"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:controls="clr-namespace:Singularity.Views.Avalonia.Controls"
+             x:Class="Singularity.Views.Avalonia.FlowBuilderView"
              Background="#141414">
 
     <UserControl.Styles>

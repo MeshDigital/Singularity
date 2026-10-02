@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace SLSKDONET.Models
+namespace Singularity.Models
 {
     /// <summary>
     /// Represents the real-time progress of a track during orchestration (search, rank, match).

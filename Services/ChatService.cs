@@ -4,10 +4,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
+using Singularity.Data.Entities;
+using Singularity.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Owns 1:1 Soulseek private messaging: persists incoming/outgoing messages and republishes

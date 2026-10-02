@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Helpers;
+namespace Singularity.Helpers;
 
 /// <summary>
 /// Specifies that a view model supports incremental loading (infinite scrolling).

@@ -7,10 +7,10 @@ using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Models;
-using SLSKDONET.Views;
+using Singularity.Models;
+using Singularity.Views;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Persistent notification history — a bell/side-panel complement to the existing ephemeral
@@ -106,7 +106,7 @@ public sealed class NotificationCenterService : ReactiveObject, IDisposable
 
         if (!string.IsNullOrWhiteSpace(item.NavigationUsername) || !string.IsNullOrWhiteSpace(item.NavigationRoomName))
         {
-            _eventBus.Publish(new global::SLSKDONET.Models.OpenConversationRequestedEvent(item.NavigationUsername, item.NavigationRoomName));
+            _eventBus.Publish(new global::Singularity.Models.OpenConversationRequestedEvent(item.NavigationUsername, item.NavigationRoomName));
         }
     }
 
@@ -164,7 +164,7 @@ public sealed class NotificationCenterService : ReactiveObject, IDisposable
 
         Add(new NotificationItem
         {
-            Kind = global::SLSKDONET.Models.NotificationKind.DownloadCompleted,
+            Kind = global::Singularity.Models.NotificationKind.DownloadCompleted,
             Title = title,
             Detail = detail,
             NavigationUsername = e.PeerName,
@@ -180,7 +180,7 @@ public sealed class NotificationCenterService : ReactiveObject, IDisposable
 
         Add(new NotificationItem
         {
-            Kind = global::SLSKDONET.Models.NotificationKind.PrivateMessage,
+            Kind = global::Singularity.Models.NotificationKind.PrivateMessage,
             Title = $"Message from {e.PeerUsername}",
             Detail = e.Message,
             NavigationUsername = e.PeerUsername,
@@ -197,7 +197,7 @@ public sealed class NotificationCenterService : ReactiveObject, IDisposable
 
         Add(new NotificationItem
         {
-            Kind = global::SLSKDONET.Models.NotificationKind.RoomMessage,
+            Kind = global::Singularity.Models.NotificationKind.RoomMessage,
             Title = $"{e.Username} in #{e.RoomName}",
             Detail = e.Message,
             NavigationRoomName = e.RoomName,

@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models
+namespace Singularity.Models
 {
     /// <summary>
     /// Classification of vocal content in a track based on Vocal Density analysis.

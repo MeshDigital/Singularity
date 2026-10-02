@@ -8,11 +8,11 @@ using Avalonia.Threading;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using ReactiveUI;
-using SLSKDONET.Models.Stem;
-using SLSKDONET.Services.Audio;
-using SLSKDONET.Services.Audio.Separation;
+using Singularity.Models.Stem;
+using Singularity.Services.Audio;
+using Singularity.Services.Audio.Separation;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Manages the four-stem audio mixer for a single workstation deck.

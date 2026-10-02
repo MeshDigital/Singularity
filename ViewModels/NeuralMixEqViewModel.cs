@@ -1,10 +1,10 @@
 using System;
 using System.Collections.ObjectModel;
 using ReactiveUI;
-using SLSKDONET.Models.Stem;
-using SLSKDONET.Services.Audio.Separation;
+using Singularity.Models.Stem;
+using Singularity.Services.Audio.Separation;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 // ─── StemEqViewModel ─────────────────────────────────────────────────────────
 

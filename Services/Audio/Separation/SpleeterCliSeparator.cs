@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using SLSKDONET.Models.Stem;
+using Singularity.Models.Stem;
 
-namespace SLSKDONET.Services.Audio.Separation;
+namespace Singularity.Services.Audio.Separation;
 
 public class SpleeterCliSeparator : IStemSeparator
 {

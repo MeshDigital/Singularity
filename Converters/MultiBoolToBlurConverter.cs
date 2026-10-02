@@ -6,7 +6,7 @@ using Avalonia;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 
-namespace SLSKDONET.Converters;
+namespace Singularity.Converters;
 
 public class MultiBoolToBlurConverter : IMultiValueConverter
 {

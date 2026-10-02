@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace SLSKDONET.Data;
+namespace Singularity.Data;
 
 /// <summary>
 /// The one place the library database path is decided. <c>SINGULARITY_DB_PATH</c> overrides it — the

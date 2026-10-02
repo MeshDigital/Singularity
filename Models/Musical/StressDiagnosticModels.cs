@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using SLSKDONET.Data.Entities;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.Models.Musical
+namespace Singularity.Models.Musical
 {
     /// <summary>
     /// Severity level for setlist stress-test diagnostics.

@@ -6,11 +6,11 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Views;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Views;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Some Soulseek peers run "gate bots" that block downloads behind a private-chat challenge —

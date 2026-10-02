@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using SLSKDONET.Services;
+using Singularity.Services;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Linq;
@@ -8,9 +8,9 @@ using System.ComponentModel;
 using System.Collections.Specialized;
 using DynamicData;
 using ReactiveUI;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public class SearchFilterViewModel : ReactiveObject
 {

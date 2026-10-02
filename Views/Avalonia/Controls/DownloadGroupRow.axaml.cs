@@ -2,7 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 public partial class DownloadGroupRow : UserControl
 {

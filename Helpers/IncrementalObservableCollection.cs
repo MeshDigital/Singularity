@@ -6,7 +6,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Helpers;
+namespace Singularity.Helpers;
 
 /// <summary>
 /// An ObservableCollection that supports incremental loading.

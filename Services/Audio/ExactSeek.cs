@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using NAudio.Wave;
 
-namespace SLSKDONET.Services.Audio;
+namespace Singularity.Services.Audio;
 
 /// <summary>
 /// Sample-accurate seeking for NAudio's <see cref="AudioFileReader"/>.

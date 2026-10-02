@@ -1,7 +1,7 @@
 using System;
-using SLSKDONET.Data;
+using Singularity.Data;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Real-time telemetry data for active analysis tasks.

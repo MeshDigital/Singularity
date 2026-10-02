@@ -6,13 +6,13 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Services;
-using SLSKDONET.Views; // For AsyncRelayCommand and RelayCommand
+using Singularity.Configuration;
+using Singularity.Services;
+using Singularity.Views; // For AsyncRelayCommand and RelayCommand
 
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public class ConnectionViewModel : INotifyPropertyChanged, IDisposable
 {

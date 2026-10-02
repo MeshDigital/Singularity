@@ -1,6 +1,6 @@
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Events;
+namespace Singularity.Events;
 
 /// <summary>
 /// Request to insert a selected bridge candidate between two tracks in Flow Builder.

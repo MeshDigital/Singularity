@@ -4,12 +4,12 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Centralizes the "does this track have a separated-stems folder on disk" check that both
-/// <see cref="SLSKDONET.ViewModels.PlaylistTrackViewModel"/> and
-/// <see cref="SLSKDONET.ViewModels.Downloads.UnifiedTrackViewModel"/> need for their HasStems
+/// <see cref="Singularity.ViewModels.PlaylistTrackViewModel"/> and
+/// <see cref="Singularity.ViewModels.Downloads.UnifiedTrackViewModel"/> need for their HasStems
 /// badge. Previously each row's property getter fired its own independent Task.Run doing raw
 /// Directory.Exists/Directory.GetFiles calls — on a library grid with thousands of completed
 /// tracks, realizing (or re-realizing on scroll) many rows at once could queue thousands of

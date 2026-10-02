@@ -1,4 +1,4 @@
-namespace SLSKDONET.Events;
+namespace Singularity.Events;
 
 /// <summary>
 /// Event published when the user requests similar tracks for a single track (e.g. the

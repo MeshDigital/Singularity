@@ -2,10 +2,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
-using SLSKDONET.Models;
+using Singularity.Models;
 using System;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 public partial class SonicProfileControl : UserControl
 {

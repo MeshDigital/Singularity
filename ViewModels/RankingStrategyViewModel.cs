@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public class RankingStrategyViewModel : INotifyPropertyChanged
 {

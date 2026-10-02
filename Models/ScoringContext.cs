@@ -1,6 +1,6 @@
-using SLSKDONET.Utils;
+using Singularity.Utils;
 
-namespace SLSKDONET.Models
+namespace Singularity.Models
 {
     /// <summary>
     /// Phase 2.3: Parameter Object for scoring operations.

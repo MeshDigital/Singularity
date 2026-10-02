@@ -4,10 +4,10 @@ using System.IO;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
+using Singularity.Configuration;
+using Singularity.Data;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public sealed record ShareIndexEntry(string LocalPath, long Size);
 

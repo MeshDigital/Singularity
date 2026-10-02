@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Represents a folder used to organize playlists into a nested tree.

@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 
-namespace SLSKDONET.Converters;
+namespace Singularity.Converters;
 
 public class BoolOpacityConverter : IValueConverter
 {

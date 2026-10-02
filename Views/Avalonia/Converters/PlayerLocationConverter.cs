@@ -1,9 +1,9 @@
 using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Views.Avalonia.Converters;
+namespace Singularity.Views.Avalonia.Converters;
 
 /// <summary>
 /// Converts PlayerDockLocation to Grid positioning values (Row, Column, Span, etc.)

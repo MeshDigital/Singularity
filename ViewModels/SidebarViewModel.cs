@@ -3,9 +3,9 @@ using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using ReactiveUI;
-using SLSKDONET.Services;
+using Singularity.Services;
 
-namespace SLSKDONET.ViewModels
+namespace Singularity.ViewModels
 {
     // Order matches the visual TabItem order in MainWindow.axaml's right-panel TabControl —
     // ActiveTabIndex below maps directly to this ordinal, driving TabControl.SelectedIndex.
@@ -172,13 +172,13 @@ namespace SLSKDONET.ViewModels
                 .DisposeWith(_disposables);
 
             // Open right sidebar when bridge between event is triggered (from Flow Builder/intelligence)
-            ReactiveUI.MessageBus.Current.Listen<SLSKDONET.Events.FindBridgeBetweenTracksEvent>()
+            ReactiveUI.MessageBus.Current.Listen<Singularity.Events.FindBridgeBetweenTracksEvent>()
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ => _rightPanelService.OpenPanel(SimilarTracksVm, "SIMILAR TRACKS", "🔗"))
                 .DisposeWith(_disposables);
 
             // Open right sidebar when "Find Similar" is requested for a single track (Library row button)
-            ReactiveUI.MessageBus.Current.Listen<SLSKDONET.Events.FindSimilarTrackRequestEvent>()
+            ReactiveUI.MessageBus.Current.Listen<Singularity.Events.FindSimilarTrackRequestEvent>()
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ =>
                 {
@@ -188,7 +188,7 @@ namespace SLSKDONET.ViewModels
                 .DisposeWith(_disposables);
 
             // Open the Mix tab when a transition badge is clicked in a playlist track list.
-            ReactiveUI.MessageBus.Current.Listen<SLSKDONET.Events.OpenMixTransitionEvent>()
+            ReactiveUI.MessageBus.Current.Listen<Singularity.Events.OpenMixTransitionEvent>()
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(evt =>
                 {
@@ -199,7 +199,7 @@ namespace SLSKDONET.ViewModels
                 .DisposeWith(_disposables);
 
             // Discover tab for a playlist (Library header button).
-            ReactiveUI.MessageBus.Current.Listen<SLSKDONET.Events.OpenPlaylistDiscoverEvent>()
+            ReactiveUI.MessageBus.Current.Listen<Singularity.Events.OpenPlaylistDiscoverEvent>()
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(evt =>
                 {

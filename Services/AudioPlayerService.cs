@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using System.Timers;
-using SLSKDONET.Configuration;
-using SLSKDONET.Services.Audio;
-using SLSKDONET.Services.Timeline;
+using Singularity.Configuration;
+using Singularity.Services.Audio;
+using Singularity.Services.Timeline;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
     public class AudioPlayerService : IAudioPlayerService, IDisposable
     {
@@ -41,7 +41,7 @@ namespace SLSKDONET.Services
 
             /// <summary>Mix-saved transition to apply to the crossfade into this deck (set via
             /// PreloadNext), or null to fall back to the legacy fixed CrossfadeSeconds/curve.</summary>
-            public SLSKDONET.Models.Timeline.TransitionModel? PendingTransition;
+            public Singularity.Models.Timeline.TransitionModel? PendingTransition;
             public double PendingTransitionBpm = 128.0;
 
             /// <summary>Display name of the preset behind <see cref="PendingTransition"/> (e.g.
@@ -65,7 +65,7 @@ namespace SLSKDONET.Services
             /// tempo-matched when the mix starts and transition lengths follow the outgoing beat.</summary>
             public double? PendingSourceBpm;
 
-            /// <summary>File this deck plays (for <see cref="SLSKDONET.Services.Audio.ExactSeek"/>).</summary>
+            /// <summary>File this deck plays (for <see cref="Singularity.Services.Audio.ExactSeek"/>).</summary>
             public string FilePath = string.Empty;
 
             /// <summary>Background exact seek in flight (Media Foundation formats decode forward to
@@ -90,7 +90,7 @@ namespace SLSKDONET.Services
             {
                 var file = AudioFile;
                 if (file == null) return;
-                if (!SLSKDONET.Services.Audio.ExactSeek.NeedsDecodeForward(FilePath))
+                if (!Singularity.Services.Audio.ExactSeek.NeedsDecodeForward(FilePath))
                 {
                     WaitForSeek();
                     file.CurrentTime = TimeSpan.FromSeconds(seconds);
@@ -101,7 +101,7 @@ namespace SLSKDONET.Services
                 SeekTask = System.Threading.Tasks.Task.Run(async () =>
                 {
                     if (previous != null) { try { await previous; } catch { } }
-                    SLSKDONET.Services.Audio.ExactSeek.Seek(file, FilePath, seconds);
+                    Singularity.Services.Audio.ExactSeek.Seek(file, FilePath, seconds);
                     VariSpeed?.Reset();
                 });
             }
@@ -116,7 +116,7 @@ namespace SLSKDONET.Services
 
         /// <summary>
         /// Live per-channel 3-band gain stage (one-pole crossover split, same technique as
-        /// <see cref="SLSKDONET.Services.Timeline.TransitionDsp"/>'s EqSwapProvider/FilterSweepProvider)
+        /// <see cref="Singularity.Services.Timeline.TransitionDsp"/>'s EqSwapProvider/FilterSweepProvider)
         /// inserted into each deck's chain so Mix presets that need audible EQ movement during a
         /// transition (Blend/Wave/Melt) — not just a plain volume crossfade — actually sound
         /// different during real queue playback. Gains default to 1.0 (a no-op fast path) outside
@@ -360,15 +360,15 @@ namespace SLSKDONET.Services
                 // Preset-accurate automation — the same TransitionEngine math the Mix editor's
                 // waveform overlay curves are sampled from, so what plays matches what was previewed.
                 const int samplePoints = 1000;
-                var region = new SLSKDONET.Services.Audio.TransitionRegion
+                var region = new Singularity.Services.Audio.TransitionRegion
                 {
                     StartSample = 0,
                     EndSample = samplePoints,
                     Type = pendingTransition.Type.ToAutomationType(),
-                    Curve = SLSKDONET.Services.Audio.TransitionCurve.SCurve,
+                    Curve = Singularity.Services.Audio.TransitionCurve.SCurve,
                     WaveDuckDepth = pendingTransition.WaveDuckDepth,
                     EchoDecayFactor = pendingTransition.EchoDecayFactor,
-                    EqConfig = new SLSKDONET.Services.Audio.EqBandSwapConfig
+                    EqConfig = new Singularity.Services.Audio.EqBandSwapConfig
                     {
                         SwapLow = pendingTransition.EqSwapLow,
                         SwapMid = pendingTransition.EqSwapMid,
@@ -516,7 +516,7 @@ namespace SLSKDONET.Services
                 var deck = _current;
                 if (deck?.AudioFile == null) return;
 
-                if (!SLSKDONET.Services.Audio.ExactSeek.NeedsDecodeForward(deck.FilePath))
+                if (!Singularity.Services.Audio.ExactSeek.NeedsDecodeForward(deck.FilePath))
                 {
                     deck.AudioFile.Position = (long)(value * deck.AudioFile.Length);
                     deck.VariSpeed?.Reset(); // discard stale buffered samples from before the seek
@@ -553,7 +553,7 @@ namespace SLSKDONET.Services
                             }
                             try
                             {
-                                SLSKDONET.Services.Audio.ExactSeek.Seek(deck.AudioFile, deck.FilePath, seconds);
+                                Singularity.Services.Audio.ExactSeek.Seek(deck.AudioFile, deck.FilePath, seconds);
                                 deck.VariSpeed?.Reset();
                             }
                             catch (Exception ex)
@@ -635,7 +635,7 @@ namespace SLSKDONET.Services
         /// an audible gap. Call this as soon as the next track is known (e.g. right after the
         /// current one starts), well before playback is expected to reach it.
         /// </summary>
-        public void PreloadNext(string filePath, double? trackLoudnessLufs = null, SLSKDONET.Models.Timeline.TransitionModel? transition = null, double? transitionBpm = null,
+        public void PreloadNext(string filePath, double? trackLoudnessLufs = null, Singularity.Models.Timeline.TransitionModel? transition = null, double? transitionBpm = null,
             double? sourceTriggerSeconds = null, double? targetTriggerSeconds = null, string? presetName = null)
         {
             if (_current == null) return;
@@ -677,7 +677,7 @@ namespace SLSKDONET.Services
         /// second PreloadNext call re-triggering CreateDeck's early-return guard for a filename
         /// that's already preloaded.
         /// </summary>
-        public void SetPendingTransitionForNext(string filePath, SLSKDONET.Models.Timeline.TransitionModel? transition, double? transitionBpm,
+        public void SetPendingTransitionForNext(string filePath, Singularity.Models.Timeline.TransitionModel? transition, double? transitionBpm,
             double? sourceTriggerSeconds = null, double? targetTriggerSeconds = null, string? presetName = null, double? outgoingBpm = null)
         {
             if (_next == null || _nextFilePath != filePath) return;
@@ -857,7 +857,7 @@ namespace SLSKDONET.Services
             // PlayableAudio: files Windows can't decode (some FLAC/Opus/Ogg) play from an
             // ffmpeg-decoded WAV instead of failing to load. FilePath is what is actually read,
             // so ExactSeek knows whether a decode-forward seek is needed.
-            var reader = SLSKDONET.Services.Audio.PlayableAudio.Open(filePath, out var playablePath);
+            var reader = Singularity.Services.Audio.PlayableAudio.Open(filePath, out var playablePath);
             var deck = new Deck
             {
                 FilePath = playablePath,

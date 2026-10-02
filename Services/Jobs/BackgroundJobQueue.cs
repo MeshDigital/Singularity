@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services.Jobs;
+namespace Singularity.Services.Jobs;
 
 /// <summary>
 /// Channel-based implementation of <see cref="IBackgroundJobQueue"/>.

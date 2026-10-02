@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>Well-known values for <see cref="Data.Entities.EngineDiagnosticEventEntity.EventType"/>.</summary>
 public static class EngineDiagnosticEventType

@@ -1,7 +1,7 @@
 using System;
-using SLSKDONET.Views;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Display data for a single on-screen toast, rendered by the toast host in MainWindow.axaml.

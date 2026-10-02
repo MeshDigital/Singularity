@@ -6,9 +6,9 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using HtmlAgilityPack;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.InputParsers;
+namespace Singularity.Services.InputParsers;
 
 /// <summary>
 /// Scrapes public Spotify playlists and albums without requiring API keys.
@@ -690,7 +690,7 @@ public class SpotifyScraperInputSource
                 // used to be a locally-invented "artist|title" variant that was incompatible with
                 // it, which meant a track scraped here could never be recognized as already
                 // present when synced again, and got silently re-added as a duplicate every time.
-                TrackHash = SLSKDONET.Utils.TrackHashUtil.Compute(artist, title)
+                TrackHash = Singularity.Utils.TrackHashUtil.Compute(artist, title)
             };
         }
         catch (Exception ex)

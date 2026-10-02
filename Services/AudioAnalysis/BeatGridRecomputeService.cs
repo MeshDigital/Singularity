@@ -7,10 +7,10 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Views;
+using Singularity.Data;
+using Singularity.Views;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// One-time, background re-fit of every already-analysed track's BPM, beat grid and downbeat with
@@ -171,7 +171,7 @@ public sealed class BeatGridRecomputeService
 
     private string BackupLibrary()
     {
-        string source = SLSKDONET.Data.OrbitPaths.LibraryDbPath;
+        string source = Singularity.Data.OrbitPaths.LibraryDbPath;
         string dir = Path.Combine(OrbitDataDir, "Backups");
         Directory.CreateDirectory(dir);
         string target = Path.Combine(dir, $"library.db.bak-{PassName}-{DateTime.Now:yyyyMMdd-HHmmss}");

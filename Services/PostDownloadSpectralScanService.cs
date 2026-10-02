@@ -2,10 +2,10 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
+using Singularity.Data;
+using Singularity.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Background service that automatically runs spectral integrity analysis on every
@@ -43,7 +43,7 @@ public sealed class PostDownloadSpectralScanService : IDisposable
     private readonly DatabaseService _databaseService;
     private readonly IEventBus _eventBus;
     private readonly ILogger<PostDownloadSpectralScanService> _logger;
-    private readonly SLSKDONET.Services.Diagnostics.ITrackAuditLogger _auditLogger;
+    private readonly Singularity.Services.Diagnostics.ITrackAuditLogger _auditLogger;
     private readonly Configuration.AppConfig _config;
     private readonly System.Reactive.Disposables.CompositeDisposable _disposables = new();
 
@@ -52,7 +52,7 @@ public sealed class PostDownloadSpectralScanService : IDisposable
         DatabaseService databaseService,
         IEventBus eventBus,
         ILogger<PostDownloadSpectralScanService> logger,
-        SLSKDONET.Services.Diagnostics.ITrackAuditLogger auditLogger,
+        Singularity.Services.Diagnostics.ITrackAuditLogger auditLogger,
         Configuration.AppConfig config)
     {
         _integrityService = integrityService;

@@ -4,11 +4,11 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using SLSKDONET.Data;
-using SLSKDONET.Services;
-using SLSKDONET.Views;
+using Singularity.Data;
+using Singularity.Services;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// ViewModel for displaying orphaned tracks (files that no longer exist on disk).

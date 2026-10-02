@@ -10,7 +10,7 @@ using System;
 using System.Threading;
 using Avalonia.Threading;
 
-namespace SLSKDONET.Views.Avalonia.Controls
+namespace Singularity.Views.Avalonia.Controls
 {
     public class LiveBackground : Control
     {

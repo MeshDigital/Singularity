@@ -2,7 +2,7 @@ using Microsoft.Extensions.Configuration;
 using System.IO;
 using System.Text.Json;
 
-namespace SLSKDONET.Configuration;
+namespace Singularity.Configuration;
 
 /// <summary>
 /// Manages configuration loading and saving.

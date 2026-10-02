@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.ViewModels;
-using SLSKDONET.Data;
+using Singularity.ViewModels;
+using Singularity.Data;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 public enum SystemHealth
 {

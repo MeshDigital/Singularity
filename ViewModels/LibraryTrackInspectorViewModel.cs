@@ -5,9 +5,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Services.Similarity;
+using Singularity.Services.Similarity;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public sealed class LibraryTrackInspectorViewModel
 {

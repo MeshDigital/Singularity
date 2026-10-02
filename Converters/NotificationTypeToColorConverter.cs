@@ -3,10 +3,10 @@ using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 
-namespace SLSKDONET.Converters;
+namespace Singularity.Converters;
 
 /// <summary>
-/// Maps <see cref="SLSKDONET.Views.NotificationType"/> to the accent color used by the toast host.
+/// Maps <see cref="Singularity.Views.NotificationType"/> to the accent color used by the toast host.
 /// </summary>
 public class NotificationTypeToColorConverter : IValueConverter
 {

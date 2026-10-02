@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.Engine.Analysis;
+using Singularity.Engine.Analysis;
 
-namespace SLSKDONET.Engine.Cueing;
+namespace Singularity.Engine.Cueing;
 
 /// <summary>
 /// Intents assigned to structural cue points.

@@ -4,7 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public class UserInputService : IUserInputService
 {

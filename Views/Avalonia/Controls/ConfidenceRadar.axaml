@@ -3,7 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="80" d:DesignHeight="80"
-             x:Class="SLSKDONET.Views.Avalonia.Controls.ConfidenceRadar">
+             x:Class="Singularity.Views.Avalonia.Controls.ConfidenceRadar">
     <Panel Width="60" Height="60" Margin="5">
         <!-- Background Ring -->
         <Ellipse Stroke="#11FFFFFF" StrokeThickness="4"/>

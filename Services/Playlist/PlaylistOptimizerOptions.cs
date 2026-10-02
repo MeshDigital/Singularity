@@ -1,4 +1,4 @@
-namespace SLSKDONET.Services.Playlist;
+namespace Singularity.Services.Playlist;
 
 /// <summary>
 /// Energy curve shape applied as a post-ordering pass to the optimized playlist.

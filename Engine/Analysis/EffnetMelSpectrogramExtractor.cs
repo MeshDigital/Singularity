@@ -4,7 +4,7 @@ using NWaves.Filters.Fda;
 using NWaves.Transforms;
 using NWaves.Windows;
 
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// Computes mel-spectrogram patches matching Essentia's <c>TensorflowInputMusiCNN</c>

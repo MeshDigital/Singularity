@@ -7,9 +7,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using SLSKDONET.ViewModels; // For VibePill record
+using Singularity.ViewModels; // For VibePill record
 
-namespace SLSKDONET.Views.Avalonia.Controls
+namespace Singularity.Views.Avalonia.Controls
 {
     /// <summary>
     /// A lightweight control that renders VibePills directly to the drawing context

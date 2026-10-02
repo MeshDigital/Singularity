@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
-using SLSKDONET.Models.Stem;
+using Singularity.Models.Stem;
 
-namespace SLSKDONET.Services.Audio.Separation;
+namespace Singularity.Services.Audio.Separation;
 
 /// <summary>
 /// IStemSeparator implementation using the Demucs v4 "4-stem" ONNX model.

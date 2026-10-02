@@ -6,7 +6,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Visuals;
 using Avalonia.Controls;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public class FileInteractionService : IFileInteractionService
 {

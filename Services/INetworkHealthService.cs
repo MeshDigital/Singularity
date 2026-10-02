@@ -1,6 +1,6 @@
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Service for monitoring and diagnosing network health (throttle/ban/connection issues)

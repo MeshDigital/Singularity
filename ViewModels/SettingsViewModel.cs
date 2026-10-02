@@ -5,21 +5,21 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Models;
-using SLSKDONET.Services.Platform;
-using SLSKDONET.Views; // For AsyncRelayCommand
-using SLSKDONET.ViewModels.Settings;
+using Singularity.Configuration;
+using Singularity.Services;
+using Singularity.Services.Models;
+using Singularity.Services.Platform;
+using Singularity.Views; // For AsyncRelayCommand
+using Singularity.ViewModels.Settings;
 using Avalonia.Threading;
 
 using System.Collections.ObjectModel; // Added
 using System.Linq;
-using SLSKDONET.Models; // For SearchPolicy and Events
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Data; // For AppDbContext
+using Singularity.Models; // For SearchPolicy and Events
+using Singularity.Data.Entities;
+using Singularity.Data; // For AppDbContext
 using Microsoft.EntityFrameworkCore;
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 
 public enum SpotifyAuthStatus
@@ -250,7 +250,7 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    /// <summary>Matches <see cref="SLSKDONET.Services.Audio.AudioOutputMode"/>'s member names. No
+    /// <summary>Matches <see cref="Singularity.Services.Audio.AudioOutputMode"/>'s member names. No
     /// WasapiExclusive: an exclusive stream locks the device, and ORBIT always plays several
     /// streams at once (two decks per crossfade, plus previews) — it broke every mix.</summary>
     public static string[] AvailableAudioOutputModes { get; } = { "WasapiShared", "WaveOut", "Asio" };
@@ -294,8 +294,8 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Switches what is playing right now onto the newly chosen device (off the UI thread — stopping a WASAPI output blocks briefly).</summary>
     private static void ApplyOutputDeviceNow()
     {
-        if (Avalonia.Application.Current is not SLSKDONET.App app || app.Services == null) return;
-        if (app.Services.GetService(typeof(SLSKDONET.Services.IAudioPlayerService)) is SLSKDONET.Services.IAudioPlayerService player)
+        if (Avalonia.Application.Current is not Singularity.App app || app.Services == null) return;
+        if (app.Services.GetService(typeof(Singularity.Services.IAudioPlayerService)) is Singularity.Services.IAudioPlayerService player)
             System.Threading.Tasks.Task.Run(player.ApplyOutputSettings);
     }
 
@@ -304,8 +304,8 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
         AvailableAudioOutputDevices.Clear();
         IEnumerable<string> names = AudioOutputMode switch
         {
-            "WasapiShared" or "WasapiExclusive" => SLSKDONET.Services.Audio.AudioOutputProvider.GetWasapiDeviceNames(),
-            "Asio" => SLSKDONET.Services.Audio.AudioOutputProvider.GetAsioDriverNames(),
+            "WasapiShared" or "WasapiExclusive" => Singularity.Services.Audio.AudioOutputProvider.GetWasapiDeviceNames(),
+            "Asio" => Singularity.Services.Audio.AudioOutputProvider.GetAsioDriverNames(),
             _ => Enumerable.Empty<string>(),
         };
         foreach (var name in names)

@@ -7,11 +7,11 @@ using Avalonia.Media;
 using DynamicData;
 using DynamicData.Binding;
 using ReactiveUI;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Views;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels.Downloads;
+namespace Singularity.ViewModels.Downloads;
 
 /// <summary>
 /// Phase 2: Represents a grouped collection of downloads (Album or Project).

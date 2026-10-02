@@ -4,13 +4,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Models.Musical;
-using SLSKDONET.Services.AudioAnalysis;
+using Singularity.Configuration;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Models.Musical;
+using Singularity.Services.AudioAnalysis;
 
-namespace SLSKDONET.Services.Similarity;
+namespace Singularity.Services.Similarity;
 
 /// <summary>
 /// A10.3 similarity core over persisted fingerprints and optional section vectors.

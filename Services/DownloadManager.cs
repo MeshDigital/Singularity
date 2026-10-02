@@ -1,5 +1,5 @@
 using System;
-using SLSKDONET.Views;
+using Singularity.Views;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -12,22 +12,22 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Services.InputParsers;
-using SLSKDONET.Services.AutoDownload;
-using SLSKDONET.Utils;
-using SLSKDONET.Services.Models;
-using SLSKDONET.Data.Essentia;
+using Singularity.Configuration;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Services.InputParsers;
+using Singularity.Services.AutoDownload;
+using Singularity.Utils;
+using Singularity.Services.Models;
+using Singularity.Data.Essentia;
 using Microsoft.EntityFrameworkCore;
-using SLSKDONET.Services.Repositories; // [NEW] Namespace
-using SLSKDONET.Services.IO; // Added explicit using
-using SLSKDONET.Events;
+using Singularity.Services.Repositories; // [NEW] Namespace
+using Singularity.Services.IO; // Added explicit using
+using Singularity.Events;
 
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Orchestrates the download process for projects and individual tracks.
@@ -56,7 +56,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     private readonly PeerReliabilityService _peerReliability;
     private readonly PrefetchVerifier _prefetchVerifier;
     private readonly INetworkHealthService _networkHealth;
-    private readonly SLSKDONET.Services.Diagnostics.ITrackAuditLogger _auditLogger;
+    private readonly Singularity.Services.Diagnostics.ITrackAuditLogger _auditLogger;
 
 
     private readonly List<IDisposable> _eventBusSubs = new();
@@ -208,7 +208,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         CrashRecoveryJournal crashJournal,
         PeerReliabilityService peerReliability,
         INetworkHealthService networkHealth,
-        SLSKDONET.Services.Diagnostics.ITrackAuditLogger auditLogger) // Phase 1: Engine Overhaul
+        Singularity.Services.Diagnostics.ITrackAuditLogger auditLogger) // Phase 1: Engine Overhaul
 
     {
         _logger = logger;
@@ -4023,7 +4023,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                     }
                     else
                     {
-                        var isValidAudio = await SLSKDONET.Services.IO.FileVerificationHelper.VerifyAudioFormatAsync(finalPath);
+                        var isValidAudio = await Singularity.Services.IO.FileVerificationHelper.VerifyAudioFormatAsync(finalPath);
                         if (!isValidAudio)
                         {
                             _logger.LogWarning("Downloaded file failed audio format verification: {Path}", finalPath);
@@ -4034,7 +4034,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                             return;
                         }
 
-                        var isValidSize = await SLSKDONET.Services.IO.FileVerificationHelper.VerifyFileSizeAsync(finalPath, 10 * 1024);
+                        var isValidSize = await Singularity.Services.IO.FileVerificationHelper.VerifyFileSizeAsync(finalPath, 10 * 1024);
                         if (!isValidSize)
                         {
                             _logger.LogWarning("Downloaded file too small (< 10KB): {Path}", finalPath);

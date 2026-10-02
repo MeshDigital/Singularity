@@ -4,7 +4,7 @@ using Avalonia;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 
-namespace SLSKDONET.Converters;
+namespace Singularity.Converters;
 
 /// <summary>
 /// Converts a ratio (0.0-1.0) to a circular progress path geometry for health rings.

@@ -6,12 +6,12 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Data.Essentia;
-using SLSKDONET.Engine.Analysis;
-using SLSKDONET.Services.Similarity;
+using Singularity.Data.Entities;
+using Singularity.Data.Essentia;
+using Singularity.Engine.Analysis;
+using Singularity.Services.Similarity;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// Orchestrates the full audio analysis pipeline for a single track:

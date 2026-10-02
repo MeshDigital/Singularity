@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
+using Singularity.Configuration;
+using Singularity.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Handles valid updates and migrations for Application Configuration.

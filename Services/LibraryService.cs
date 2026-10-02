@@ -4,16 +4,16 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Utils;
+using Singularity.Configuration;
+using Singularity.Data;
+using Singularity.Models;
+using Singularity.Data.Entities;
+using Singularity.Utils;
 using Avalonia.Threading;
 using Microsoft.EntityFrameworkCore;
-using SLSKDONET.Views;
+using Singularity.Views;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Concrete implementation of ILibraryService.
@@ -1357,7 +1357,7 @@ public class LibraryService : ILibraryService
             FrequencyCutoff = entity.FrequencyCutoff,
             QualityDetails = entity.QualityDetails,
             // Derive IsTranscoded and SpectralVerdictText from stored Integrity level + QualityDetails
-            IsTranscoded = entity.Integrity == SLSKDONET.Data.IntegrityLevel.Suspicious,
+            IsTranscoded = entity.Integrity == Singularity.Data.IntegrityLevel.Suspicious,
             SpectralVerdictText = !string.IsNullOrEmpty(entity.QualityDetails)
                 ? entity.QualityDetails.Split('|')[0].Trim()
                 : null,

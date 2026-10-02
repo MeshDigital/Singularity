@@ -1,17 +1,17 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
+using Singularity.Data;
+using Singularity.Data.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Models;
+using Singularity.Models;
+using Singularity.Services.Models;
 
-namespace SLSKDONET.Services.Repositories;
+namespace Singularity.Services.Repositories;
 
 public class TrackRepository : ITrackRepository
 {

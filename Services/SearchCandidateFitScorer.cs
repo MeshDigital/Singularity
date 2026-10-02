@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.Models;
-using SLSKDONET.Services.InputParsers;
-using SLSKDONET.Utils;
+using Singularity.Models;
+using Singularity.Services.InputParsers;
+using Singularity.Utils;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public static class SearchCandidateFitScorer
 {

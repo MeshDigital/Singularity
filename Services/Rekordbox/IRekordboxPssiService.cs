@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.Rekordbox;
+namespace Singularity.Services.Rekordbox;
 
 /// <summary>One track found, during a full-library scan, to already have saved memory/hot cues in
 /// Rekordbox — see <see cref="IRekordboxPssiService.FindTracksWithSavedCuesAsync"/>.</summary>

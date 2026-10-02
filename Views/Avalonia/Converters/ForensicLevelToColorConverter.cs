@@ -3,7 +3,7 @@ using Avalonia.Media;
 using System;
 using System.Globalization;
 
-namespace SLSKDONET.Views.Avalonia.Converters
+namespace Singularity.Views.Avalonia.Converters
 {
     /// <summary>
     /// Value converter that maps log levels or symbols (e.g. ERROR, WARN, INFO) to custom forensic colors/brushes.

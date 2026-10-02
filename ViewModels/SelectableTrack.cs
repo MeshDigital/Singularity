@@ -2,10 +2,10 @@ using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
-using SLSKDONET.Models;
-using SLSKDONET.Views;
+using Singularity.Models;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Wrapper for Track model to handle UI selection state and notifications.

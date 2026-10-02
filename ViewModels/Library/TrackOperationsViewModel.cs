@@ -5,12 +5,12 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Views;
-using SLSKDONET.Events;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Views;
+using Singularity.Events;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 /// <summary>
 /// Manages track-level operations like play, pause, resume, cancel, retry, etc.
@@ -827,8 +827,8 @@ public class TrackOperationsViewModel : INotifyPropertyChanged, IDisposable
 
         if (string.IsNullOrEmpty(trackHash)) return;
 
-        ReactiveUI.MessageBus.Current.SendMessage(SLSKDONET.Events.OpenInspectorEvent.Create(
-            new SLSKDONET.ViewModels.Diagnostics.BlackBoxTerminalViewModel(trackHash), 
+        ReactiveUI.MessageBus.Current.SendMessage(Singularity.Events.OpenInspectorEvent.Create(
+            new Singularity.ViewModels.Diagnostics.BlackBoxTerminalViewModel(trackHash), 
             "Library.TrackSelection.AuditLog"));
     }
 

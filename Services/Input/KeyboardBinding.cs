@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Avalonia.Input;
 
-namespace SLSKDONET.Services.Input;
+namespace Singularity.Services.Input;
 
 /// <summary>
 /// A single key → action binding (Epic #119, Task 2).

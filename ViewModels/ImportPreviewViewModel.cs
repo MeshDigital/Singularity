@@ -8,13 +8,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Utils;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Utils;
 
-using SLSKDONET.Views;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// ViewModel for previewing imported tracks before adding to library.

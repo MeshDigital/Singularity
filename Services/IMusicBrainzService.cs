@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public class MusicBrainzCredits
 {

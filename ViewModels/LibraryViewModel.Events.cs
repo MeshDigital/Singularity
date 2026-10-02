@@ -5,16 +5,16 @@ using Microsoft.Extensions.Logging;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using SLSKDONET.Models;
-using SLSKDONET.ViewModels.Library;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Views;
-using SLSKDONET.Events;
-using SLSKDONET.Models.Musical;
-using SLSKDONET.Services.Similarity;
+using Singularity.Models;
+using Singularity.ViewModels.Library;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Views;
+using Singularity.Events;
+using Singularity.Models.Musical;
+using Singularity.Services.Similarity;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public partial class LibraryViewModel
 {
@@ -283,7 +283,7 @@ public partial class LibraryViewModel
         // can't know about this outer wrapper. Only surfaced once something (the playlist header)
         // actually needed live updates through the wrapper instead of the direct path.
         OnPropertyChanged(nameof(SelectedProject));
-        ReactiveUI.MessageBus.Current.SendMessage(new SLSKDONET.Events.PlaylistContextChangedEvent(project?.Id, project?.SourceTitle));
+        ReactiveUI.MessageBus.Current.SendMessage(new Singularity.Events.PlaylistContextChangedEvent(project?.Id, project?.SourceTitle));
 
         SetSmartPlaylistContextMode(false);
         RaiseLibraryIntelligenceContextStateChanged();

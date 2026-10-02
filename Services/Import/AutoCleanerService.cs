@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services.Import;
+namespace Singularity.Services.Import;
 
 /// <summary>
 /// Service for generating tiered search queries from raw input.

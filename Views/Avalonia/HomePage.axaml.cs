@@ -2,7 +2,7 @@ using Avalonia.Controls;
 using System;
 using System.Globalization;
 
-namespace SLSKDONET.Views.Avalonia;
+namespace Singularity.Views.Avalonia;
 
 /// <summary>
 /// Phase 6D: Home page with dashboard stats and quick actions.
@@ -14,7 +14,7 @@ public partial class HomePage : UserControl
         InitializeComponent();
     }
 
-    public HomePage(SLSKDONET.ViewModels.HomeViewModel viewModel)
+    public HomePage(Singularity.ViewModels.HomeViewModel viewModel)
     {
         InitializeComponent();
         DataContext = viewModel;

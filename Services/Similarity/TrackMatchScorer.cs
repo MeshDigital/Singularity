@@ -1,9 +1,9 @@
 using System;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
+using Singularity.Configuration;
+using Singularity.Data.Entities;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.Similarity;
+namespace Singularity.Services.Similarity;
 
 /// <summary>
 /// Pure-static scorer that converts raw audio feature data for two tracks into a

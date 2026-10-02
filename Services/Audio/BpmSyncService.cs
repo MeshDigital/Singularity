@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Services.Audio;
+namespace Singularity.Services.Audio;
 
 /// <summary>Designates which deck is the master tempo reference for sync.</summary>
 public enum DeckSide { A, B }

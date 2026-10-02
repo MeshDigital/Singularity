@@ -1,9 +1,9 @@
 using System;
 
-namespace SLSKDONET.Models.Timeline;
+namespace Singularity.Models.Timeline;
 
 /// <summary>
-/// Domain-model wrapper around <see cref="SLSKDONET.Data.Entities.PlaylistTrackTransitionEntity"/> —
+/// Domain-model wrapper around <see cref="Singularity.Data.Entities.PlaylistTrackTransitionEntity"/> —
 /// the persisted Mix transition for one adjacent track pair in a playlist.
 /// </summary>
 public class PlaylistTrackTransition
@@ -32,7 +32,7 @@ public class PlaylistTrackTransition
     public int? LoopRepeats { get; set; }
 
     /// <summary>Seconds into the outgoing track where the mix-out begins — see
-    /// <see cref="SLSKDONET.Engine.Transitions.TransitionEngine.OptimizeTransition"/>.</summary>
+    /// <see cref="Singularity.Engine.Transitions.TransitionEngine.OptimizeTransition"/>.</summary>
     public double? SourceTriggerSeconds { get; set; }
 
     /// <summary>Seconds into the incoming track where playback starts.</summary>
@@ -43,7 +43,7 @@ public class PlaylistTrackTransition
     /// <summary>Bars → beats (4 beats per bar) for the DSP layer, which works in beats.</summary>
     public double DurationBeats => DurationBars * 4.0;
 
-    /// <summary>Builds the DSP-facing model consumed by <see cref="SLSKDONET.Services.Timeline.TransitionDsp"/>.</summary>
+    /// <summary>Builds the DSP-facing model consumed by <see cref="Singularity.Services.Timeline.TransitionDsp"/>.</summary>
     public TransitionModel ToTransitionModel()
     {
         var model = new TransitionModel

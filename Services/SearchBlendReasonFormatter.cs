@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public static class SearchBlendReasonFormatter
 {

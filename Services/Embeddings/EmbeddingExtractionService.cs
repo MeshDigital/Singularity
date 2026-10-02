@@ -7,13 +7,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Data.Essentia;
-using SLSKDONET.Services.Jobs;
-using SLSKDONET.Services.Similarity;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Data.Essentia;
+using Singularity.Services.Jobs;
+using Singularity.Services.Similarity;
 
-namespace SLSKDONET.Services.Embeddings;
+namespace Singularity.Services.Embeddings;
 
 /// <summary>
 /// Extracts audio embedding vectors from Essentia analysis output and persists them

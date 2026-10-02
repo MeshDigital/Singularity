@@ -1,15 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models.Timeline;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Models.Timeline;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Services.Repositories;
+namespace Singularity.Services.Repositories;
 
 public class TransitionRepository : ITransitionRepository
 {

@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace SLSKDONET.Data.Entities;
+namespace Singularity.Data.Entities;
 
 /// <summary>
 /// A single 1:1 Soulseek private message, either sent or received. Incoming messages are

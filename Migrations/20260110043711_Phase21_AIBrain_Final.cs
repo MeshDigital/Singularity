@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace SLSKDONET.Migrations
+namespace Singularity.Migrations
 {
     /// <inheritdoc />
     public partial class Phase21_AIBrain_Final : Migration

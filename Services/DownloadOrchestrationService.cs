@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.ViewModels;
-using SLSKDONET.Models; // Added for PlaylistTrackState
+using Singularity.ViewModels;
+using Singularity.Models; // Added for PlaylistTrackState
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Orchestrates download lifecycle operations including start, pause, and cancel.
@@ -139,9 +139,9 @@ public class DownloadOrchestrationService
         {
             SuccessfulCount = allTracks.Count(t => t.State == PlaylistTrackState.Completed),
             FailedCount = allTracks.Count(t => t.State == PlaylistTrackState.Failed),
-            PendingCount = allTracks.Count(t => t.State == SLSKDONET.Models.PlaylistTrackState.Pending || 
-                                                 t.State == SLSKDONET.Models.PlaylistTrackState.Downloading || 
-                                                 t.State == SLSKDONET.Models.PlaylistTrackState.Searching),
+            PendingCount = allTracks.Count(t => t.State == Singularity.Models.PlaylistTrackState.Pending || 
+                                                 t.State == Singularity.Models.PlaylistTrackState.Downloading || 
+                                                 t.State == Singularity.Models.PlaylistTrackState.Searching),
             TotalCount = allTracks.Count
         };
     }

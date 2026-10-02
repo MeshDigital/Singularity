@@ -7,11 +7,11 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
-using SLSKDONET.Models.Stem;
+using Singularity.Data;
+using Singularity.Models;
+using Singularity.Models.Stem;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Creates and reads .orbsession bundle files — portable ZIP archives that contain

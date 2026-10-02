@@ -3,11 +3,11 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Services.AudioAnalysis;
-using SLSKDONET.Services.IO;
+using Singularity.Data.Entities;
+using Singularity.Services.AudioAnalysis;
+using Singularity.Services.IO;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Lightweight corruption scanner for audio files.

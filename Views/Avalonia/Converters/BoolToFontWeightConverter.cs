@@ -3,7 +3,7 @@ using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 
-namespace SLSKDONET.Views.Avalonia.Converters;
+namespace Singularity.Views.Avalonia.Converters;
 
 /// <summary>
 /// Converts bool to FontWeight (SemiBold for true, Normal for false).

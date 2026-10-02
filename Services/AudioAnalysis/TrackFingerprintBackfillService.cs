@@ -4,9 +4,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// A10.1 non-UI hook for rebuilding fingerprints from current persisted analysis data.

@@ -3,7 +3,7 @@ using Avalonia.Media;
 using System;
 using System.Globalization;
 
-namespace SLSKDONET.Views.Avalonia.Converters
+namespace Singularity.Views.Avalonia.Converters
 {
     public class LedColorConverter : IValueConverter
     {

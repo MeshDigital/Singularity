@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.ViewModels.Downloads;
+namespace Singularity.ViewModels.Downloads;
 
 public class EngineLogEntry
 {

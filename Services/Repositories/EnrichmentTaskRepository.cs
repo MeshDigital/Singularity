@@ -3,10 +3,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
+using Singularity.Data;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.Services.Repositories;
+namespace Singularity.Services.Repositories;
 
 public class EnrichmentTaskRepository : IEnrichmentTaskRepository
 {

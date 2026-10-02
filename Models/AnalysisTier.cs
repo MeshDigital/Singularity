@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Defines the level of depth for audio analysis.

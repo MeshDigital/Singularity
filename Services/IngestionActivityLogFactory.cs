@@ -1,8 +1,8 @@
 using System;
 using System.Text.Json;
-using SLSKDONET.Data;
+using Singularity.Data;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 internal static class IngestionActivityLogFactory
 {

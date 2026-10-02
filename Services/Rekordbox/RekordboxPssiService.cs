@@ -6,9 +6,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.Rekordbox;
+namespace Singularity.Services.Rekordbox;
 
 /// <summary>
 /// Surfaces Rekordbox's own phrase/song-structure analysis (PSSI tag in its ANLZ files) as a

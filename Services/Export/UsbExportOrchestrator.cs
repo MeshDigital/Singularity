@@ -6,11 +6,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Services.IO;
-using SLSKDONET.Services.Library;
+using Singularity.Models;
+using Singularity.Services.IO;
+using Singularity.Services.Library;
 
-namespace SLSKDONET.Services.Export;
+namespace Singularity.Services.Export;
 
 public enum ExportMode { XmlOnly, FilesAndXml }
 

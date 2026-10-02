@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Aggregate reliability counters for connection/search hardening telemetry.

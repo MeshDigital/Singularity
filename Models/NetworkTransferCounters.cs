@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Aggregate counters for transfer outcomes by terminal state.

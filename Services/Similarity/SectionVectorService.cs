@@ -7,11 +7,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.Similarity;
+namespace Singularity.Services.Similarity;
 
 /// <summary>
 /// Builds and caches per-section feature vectors for every analyzed track.

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Computes message-grouping and date-separator flags for a chat thread. Called after messages

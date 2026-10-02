@@ -2,12 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:svc="clr-namespace:SLSKDONET.Services"
-             xmlns:controls="clr-namespace:SLSKDONET.Views.Avalonia.Controls"
-             xmlns:conv="clr-namespace:SLSKDONET.Views.Avalonia.Converters"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:svc="clr-namespace:Singularity.Services"
+             xmlns:controls="clr-namespace:Singularity.Views.Avalonia.Controls"
+             xmlns:conv="clr-namespace:Singularity.Views.Avalonia.Converters"
              mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
-             x:Class="SLSKDONET.Views.Avalonia.UsersPage"
+             x:Class="Singularity.Views.Avalonia.UsersPage"
              x:DataType="vm:UsersViewModel"
              Background="{DynamicResource BrushBg1}" Foreground="White">
 

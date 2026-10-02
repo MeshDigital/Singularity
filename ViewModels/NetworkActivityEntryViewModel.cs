@@ -1,7 +1,7 @@
 using System;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Lightweight display model for a single network call shown in the

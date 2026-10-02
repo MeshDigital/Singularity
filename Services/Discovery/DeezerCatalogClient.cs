@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services.Discovery;
+namespace Singularity.Services.Discovery;
 
 /// <summary>
 /// Deezer's public catalog API (no key, no login): artist search, related artists and artist top

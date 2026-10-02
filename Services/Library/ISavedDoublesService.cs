@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using SLSKDONET.Models.Musical;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.Services.Library;
+namespace Singularity.Services.Library;
 
 public interface ISavedDoublesService
 {

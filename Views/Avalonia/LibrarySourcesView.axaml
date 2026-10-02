@@ -2,9 +2,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="using:SLSKDONET.ViewModels"
+             xmlns:vm="using:Singularity.ViewModels"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-             x:Class="SLSKDONET.Views.Avalonia.LibrarySourcesView"
+             x:Class="Singularity.Views.Avalonia.LibrarySourcesView"
              x:DataType="vm:LibrarySourcesViewModel">
     
     <Border Background="#252526" CornerRadius="8" Padding="20" BorderBrush="#3E3E3E" BorderThickness="1">

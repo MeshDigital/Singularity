@@ -1,6 +1,6 @@
 using System.Windows.Input;
 
-namespace SLSKDONET.ViewModels.Downloads;
+namespace Singularity.ViewModels.Downloads;
 
 /// <summary>
 /// Minimal display contract shared by <see cref="DownloadRowViewModel"/> (live session rows) and

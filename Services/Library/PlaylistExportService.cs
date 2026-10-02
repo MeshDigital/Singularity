@@ -9,24 +9,24 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Library.Rekordbox;
-using SLSKDONET.Services.Models.Export;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Services.Library.Rekordbox;
+using Singularity.Services.Models.Export;
 
-namespace SLSKDONET.Services.Library;
+namespace Singularity.Services.Library;
 
 public class PlaylistExportService
 {
     private readonly ILogger<PlaylistExportService> _logger;
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
-    private readonly SLSKDONET.Services.IO.IFileWriteService _fileWriteService;
+    private readonly Singularity.Services.IO.IFileWriteService _fileWriteService;
 
     public PlaylistExportService(
         ILogger<PlaylistExportService> logger,
         IDbContextFactory<AppDbContext> dbFactory,
-        SLSKDONET.Services.IO.IFileWriteService fileWriteService)
+        Singularity.Services.IO.IFileWriteService fileWriteService)
     {
         _logger = logger;
         _dbFactory = dbFactory;

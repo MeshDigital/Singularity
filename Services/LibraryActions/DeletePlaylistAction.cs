@@ -1,10 +1,10 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Services;
-using SLSKDONET.ViewModels;
+using Singularity.Services;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Services.LibraryActions;
+namespace Singularity.Services.LibraryActions;
 
 /// <summary>
 /// Removes a playlist from the visible library list while preserving track/library records

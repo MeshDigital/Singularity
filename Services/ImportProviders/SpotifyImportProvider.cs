@@ -2,10 +2,10 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Services.InputParsers;
+using Singularity.Models;
+using Singularity.Services.InputParsers;
 
-namespace SLSKDONET.Services.ImportProviders;
+namespace Singularity.Services.ImportProviders;
 
 /// <summary>
 /// Import provider for Spotify playlists.

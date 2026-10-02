@@ -5,9 +5,9 @@ using System.IO;
 using System.Xml;
 using System.Xml.Linq;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.Integrations;
+namespace Singularity.Services.Integrations;
 
 /// <summary>
 /// Imports DJ metadata from a Traktor Pro NML library file (.nml).

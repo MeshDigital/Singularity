@@ -1,11 +1,11 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using System;
-using SLSKDONET.ViewModels.Library;
-using SLSKDONET.Data.Entities;
+using Singularity.ViewModels.Library;
+using Singularity.Data.Entities;
 using System.Reactive.Linq;
 
-namespace SLSKDONET.Views.Avalonia.Dialogs;
+namespace Singularity.Views.Avalonia.Dialogs;
 
 public partial class SmartCrateEditorDialog : Window
 {

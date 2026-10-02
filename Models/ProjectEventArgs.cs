@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Event args for when a new project is added to the download manager

@@ -2,9 +2,9 @@ using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
-using SLSKDONET.Data.Entities;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.Converters;
+namespace Singularity.Converters;
 
 /// <summary>
 /// Converts a musical PhraseType to a DAW-style color brush.

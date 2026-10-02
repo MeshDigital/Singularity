@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SLSKDONET.Models.Timeline;
+namespace Singularity.Models.Timeline;
 
 /// <summary>
 /// A single horizontal lane in the <see cref="TimelineSession"/> — conceptually

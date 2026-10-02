@@ -9,10 +9,10 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Engine.Analysis;
+using Singularity.Data.Entities;
+using Singularity.Engine.Analysis;
 
-namespace SLSKDONET.Services.Similarity;
+namespace Singularity.Services.Similarity;
 
 /// <summary>
 /// Extracts DiscogsEffnet audio embeddings and built-in style predictions via ONNX Runtime

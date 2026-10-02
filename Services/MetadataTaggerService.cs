@@ -5,13 +5,13 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
+using Singularity.Models;
 using TagLib;
 using File = System.IO.File;
 
-using SLSKDONET.Services.IO; // Added explicit using
+using Singularity.Services.IO; // Added explicit using
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Concrete implementation of ITaggerService.
@@ -220,7 +220,7 @@ public class MetadataTaggerService : ITaggerService
                     // extension-based detection would always reject it — pass the original
                     // file's MIME type explicitly instead (same one used to write the tags above).
                     var mimeType = GetMimeTypeFromExtension(Path.GetExtension(filePath));
-                    var isValid = await SLSKDONET.Services.IO.FileVerificationHelper.VerifyAudioFormatAsync(tempPath, mimeType);
+                    var isValid = await Singularity.Services.IO.FileVerificationHelper.VerifyAudioFormatAsync(tempPath, mimeType);
                     if (!isValid)
                     {
                         _logger.LogWarning("Tagging verification failed: {TempPath}", tempPath);

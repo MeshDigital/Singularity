@@ -3,9 +3,9 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Reference-counted wrapper around <see cref="ISoulseekAdapter.WatchUserAsync"/>/<see cref="ISoulseekAdapter.UnwatchUserAsync"/>.

@@ -4,10 +4,10 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Data.Essentia;
+using Singularity.Data.Entities;
+using Singularity.Data.Essentia;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// Runs the structural analysis pass early (right after Essentia/energy-curve extraction) purely

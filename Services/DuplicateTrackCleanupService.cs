@@ -7,10 +7,10 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
+using Singularity.Data;
+using Singularity.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// One-time cleanup for two confirmed duplicate-data bugs (see <c>ImportOrchestrator</c>'s fresh-import
@@ -224,7 +224,7 @@ public sealed class DuplicateTrackCleanupService
         try
         {
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var dbPath = SLSKDONET.Data.OrbitPaths.LibraryDbPath;
+            var dbPath = Singularity.Data.OrbitPaths.LibraryDbPath;
             var backupDir = Path.Combine(appData, "Singularity", "Backups");
 
             if (!File.Exists(dbPath))

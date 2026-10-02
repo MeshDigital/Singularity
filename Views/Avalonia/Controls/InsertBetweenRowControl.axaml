@@ -5,7 +5,7 @@
              mc:Ignorable="d"
              d:DesignWidth="900"
              d:DesignHeight="28"
-             x:Class="SLSKDONET.Views.Avalonia.Controls.InsertBetweenRowControl"
+             x:Class="Singularity.Views.Avalonia.Controls.InsertBetweenRowControl"
              x:Name="Root"
              Classes.magnetic-hover="{Binding IsMagneticHover, ElementName=Root}"
              Height="28">

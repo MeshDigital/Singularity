@@ -6,13 +6,13 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Input; // For ICommand
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Views; // For RelayCommand
-using SLSKDONET.Data; // For IntegrityLevel
-using SLSKDONET.Events;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Views; // For RelayCommand
+using Singularity.Data; // For IntegrityLevel
+using Singularity.Events;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>One entry in the AI genre classifier's ranked output, for the Track Inspector.</summary>
 public sealed record GenreScore(string Label, double Confidence);
@@ -1082,8 +1082,8 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
     // rather than a single root cause, so instead of chasing every future write path that could
     // leave the two fields disagreeing, the "FILE MISSING" badge itself no longer trusts
     // AvailabilityState alone when Status already says the file was successfully downloaded.
-    public bool IsGhost => Model.AvailabilityState == SLSKDONET.Models.TrackAvailabilityState.Ghost
-        && Model.Status != SLSKDONET.Models.TrackStatus.Downloaded;
+    public bool IsGhost => Model.AvailabilityState == Singularity.Models.TrackAvailabilityState.Ghost
+        && Model.Status != Singularity.Models.TrackStatus.Downloaded;
 
     /// <summary>
     /// True only for the shared <see cref="Placeholder"/> instance returned by

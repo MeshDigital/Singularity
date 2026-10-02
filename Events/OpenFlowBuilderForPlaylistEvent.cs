@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Published by the Mix transition editor's "Open in Flow Builder" link.

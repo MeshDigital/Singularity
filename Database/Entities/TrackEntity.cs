@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using SLSKDONET.Models;
-using SLSKDONET.Models.Musical;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Database.Enums;
+using Singularity.Models;
+using Singularity.Models.Musical;
+using Singularity.Data.Entities;
+using Singularity.Database.Enums;
 
-namespace SLSKDONET.Data;
+namespace Singularity.Data;
 
 /// <summary>
 /// Status of the audio analysis process for a track.
@@ -44,7 +44,7 @@ public class TrackEntity
     // State Tracking Properties for Curation Workstation
     public bool IsLocalFile { get; set; }
     public string? LocalFilePath { get; set; }
-    public SLSKDONET.Database.Enums.DownloadState Status { get; set; } = SLSKDONET.Database.Enums.DownloadState.Pending;
+    public Singularity.Database.Enums.DownloadState Status { get; set; } = Singularity.Database.Enums.DownloadState.Pending;
     
     // Metadata Analysis Payload Block
     public string? SpectralForensicsData { get; set; } 

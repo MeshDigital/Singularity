@@ -4,14 +4,14 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Engine.Analysis;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Timeline;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Engine.Analysis;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Services.Timeline;
 
-namespace SLSKDONET.Engine.Cueing;
+namespace Singularity.Engine.Cueing;
 
 /// <summary>Which of <see cref="CueGenerationService"/>'s priority paths produced a cue set.</summary>
 public enum CueGenerationPath

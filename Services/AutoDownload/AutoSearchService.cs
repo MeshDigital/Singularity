@@ -5,11 +5,11 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
+using Singularity.Configuration;
+using Singularity.Data;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.AutoDownload;
+namespace Singularity.Services.AutoDownload;
 
 /// <summary>
 /// AutoSearchService — Automatic downloads strict mode investigator and optimizer.

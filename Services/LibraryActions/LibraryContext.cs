@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using SLSKDONET.Models;
-using SLSKDONET.ViewModels;
+using Singularity.Models;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Services.LibraryActions;
+namespace Singularity.Services.LibraryActions;
 
 /// <summary>
 /// Context object passed to library actions containing current selection and state

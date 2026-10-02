@@ -1,7 +1,7 @@
 using ReactiveUI;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// ViewModel for a single stem waveform row (Vocals / Drums / Bass / Other) in

@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="280"
-        x:Class="SLSKDONET.Views.Avalonia.Controls.RemoveTrackDialog"
+        x:Class="Singularity.Views.Avalonia.Controls.RemoveTrackDialog"
         Title="Remove Track"
         SizeToContent="WidthAndHeight"
         MinWidth="440" MaxWidth="560"

@@ -1,10 +1,10 @@
 using Avalonia.Data.Converters;
 using Avalonia.Media;
-using SLSKDONET.Models;
+using Singularity.Models;
 using System;
 using System.Globalization;
 
-namespace SLSKDONET.Views.Avalonia.Converters;
+namespace Singularity.Views.Avalonia.Converters;
 
 /// <summary>
 /// Converts PlaylistTrackState to a colored brush for status badges.

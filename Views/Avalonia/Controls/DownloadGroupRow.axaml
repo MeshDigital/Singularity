@@ -2,10 +2,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="using:SLSKDONET.ViewModels.Downloads"
-             xmlns:controls="using:SLSKDONET.Views.Avalonia.Controls"
+             xmlns:vm="using:Singularity.ViewModels.Downloads"
+             xmlns:controls="using:Singularity.Views.Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="120"
-             x:Class="SLSKDONET.Views.Avalonia.Controls.DownloadGroupRow"
+             x:Class="Singularity.Views.Avalonia.Controls.DownloadGroupRow"
              x:DataType="vm:DownloadGroupViewModel">
 
     <UserControl.Styles>

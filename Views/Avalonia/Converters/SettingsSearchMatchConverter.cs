@@ -2,7 +2,7 @@ using Avalonia.Data.Converters;
 using System;
 using System.Globalization;
 
-namespace SLSKDONET.Views.Avalonia.Converters
+namespace Singularity.Views.Avalonia.Converters
 {
     /// <summary>
     /// Drives the Settings page's search box: bind a section's IsVisible to

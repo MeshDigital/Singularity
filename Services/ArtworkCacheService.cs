@@ -7,9 +7,9 @@ using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Utils;
+using Singularity.Utils;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
     /// <summary>
     /// Provides a shared cache for artwork bitmaps to prevent memory bloat.

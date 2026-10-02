@@ -4,7 +4,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Input;
 using Avalonia.Controls.Primitives;
 
-namespace SLSKDONET.Views.Avalonia;
+namespace Singularity.Views.Avalonia;
 
 public partial class PlaylistGridView : UserControl
 {

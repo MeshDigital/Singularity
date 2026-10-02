@@ -5,9 +5,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using ReactiveUI;
-using SLSKDONET.ViewModels.Workstation;
+using Singularity.ViewModels.Workstation;
 
-namespace SLSKDONET.Views.Avalonia.Workstation;
+namespace Singularity.Views.Avalonia.Workstation;
 
 public partial class ExportDialog : Window
 {

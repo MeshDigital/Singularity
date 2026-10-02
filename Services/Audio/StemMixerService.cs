@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
-using SLSKDONET.Models.Stem;
+using Singularity.Models.Stem;
 
-namespace SLSKDONET.Services.Audio;
+namespace Singularity.Services.Audio;
 
 /// <summary>
 /// Mixes multiple per-stem <see cref="ISampleProvider"/> chains with individual

@@ -9,11 +9,11 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Services;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Row list for the Users/Contacts page: every Soulseek peer ever tracked, sourced from

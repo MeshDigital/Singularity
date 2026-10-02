@@ -5,10 +5,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
+using Singularity.Configuration;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.AutoDownload;
+namespace Singularity.Services.AutoDownload;
 
 /// <summary>
 /// SoulseekSearchHelper — Wrapper for Soulseek.NET search with automatic filter application.

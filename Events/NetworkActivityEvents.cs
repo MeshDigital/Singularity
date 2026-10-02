@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// A single outbound network call observed by the network activity monitor.

@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models.Entertainment;
+namespace Singularity.Models.Entertainment;
 
 /// <summary>
 /// Configuration for ORBIT's Ambient Mode — a slow, meditative atmospheric state

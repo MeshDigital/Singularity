@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Data.Essentia;
-using SLSKDONET.Models;
+using Singularity.Data.Entities;
+using Singularity.Data.Essentia;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// Pure harmonic analysis layer for A10.2.

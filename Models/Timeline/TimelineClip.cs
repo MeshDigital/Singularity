@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SLSKDONET.Models.Timeline;
+namespace Singularity.Models.Timeline;
 
 /// <summary>
 /// The stems a clip can reference independently.

@@ -2,7 +2,7 @@ using Avalonia.Data.Converters;
 using System;
 using System.Globalization;
 
-namespace SLSKDONET.Views.Avalonia.Converters
+namespace Singularity.Views.Avalonia.Converters
 {
     /// <summary>
     /// Converts a double value (0.0 to 1.0) to opacity for visual indicators.

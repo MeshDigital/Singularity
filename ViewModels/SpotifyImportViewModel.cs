@@ -7,13 +7,13 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Services.InputParsers;
-using SLSKDONET.Views;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Services.InputParsers;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public class SpotifyImportViewModel : INotifyPropertyChanged
 {

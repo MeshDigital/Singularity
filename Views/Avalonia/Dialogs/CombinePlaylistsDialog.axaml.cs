@@ -1,9 +1,9 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using System.Linq;
-using SLSKDONET.ViewModels.Library;
+using Singularity.ViewModels.Library;
 
-namespace SLSKDONET.Views.Avalonia.Dialogs;
+namespace Singularity.Views.Avalonia.Dialogs;
 
 public partial class CombinePlaylistsDialog : Window
 {

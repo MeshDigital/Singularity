@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SLSKDONET.Services.InputParsers;
+namespace Singularity.Services.InputParsers;
 
 public enum SearchQueryLane
 {

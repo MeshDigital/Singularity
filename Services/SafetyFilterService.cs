@@ -3,10 +3,10 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Configuration;
+using Singularity.Models;
+using Singularity.Configuration;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public interface ISafetyFilterService
 {

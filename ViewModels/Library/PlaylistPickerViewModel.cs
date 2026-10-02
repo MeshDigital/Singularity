@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using ReactiveUI;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 public class PlaylistPickerResult
 {

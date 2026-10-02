@@ -1,10 +1,10 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using SLSKDONET.Data.Essentia;
-using SLSKDONET.Models;
+using Singularity.Data.Essentia;
+using Singularity.Models;
 
-namespace SLSKDONET.Data.Entities;
+namespace Singularity.Data.Entities;
 
 /// <summary>
 /// Tracks individual analysis runs for comprehensive audit trails and error tracking.

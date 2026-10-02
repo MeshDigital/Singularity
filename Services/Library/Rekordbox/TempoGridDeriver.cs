@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SLSKDONET.Services.Library.Rekordbox;
+namespace Singularity.Services.Library.Rekordbox;
 
 /// <summary>A single Rekordbox TEMPO grid anchor: a BPM value effective from a point in time.</summary>
 public sealed record TempoAnchor(double InizioSeconds, double Bpm);
@@ -26,7 +26,7 @@ public static class TempoGridDeriver
     /// <paramref name="downbeatOffsetSeconds"/> (the common, safe case) unless the beat grid is
     /// long enough to analyze AND <paramref name="bpmStability"/> indicates a genuinely
     /// drifting/unstable tempo — matching this codebase's own documented convention that
-    /// BpmStability &lt; 0.7 means "unstable/drifting tempo" (<see cref="SLSKDONET.Models.PlaylistTrack.BpmStability"/>).
+    /// BpmStability &lt; 0.7 means "unstable/drifting tempo" (<see cref="Singularity.Models.PlaylistTrack.BpmStability"/>).
     /// Returns an empty list when there is no usable BPM at all (caller should omit TEMPO entirely).
     /// </summary>
     public static IReadOnlyList<TempoAnchor> DeriveAnchors(

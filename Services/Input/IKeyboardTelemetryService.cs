@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace SLSKDONET.Services.Input;
+namespace Singularity.Services.Input;
 
 /// <summary>
 /// Tracks local keyboard action usage for the opt-in usage-statistics feature

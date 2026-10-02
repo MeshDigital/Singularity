@@ -1,18 +1,18 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Models;
+using Singularity.Data;
+using Singularity.Models;
+using Singularity.Services.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.IO; // Added for Path
-using SLSKDONET.Data.Entities;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public class DatabaseService
 {
@@ -738,7 +738,7 @@ public class DatabaseService
         Guid trackId,
         bool isTranscoded,
         int? frequencyCutoffHz,
-        SLSKDONET.Data.IntegrityLevel integrityLevel,
+        Singularity.Data.IntegrityLevel integrityLevel,
         string? qualityDetails,
         int? sampleRateHz = null,
         int? bitDepth = null,
@@ -2307,7 +2307,7 @@ public class DatabaseService
 
     public async Task BackupDatabaseAsync(string backupPath)
     {
-        var dbPath = SLSKDONET.Data.OrbitPaths.LibraryDbPath;
+        var dbPath = Singularity.Data.OrbitPaths.LibraryDbPath;
         
         if (!File.Exists(dbPath))
         {

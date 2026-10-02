@@ -5,12 +5,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Similarity;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Services.Similarity;
 
-namespace SLSKDONET.Services.Playlist;
+namespace Singularity.Services.Playlist;
 
 /// <summary>
 /// Result returned by <see cref="PlaylistOptimizer.OptimizeAsync"/>.

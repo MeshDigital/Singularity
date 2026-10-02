@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Data.Essentia;
+using Singularity.Data.Entities;
+using Singularity.Data.Essentia;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// Extracts BPM and confidence from Essentia JSON output, applies

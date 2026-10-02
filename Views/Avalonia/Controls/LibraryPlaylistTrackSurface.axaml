@@ -2,12 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:views="clr-namespace:SLSKDONET.Views.Avalonia"
-             xmlns:controls="clr-namespace:SLSKDONET.Views.Avalonia.Controls"
-             xmlns:converters="clr-namespace:SLSKDONET.Views.Avalonia.Converters"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:views="clr-namespace:Singularity.Views.Avalonia"
+             xmlns:controls="clr-namespace:Singularity.Views.Avalonia.Controls"
+             xmlns:converters="clr-namespace:Singularity.Views.Avalonia.Converters"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
-             x:Class="SLSKDONET.Views.Avalonia.Controls.LibraryPlaylistTrackSurface"
+             x:Class="Singularity.Views.Avalonia.Controls.LibraryPlaylistTrackSurface"
              x:DataType="vm:Library.TrackListViewModel"
              Background="#1E1E1E">
 

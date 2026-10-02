@@ -1,8 +1,8 @@
 using System;
 using System.Threading.Tasks;
-using SLSKDONET.Data.Entities;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.Services.Repositories;
+namespace Singularity.Services.Repositories;
 
 public interface IEnrichmentTaskRepository
 {

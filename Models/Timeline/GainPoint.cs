@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models.Timeline;
+namespace Singularity.Models.Timeline;
 
 /// <summary>
 /// A single automation point on a clip's gain envelope.

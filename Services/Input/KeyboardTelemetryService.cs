@@ -4,9 +4,9 @@ using System.IO;
 using System.Linq;
 using LiteDB;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
+using Singularity.Configuration;
 
-namespace SLSKDONET.Services.Input;
+namespace Singularity.Services.Input;
 
 /// <summary>
 /// Opt-in local keyboard telemetry backed by LiteDB.

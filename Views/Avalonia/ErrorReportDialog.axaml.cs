@@ -7,9 +7,9 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
-using SLSKDONET.Services;
+using Singularity.Services;
 
-namespace SLSKDONET.Views.Avalonia;
+namespace Singularity.Views.Avalonia;
 
 /// <summary>
 /// Phase 12: Error Report Dialog - User-friendly crash reporting for beta testing
@@ -32,7 +32,7 @@ public partial class ErrorReportDialog : Window, INotifyPropertyChanged
         // Get log file path
         LogFilePath = System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "SLSKDONET",
+            "Singularity",
             "logs",
             $"log-{DateTime.Now:yyyy-MM-dd}.txt");
     }

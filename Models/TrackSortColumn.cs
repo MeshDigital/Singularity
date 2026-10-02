@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Which column the track grid is currently sorted by. Threaded from TrackListViewModel down

@@ -1,8 +1,8 @@
 using System;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Data.Essentia;
+using Singularity.Data.Entities;
+using Singularity.Data.Essentia;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// Computes a Mixed-In-Key-style energy score (1–10) from Essentia low-level

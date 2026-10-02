@@ -6,9 +6,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models.Timeline;
+using Singularity.Models.Timeline;
 
-namespace SLSKDONET.Services.Video;
+namespace Singularity.Services.Video;
 
 /// <summary>
 /// Task 8.4 — Generates a YouTube chapter description file from a

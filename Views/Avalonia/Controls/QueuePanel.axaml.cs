@@ -5,10 +5,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
-using SLSKDONET.Services;
-using SLSKDONET.ViewModels;
+using Singularity.Services;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 public partial class QueuePanel : UserControl
 {

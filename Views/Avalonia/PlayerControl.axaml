@@ -2,12 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:controls="clr-namespace:SLSKDONET.Views.Avalonia.Controls"
-             xmlns:views="clr-namespace:SLSKDONET.Views.Avalonia"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:controls="clr-namespace:Singularity.Views.Avalonia.Controls"
+             xmlns:views="clr-namespace:Singularity.Views.Avalonia"
 
              mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="800"
-             x:Class="SLSKDONET.Views.Avalonia.PlayerControl"
+             x:Class="Singularity.Views.Avalonia.PlayerControl"
              x:DataType="vm:PlayerViewModel"
              Background="{DynamicResource BrushBg1}">
 

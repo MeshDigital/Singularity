@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
-using SLSKDONET.Data.Entities;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public interface IAudioAnalysisService
 {

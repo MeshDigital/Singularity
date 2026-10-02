@@ -8,15 +8,15 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Views;
-using SLSKDONET.ViewModels.Library;
-using SLSKDONET.Services.Similarity;
-using SLSKDONET.Models.Musical;
-using SLSKDONET.Services.Library;
-using SLSKDONET.Services.Playlist;
+using Singularity.Models;
+using Singularity.Views;
+using Singularity.ViewModels.Library;
+using Singularity.Services.Similarity;
+using Singularity.Models.Musical;
+using Singularity.Services.Library;
+using Singularity.Services.Playlist;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public sealed class PlaylistIntelligenceViewModel : INotifyPropertyChanged, IDisposable
 {
@@ -746,7 +746,7 @@ public sealed class PlaylistIntelligenceViewModel : INotifyPropertyChanged, IDis
                 top: 5),
             BuildOverviewStatBars(tracks
                 .Where(t => !string.IsNullOrEmpty(t.MusicalKey))
-                .Select(t => SLSKDONET.Utils.KeyConverter.ToCamelot(t.MusicalKey)),
+                .Select(t => Singularity.Utils.KeyConverter.ToCamelot(t.MusicalKey)),
                 top: 8),
             BuildOverviewBpmBrackets(bpms));
     }

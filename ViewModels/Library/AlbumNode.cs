@@ -3,16 +3,16 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Data.Essentia;
-using SLSKDONET.Views; // For RelayCommand
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Data.Essentia;
+using Singularity.Views; // For RelayCommand
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using System;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 public class AlbumNode : ILibraryNode, INotifyPropertyChanged
 {

@@ -1,8 +1,8 @@
 using System;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 using ReactiveUI;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
     public interface IRightPanelService
     {

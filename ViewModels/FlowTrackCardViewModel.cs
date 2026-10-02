@@ -4,10 +4,10 @@ using System.Linq;
 using System.Reactive;
 using Avalonia.Media;
 using ReactiveUI;
-using SLSKDONET.Models;
-using SLSKDONET.Models.Musical;
+using Singularity.Models;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Transition bridge data shown between two adjacent cards on the Flow Builder timeline.

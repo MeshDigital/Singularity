@@ -8,10 +8,10 @@ using Avalonia.Skia;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using SkiaSharp;
-using SLSKDONET;                  // App
-using SLSKDONET.Services.Audio;
+using Singularity;                  // App
+using Singularity.Services.Audio;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 /// <summary>
 /// Real-time FFT spectrum visualizer for the library hover-preview.

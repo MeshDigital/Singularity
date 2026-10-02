@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
     public partial class InputDialog : Window
     {

@@ -4,9 +4,9 @@ using System.Reactive;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using ReactiveUI;
-using SLSKDONET.Services;
+using Singularity.Services;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// A single row in a chat message thread — shared between 1:1 conversations and chat rooms

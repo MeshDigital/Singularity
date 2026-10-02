@@ -5,9 +5,9 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Events;
+using Singularity.Events;
 
-namespace SLSKDONET.Services.Diagnostics;
+namespace Singularity.Services.Diagnostics;
 
 public record AuditLogEntry(string TrackHash, string Message, bool IsError = false, DateTime? Timestamp = null);
 

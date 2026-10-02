@@ -1,7 +1,7 @@
 using System;
-using SLSKDONET.Models.Musical;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 public sealed class SavedDoubleViewModel
 {

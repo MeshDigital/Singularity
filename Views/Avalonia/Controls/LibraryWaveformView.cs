@@ -7,11 +7,11 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Timeline;
+using Singularity.Models;
+using Singularity.Services.Timeline;
 using SkiaSharp;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 /// <summary>
 /// Full-length waveform underlay for library track rows.

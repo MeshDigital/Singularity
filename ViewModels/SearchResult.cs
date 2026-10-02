@@ -1,9 +1,9 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public class SearchResult : INotifyPropertyChanged
 {

@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 
-namespace SLSKDONET.Views.Avalonia.Dialogs;
+namespace Singularity.Views.Avalonia.Dialogs;
 
 public enum ExportPlaylistChoice
 {

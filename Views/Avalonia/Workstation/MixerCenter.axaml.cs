@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 
-namespace SLSKDONET.Views.Avalonia.Workstation;
+namespace Singularity.Views.Avalonia.Workstation;
 
 public partial class MixerCenter : UserControl
 {

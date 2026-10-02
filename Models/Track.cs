@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 public enum TrackAvailabilityState
 {
@@ -134,7 +134,7 @@ public class Track
 
     /// <summary>
     /// How well this search result's artist/title text matches the search query (0.0-1.0),
-    /// set by <see cref="SLSKDONET.Services.ResultSorter.CalculateRank"/>. Distinct from
+    /// set by <see cref="Singularity.Services.ResultSorter.CalculateRank"/>. Distinct from
     /// <see cref="CurrentRank"/>, which blends this together with file quality and peer
     /// availability — this raw signal exists so relevance-sensitive decisions (like the
     /// discovery fast-lane short-circuit) can require a minimum match confidence on its own,

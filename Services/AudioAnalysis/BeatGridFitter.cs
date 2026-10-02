@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Services.Rekordbox;
+using Singularity.Data.Entities;
+using Singularity.Services.Rekordbox;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// Fits a constant tempo + phase to a beat tracker's tick positions, replacing two lossy
@@ -247,7 +247,7 @@ public static class BeatGridFitter
     /// <summary>Structural events already stored on <paramref name="features"/> (see <see cref="EstimateBarPhase"/>).</summary>
     public static StructuralEvents StructuralEventsFrom(AudioFeaturesEntity features)
     {
-        var a = SLSKDONET.Engine.Analysis.AnalysisPipelineResultBuilder.Build(features);
+        var a = Singularity.Engine.Analysis.AnalysisPipelineResultBuilder.Build(features);
         return new StructuralEvents(a.SubBassReturnTimestamps, a.SubBassDropoutTimestamps);
     }
 

@@ -2,13 +2,13 @@ using System;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using ReactiveUI;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Models;
+using Singularity.Services;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Enhanced ViewModel wrapper for playlist cards in the library with forensic health metrics.
@@ -51,9 +51,9 @@ public class LibraryPlaylistCardViewModel : ReactiveObject, IDisposable
     private bool HasForensicCoverage =>
         _playlist.PlaylistTracks != null &&
         _playlist.PlaylistTracks.Any(t =>
-            t.Integrity == SLSKDONET.Data.IntegrityLevel.Verified ||
-            t.Integrity == SLSKDONET.Data.IntegrityLevel.Gold ||
-            t.Integrity == SLSKDONET.Data.IntegrityLevel.Suspicious ||
+            t.Integrity == Singularity.Data.IntegrityLevel.Verified ||
+            t.Integrity == Singularity.Data.IntegrityLevel.Gold ||
+            t.Integrity == Singularity.Data.IntegrityLevel.Suspicious ||
             t.FrequencyCutoff.HasValue);
 
     public double PrimaryRatio => HasForensicCoverage ? LosslessRatio : DownloadedRatio;
@@ -81,8 +81,8 @@ public class LibraryPlaylistCardViewModel : ReactiveObject, IDisposable
                 return 0.0;
 
             var verifiedCount = _playlist.PlaylistTracks.Count(t =>
-                t.Integrity == SLSKDONET.Data.IntegrityLevel.Verified ||
-                t.Integrity == SLSKDONET.Data.IntegrityLevel.Gold);
+                t.Integrity == Singularity.Data.IntegrityLevel.Verified ||
+                t.Integrity == Singularity.Data.IntegrityLevel.Gold);
 
             return (double)verifiedCount / _playlist.TotalTracks;
         }
@@ -120,11 +120,11 @@ public class LibraryPlaylistCardViewModel : ReactiveObject, IDisposable
                 return $"No forensic data yet. {DownloadedCount}/{TrackCount} downloaded.";
 
             var verified = _playlist.PlaylistTracks.Count(t =>
-                t.Integrity == SLSKDONET.Data.IntegrityLevel.Verified ||
-                t.Integrity == SLSKDONET.Data.IntegrityLevel.Gold);
+                t.Integrity == Singularity.Data.IntegrityLevel.Verified ||
+                t.Integrity == Singularity.Data.IntegrityLevel.Gold);
 
             var suspicious = _playlist.PlaylistTracks.Count(t =>
-                t.Integrity == SLSKDONET.Data.IntegrityLevel.Suspicious);
+                t.Integrity == Singularity.Data.IntegrityLevel.Suspicious);
 
             return $"{verified} verified lossless, {suspicious} suspicious";
         }

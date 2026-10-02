@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
-namespace SLSKDONET.Services.Similarity;
+namespace Singularity.Services.Similarity;
 
 /// <summary>
 /// Genre (MTG-Jamendo, 87-class) and mood (5 binary classifiers) predictions from the shared

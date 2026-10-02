@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// Separates percussive elements using HPSS (Harmonic-Percussive Source Separation)

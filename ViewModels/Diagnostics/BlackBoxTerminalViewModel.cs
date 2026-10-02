@@ -9,7 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.ViewModels.Diagnostics
+namespace Singularity.ViewModels.Diagnostics
 {
     public record TerminalLogEntry(DateTime Timestamp, string Stage, string Level, string Message);
 

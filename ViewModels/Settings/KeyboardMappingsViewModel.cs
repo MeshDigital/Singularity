@@ -8,10 +8,10 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Avalonia.Input;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Services.Input;
-using SLSKDONET.Views; // RelayCommand, RelayCommand<T>, AsyncRelayCommand
+using Singularity.Services.Input;
+using Singularity.Views; // RelayCommand, RelayCommand<T>, AsyncRelayCommand
 
-namespace SLSKDONET.ViewModels.Settings;
+namespace Singularity.ViewModels.Settings;
 
 // ─── Row ViewModel ─────────────────────────────────────────────────────────
 

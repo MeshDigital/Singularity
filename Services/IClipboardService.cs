@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public interface IClipboardService
 {

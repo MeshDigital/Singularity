@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 
-namespace SLSKDONET.Views.Avalonia.Converters;
+namespace Singularity.Views.Avalonia.Converters;
 
 /// <summary>Turns a Soulseek username into 1-2 uppercase initials for an avatar circle.</summary>
 public class UsernameToInitialsConverter : IValueConverter

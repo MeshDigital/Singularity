@@ -36,7 +36,7 @@ pwsh ./Tools/fetch-models.ps1
 
 dotnet build Singularity.sln
 dotnet run --project Singularity.csproj
-dotnet test Tests/SLSKDONET.Tests/SLSKDONET.Tests.csproj
+dotnet test Tests/Singularity.Tests/Singularity.Tests.csproj
 ```
 
 ## Data locations
@@ -53,5 +53,5 @@ Set `SINGULARITY_DB_PATH` to point the library database somewhere else (the test
 
 ## Codebase notes
 
-- The C# root namespace is still `SLSKDONET` and the test project is still `SLSKDONET.Tests`. Renaming them is mechanical and can happen whenever it's convenient.
+- The C# root namespace is still `Singularity` and the test project is still `Singularity.Tests`. Renaming them is mechanical and can happen whenever it's convenient.
 - ORBIT's original architecture docs, deep-dives and agent notes are kept for reference in [`DOCS/orbit-heritage/`](DOCS/orbit-heritage/).

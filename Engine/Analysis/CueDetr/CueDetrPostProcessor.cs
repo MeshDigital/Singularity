@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SLSKDONET.Engine.Analysis.CueDetr;
+namespace Singularity.Engine.Analysis.CueDetr;
 
 /// <summary>A cue point CUE-DETR found: spectrogram frame, time, and the peak's min-max-scaled
 /// detection score (≥ the sensitivity, 1.0 = the most confident detection in the track).</summary>

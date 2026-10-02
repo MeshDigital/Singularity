@@ -5,23 +5,23 @@ using System.Threading.Tasks;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Views;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Views;
 using Avalonia.Controls.Selection;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
+using Singularity.Data;
+using Singularity.Data.Entities;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using Avalonia.Threading;
-using SLSKDONET.Events;
-using SLSKDONET.Configuration;
-using SLSKDONET.Services.Library;
-using SLSKDONET.Services.Playlist;
-using SLSKDONET.Services.Similarity;
-using SLSKDONET.Models.Musical;
+using Singularity.Events;
+using Singularity.Configuration;
+using Singularity.Services.Library;
+using Singularity.Services.Playlist;
+using Singularity.Services.Similarity;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Coordinator ViewModel for the Library page.

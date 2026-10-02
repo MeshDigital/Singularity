@@ -1,13 +1,13 @@
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using ReactiveUI;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Models;
+using Singularity.Services;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// ViewModel wrapper for playlist cards on the Mission Control dashboard.

@@ -6,15 +6,15 @@ using Avalonia.Platform;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Audio;
-using SLSKDONET.Services.Timeline;
+using Singularity.Models;
+using Singularity.Services.Audio;
+using Singularity.Services.Timeline;
 using SkiaSharp;
 using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
 using Avalonia.Threading;
 
-namespace SLSKDONET.Views.Avalonia.Controls
+namespace Singularity.Views.Avalonia.Controls
 {
     public class WaveformControl : Control
     {

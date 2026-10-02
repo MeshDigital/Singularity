@@ -11,16 +11,16 @@ using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Data;
-using SLSKDONET.Events;
-using SLSKDONET.Models;
-using SLSKDONET.Models.Musical;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Playlist;
-using SLSKDONET.Services.Similarity;
-using SLSKDONET.Views;
+using Singularity.Data;
+using Singularity.Events;
+using Singularity.Models;
+using Singularity.Models.Musical;
+using Singularity.Services;
+using Singularity.Services.Playlist;
+using Singularity.Services.Similarity;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// One row in the Similar Tracks panel — a candidate track with its similarity score.
@@ -499,7 +499,7 @@ public sealed class SimilarTracksViewModel : ReactiveObject, IDisposable
             .Subscribe(evt => HandleFindBridgeBetweenRequest(evt))
             .DisposeWith(_disposables);
 
-        ReactiveUI.MessageBus.Current.Listen<SLSKDONET.Events.FindSimilarTrackRequestEvent>()
+        ReactiveUI.MessageBus.Current.Listen<Singularity.Events.FindSimilarTrackRequestEvent>()
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(evt => HandleFindSimilarTrackRequest(evt))
             .DisposeWith(_disposables);
@@ -588,7 +588,7 @@ public sealed class SimilarTracksViewModel : ReactiveObject, IDisposable
         FindBridgeBetweenCommand.Execute().Subscribe();
     }
 
-    private void HandleFindSimilarTrackRequest(SLSKDONET.Events.FindSimilarTrackRequestEvent evt)
+    private void HandleFindSimilarTrackRequest(Singularity.Events.FindSimilarTrackRequestEvent evt)
     {
         if (string.IsNullOrWhiteSpace(evt.TrackHash)) return;
 

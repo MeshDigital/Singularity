@@ -7,7 +7,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 $rootPath = "C:\Users\quint\OneDrive\Documenten\GitHub\QMUSICSLSK"
-$testProject = "Tests/SLSKDONET.Tests/SLSKDONET.Tests.csproj"
+$testProject = "Tests/Singularity.Tests/Singularity.Tests.csproj"
 
 Set-Location $rootPath
 

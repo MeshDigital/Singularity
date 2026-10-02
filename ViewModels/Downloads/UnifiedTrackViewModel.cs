@@ -10,15 +10,15 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
 using ReactiveUI;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Events;
-using SLSKDONET.Views;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Events;
+using Singularity.Views;
 using Microsoft.EntityFrameworkCore;
-using SLSKDONET.Data;
+using Singularity.Data;
 
-namespace SLSKDONET.ViewModels.Downloads;
+namespace Singularity.ViewModels.Downloads;
 
 /// <summary>
 /// Phase 2.5 & 12.6: Unified Track ViewModel for Download Center and Lists.
@@ -334,8 +334,8 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
 
         OpenAuditLogCommand = ReactiveCommand.Create(() =>
         {
-            ReactiveUI.MessageBus.Current.SendMessage(SLSKDONET.Events.OpenInspectorEvent.Create(
-                new SLSKDONET.ViewModels.Diagnostics.BlackBoxTerminalViewModel(GlobalId),
+            ReactiveUI.MessageBus.Current.SendMessage(Singularity.Events.OpenInspectorEvent.Create(
+                new Singularity.ViewModels.Diagnostics.BlackBoxTerminalViewModel(GlobalId),
                 "Library.TrackSelection.AuditLog"));
         });
 
@@ -617,7 +617,7 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
     {
         if (Model == null || string.IsNullOrWhiteSpace(GlobalId)) return;
         ReactiveUI.MessageBus.Current.SendMessage(
-            new SLSKDONET.Events.FindSimilarTrackRequestEvent(GlobalId, $"{ArtistName} - {TrackTitle}"));
+            new Singularity.Events.FindSimilarTrackRequestEvent(GlobalId, $"{ArtistName} - {TrackTitle}"));
     }
 
     private void FindSimilarAi() => FindSimilar();
@@ -1155,7 +1155,7 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
 
     /// <summary>True when the spectral analysis indicates a high-quality (≥ 320 kbps) transcode.</summary>
     private bool IsHighBitrateTranscode =>
-        Model.Integrity == SLSKDONET.Data.IntegrityLevel.Suspicious &&
+        Model.Integrity == Singularity.Data.IntegrityLevel.Suspicious &&
         Model.FrequencyCutoff >= HighBitrateTranscodeCutoffHz;
 
     /// <summary>
@@ -1171,8 +1171,8 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
 
             return Model.Integrity switch
             {
-                SLSKDONET.Data.IntegrityLevel.Gold       => "#1DB954", // green — genuine lossless
-                SLSKDONET.Data.IntegrityLevel.Suspicious => IsHighBitrateTranscode
+                Singularity.Data.IntegrityLevel.Gold       => "#1DB954", // green — genuine lossless
+                Singularity.Data.IntegrityLevel.Suspicious => IsHighBitrateTranscode
                     ? "#FFD700"   // amber — high-bitrate transcode (≥ 320 kbps)
                     : "#FF5252",  // red   — low/medium-bitrate transcode
                 _ => "#888888"
@@ -1189,8 +1189,8 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
 
             return Model.Integrity switch
             {
-                SLSKDONET.Data.IntegrityLevel.Gold       => "✅ TRUE LOSSLESS",
-                SLSKDONET.Data.IntegrityLevel.Suspicious => IsHighBitrateTranscode
+                Singularity.Data.IntegrityLevel.Gold       => "✅ TRUE LOSSLESS",
+                Singularity.Data.IntegrityLevel.Suspicious => IsHighBitrateTranscode
                     ? "⚠ TRANSCODE (HQ)"
                     : "⚠ FAKE FLAC",
                 _ => string.Empty
@@ -1358,7 +1358,7 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
     public bool IsSecure => IsCompleted && IntegrityScore > 0.9 && !string.IsNullOrEmpty(Model.ResolvedFilePath);
 
     // Phase 19: Search 2.0 Tiers for Library
-    public SLSKDONET.Models.SearchTier Tier => SLSKDONET.Models.SearchTier.Gold;
+    public Singularity.Models.SearchTier Tier => Singularity.Models.SearchTier.Gold;
 
     public string TierBadge => string.Empty;
 
@@ -1383,19 +1383,19 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
 
     public string CurationIcon => Model.CurationConfidence switch
     {
-        SLSKDONET.Data.Entities.CurationConfidence.Manual => "🛡️",
-        SLSKDONET.Data.Entities.CurationConfidence.High => "🏅",
-        SLSKDONET.Data.Entities.CurationConfidence.Medium => "🥈",
-        SLSKDONET.Data.Entities.CurationConfidence.Low => "📉",
+        Singularity.Data.Entities.CurationConfidence.Manual => "🛡️",
+        Singularity.Data.Entities.CurationConfidence.High => "🏅",
+        Singularity.Data.Entities.CurationConfidence.Medium => "🥈",
+        Singularity.Data.Entities.CurationConfidence.Low => "📉",
         _ => string.Empty
     };
     
     public Avalonia.Media.IBrush CurationColor => Model.CurationConfidence switch
     {
-        SLSKDONET.Data.Entities.CurationConfidence.Manual => Avalonia.Media.Brushes.LimeGreen,
-        SLSKDONET.Data.Entities.CurationConfidence.High => Avalonia.Media.Brushes.Gold,
-        SLSKDONET.Data.Entities.CurationConfidence.Medium => Avalonia.Media.Brushes.Silver,
-        SLSKDONET.Data.Entities.CurationConfidence.Low => Avalonia.Media.Brushes.OrangeRed,
+        Singularity.Data.Entities.CurationConfidence.Manual => Avalonia.Media.Brushes.LimeGreen,
+        Singularity.Data.Entities.CurationConfidence.High => Avalonia.Media.Brushes.Gold,
+        Singularity.Data.Entities.CurationConfidence.Medium => Avalonia.Media.Brushes.Silver,
+        Singularity.Data.Entities.CurationConfidence.Low => Avalonia.Media.Brushes.OrangeRed,
         _ => Avalonia.Media.Brushes.Transparent
     };
     
@@ -2392,7 +2392,7 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
     }
     
     // Phase 11.5: Library Trust Badges
-    public SLSKDONET.Data.Entities.CurationConfidence CurationConfidence => Model.CurationConfidence;
+    public Singularity.Data.Entities.CurationConfidence CurationConfidence => Model.CurationConfidence;
     public string ProvenanceTooltip => $"Confidence: {CurationConfidence}\nSource: {Model.Source}";
 
     public void Dispose()

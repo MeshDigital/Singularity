@@ -1,4 +1,4 @@
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Display model for a single hot cue pad (slots A–H).

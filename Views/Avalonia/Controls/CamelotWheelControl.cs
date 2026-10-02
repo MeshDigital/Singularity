@@ -5,7 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 
-namespace SLSKDONET.Views.Avalonia.Controls
+namespace Singularity.Views.Avalonia.Controls
 {
     public class CamelotWheelControl : Control
     {

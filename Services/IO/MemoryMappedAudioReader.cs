@@ -4,7 +4,7 @@ using System.IO.MemoryMappedFiles;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Services.IO;
+namespace Singularity.Services.IO;
 
 /// <summary>
 /// Reads raw audio file bytes, switching to a <see cref="MemoryMappedFile"/> for

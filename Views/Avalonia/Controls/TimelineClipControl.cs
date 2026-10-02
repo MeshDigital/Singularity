@@ -5,11 +5,11 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Timeline;
+using Singularity.Models;
+using Singularity.Services.Timeline;
 using SkiaSharp;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 /// <summary>
 /// Renders a single <see cref="Models.Timeline.TimelineClip"/> lane region:

@@ -3,7 +3,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using SkiaSharp;
 
-namespace SLSKDONET.Services.Video;
+namespace Singularity.Services.Video;
 
 /// <summary>
 /// Renders audio-reactive visual primitives into a <see cref="SKBitmap"/>

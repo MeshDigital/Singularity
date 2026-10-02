@@ -1,9 +1,9 @@
 using System;
 using System.Windows.Input;
 using ReactiveUI;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.ViewModels.Downloads;
+namespace Singularity.ViewModels.Downloads;
 
 /// <summary>
 /// One playlist with tracks still missing, shown in the Download Center's

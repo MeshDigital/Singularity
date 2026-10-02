@@ -2,10 +2,10 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
-using SLSKDONET.Models;
-using SLSKDONET.ViewModels.Library;
+using Singularity.Models;
+using Singularity.ViewModels.Library;
 
-namespace SLSKDONET.Views.Avalonia.Dialogs;
+namespace Singularity.Views.Avalonia.Dialogs;
 
 public partial class CreateSmartPlaylistDialog : Window
 {

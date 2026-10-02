@@ -5,13 +5,13 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Services.Audio;
-using SLSKDONET.ViewModels;
-using SLSKDONET.ViewModels.Workstation;
-using SLSKDONET.Views;
+using Singularity.Services.Audio;
+using Singularity.ViewModels;
+using Singularity.ViewModels.Workstation;
+using Singularity.Views;
 using Unit = System.Reactive.Unit;
 
-namespace SLSKDONET.Services.Input;
+namespace Singularity.Services.Input;
 
 /// <summary>
 /// Subscribes to the main window's key-down tunnel, maps events via

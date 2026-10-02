@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
-namespace SLSKDONET.Services.Audio;
+namespace Singularity.Services.Audio;
 
 /// <summary>Output format for <see cref="MixdownService"/>.</summary>
 public enum ExportFormat { Wav, Mp3, Flac }

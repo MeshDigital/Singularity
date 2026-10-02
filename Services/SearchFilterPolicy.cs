@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using Soulseek;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public enum SearchRejectionReason
 {

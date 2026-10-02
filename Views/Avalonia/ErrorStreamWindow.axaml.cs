@@ -16,7 +16,7 @@ using Avalonia.Threading;
 using ReactiveUI;
 using Serilog;
 
-namespace SLSKDONET.Views.Avalonia;
+namespace Singularity.Views.Avalonia;
 
 public class ErrorItem
 {
@@ -138,7 +138,7 @@ public partial class ErrorStreamWindow : Window, INotifyPropertyChanged
                 // Check if we're in development (running from source)
                 bool isDevelopment = Directory.GetCurrentDirectory().Contains("GitHub") || 
                                    Directory.GetCurrentDirectory().Contains("source") ||
-                                   File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "SLSKDONET.csproj"));
+                                   File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "Singularity.csproj"));
                 
                 fallbackLogDirectory = isDevelopment 
                     ? Path.Combine(Directory.GetCurrentDirectory(), "logs")

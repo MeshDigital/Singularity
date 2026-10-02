@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models.Entertainment;
+using Singularity.Models.Entertainment;
 
-namespace SLSKDONET.Services.Entertainment;
+namespace Singularity.Services.Entertainment;
 
 /// <summary>
 /// Implements ORBIT's Ambient Mode — monitors idle time and playback state,

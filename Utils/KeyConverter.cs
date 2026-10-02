@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
-namespace SLSKDONET.Utils;
+namespace Singularity.Utils;
 
 /// <summary>
 /// Pro DJ Utility: Normalizes musical keys for export.

@@ -8,10 +8,10 @@ using Hnsw;
 using Hnsw.RamStorage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
+using Singularity.Data;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.Services.Similarity;
+namespace Singularity.Services.Similarity;
 
 /// <summary>
 /// A track entry held in the in-memory similarity index.

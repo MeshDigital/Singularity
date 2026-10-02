@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models.Musical
+namespace Singularity.Models.Musical
 {
     /// <summary>
     /// DJ-friendly presets for flow weighting.

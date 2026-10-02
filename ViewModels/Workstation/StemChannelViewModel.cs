@@ -1,10 +1,10 @@
 using System;
 using System.Reactive;
 using ReactiveUI;
-using SLSKDONET.Models.Stem;
-using SLSKDONET.Services.Audio;
+using Singularity.Models.Stem;
+using Singularity.Services.Audio;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// ViewModel for a single stem channel strip (Vocals / Drums / Bass / Other).

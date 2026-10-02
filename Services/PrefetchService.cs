@@ -5,12 +5,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
-using SLSKDONET.Services.AudioAnalysis;
+using Singularity.Configuration;
+using Singularity.Data;
+using Singularity.Models;
+using Singularity.Services.AudioAnalysis;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Local-only staging queue for opt-in prefetching.

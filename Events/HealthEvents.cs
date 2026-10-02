@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 // Soulseek Adapter and connectivity events
 public record SoulseekStateChangedEvent(

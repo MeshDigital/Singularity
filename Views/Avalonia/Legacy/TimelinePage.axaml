@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:timeline="clr-namespace:SLSKDONET.Models.Timeline"
-             x:Class="SLSKDONET.Views.Avalonia.TimelinePage"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:timeline="clr-namespace:Singularity.Models.Timeline"
+             x:Class="Singularity.Views.Avalonia.TimelinePage"
              x:DataType="vm:TimelineViewModel"
              Background="#1A1A1A">
 

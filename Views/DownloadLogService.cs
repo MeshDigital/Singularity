@@ -5,11 +5,11 @@ using System.Linq;
 using System.Text.Json;
 using TagLib;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
+using Singularity.Configuration;
+using Singularity.Models;
 using TagLibFile = TagLib.File;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Manages a persistent log of downloaded tracks.

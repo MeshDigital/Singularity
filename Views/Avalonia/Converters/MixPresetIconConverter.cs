@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 
-namespace SLSKDONET.Views.Avalonia.Converters;
+namespace Singularity.Views.Avalonia.Converters;
 
 /// <summary>Maps a Mix preset name (Auto/Fade/Rise/Blend/Wave/Melt/Custom) to the emoji shown
 /// next to it in the inline Mix module — gives each preset a distinct at-a-glance identity

@@ -7,10 +7,10 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using SLSKDONET.Services;
-using SLSKDONET.Views;
+using Singularity.Services;
+using Singularity.Views;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Represents a download job for a track.

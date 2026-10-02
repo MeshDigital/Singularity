@@ -3,7 +3,7 @@ using Avalonia.Media;
 using System;
 using System.Globalization;
 
-namespace SLSKDONET.Views.Avalonia.Converters
+namespace Singularity.Views.Avalonia.Converters
 {
     /// <summary>
     /// Returns a vibrant "active" color when true, and a muted color when false.

@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Playlist-level scheduling priority. Coarse tier that controls which playlist gets

@@ -1,7 +1,7 @@
 using System;
-using SLSKDONET.Configuration;
+using Singularity.Configuration;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public enum SearchPressureLevel
 {

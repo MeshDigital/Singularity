@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text.RegularExpressions;
 
-namespace SLSKDONET.Utils;
+namespace Singularity.Utils;
 
 /// <summary>
 /// Validation utilities for search queries and filters.

@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Data;
+namespace Singularity.Data;
 
 /// <summary>
 /// Entity for persisting the playback queue across app restarts.

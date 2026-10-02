@@ -5,9 +5,9 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Views.Avalonia;
+namespace Singularity.Views.Avalonia;
 
 /// <summary>
 /// Fullscreen player. Code-behind handles what bindings can't: the seek slider (a live

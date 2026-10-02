@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>What CommentTracklistParser did with one line of pasted input.</summary>
 public enum ImportLineOutcome

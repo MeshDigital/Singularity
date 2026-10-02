@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.Engine.Snapping;
+using Singularity.Engine.Snapping;
 
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// Extracts transients from raw audio signals, computes MFCC windows around them,

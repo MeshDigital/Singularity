@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services.Audio
+namespace Singularity.Services.Audio
 {
     /// <summary>
     /// Manages the persistence and retrieval of surgically isolated stem fragments.

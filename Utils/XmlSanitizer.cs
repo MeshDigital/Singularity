@@ -1,7 +1,7 @@
 using System;
 using System.Text.RegularExpressions;
 
-namespace SLSKDONET.Utils;
+namespace Singularity.Utils;
 
 /// <summary>
 /// Utility for sanitizing strings for use in XML attributes.

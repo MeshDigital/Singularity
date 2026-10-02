@@ -1,9 +1,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using SLSKDONET.Services;
+using Singularity.Services;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Hook helpers for the opt-in Frequent Sources feature.

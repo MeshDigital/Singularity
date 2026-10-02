@@ -1,6 +1,6 @@
 using Avalonia.Media;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Represents a visual "pill" or badge in the Library UI (e.g., Genre, Mood, Energy).

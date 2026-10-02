@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
-using SLSKDONET.Data.Entities;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// A lightweight feature snapshot for one structural section of a track

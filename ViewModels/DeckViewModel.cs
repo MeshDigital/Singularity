@@ -5,9 +5,9 @@ using Avalonia.Threading;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using ReactiveUI;
-using SLSKDONET.Services.Audio;
+using Singularity.Services.Audio;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 // ─── DeckSlotViewModel ────────────────────────────────────────────────────────
 

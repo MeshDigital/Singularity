@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Data.Essentia;
+using Singularity.Data.Entities;
+using Singularity.Data.Essentia;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// Detects musical key and scale from Essentia tonal analysis output,

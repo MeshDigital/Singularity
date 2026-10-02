@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Services.IO
+namespace Singularity.Services.IO
 {
     /// <summary>
     /// Provides atomic, crash-safe file write operations.

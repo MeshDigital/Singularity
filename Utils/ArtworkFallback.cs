@@ -1,7 +1,7 @@
 using System;
 using Avalonia.Media;
 
-namespace SLSKDONET.Utils;
+namespace Singularity.Utils;
 
 /// <summary>
 /// Generates a deterministic, visually consistent placeholder color + monogram letter for a

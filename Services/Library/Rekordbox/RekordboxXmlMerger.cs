@@ -4,7 +4,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services.Library.Rekordbox;
+namespace Singularity.Services.Library.Rekordbox;
 
 /// <summary>
 /// Reconciles a freshly-built Rekordbox XML export against an existing on-disk file at the same
@@ -30,7 +30,7 @@ public static class RekordboxXmlMerger
     /// </param>
     /// <param name="priorCueSnapshotByTrackId">
     /// Optional: fresh-export TrackID → canonicalized cue snapshot ORBIT last confirmed as in-sync
-    /// for that track (see <see cref="SLSKDONET.Data.Entities.RekordboxExportCueSyncEntity"/>). When a matched track's
+    /// for that track (see <see cref="Singularity.Data.Entities.RekordboxExportCueSyncEntity"/>). When a matched track's
     /// on-disk cues still equal this snapshot, cues are safe to overwrite with the fresh set (a
     /// genuine ORBIT-side edit); when they differ, the on-disk cues are preserved as a presumed
     /// Rekordbox hand-edit. Omitted (or no entry for a track) falls back to the original

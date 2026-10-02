@@ -2,10 +2,10 @@ using System;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using ReactiveUI;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Models;
+using Singularity.Services;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public class AnalysisProgressViewModel : ReactiveObject, IDisposable
 {

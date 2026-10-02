@@ -1,4 +1,4 @@
-namespace SLSKDONET.Services.Models;
+namespace Singularity.Services.Models;
 
 public class IndexAuditReport
 {

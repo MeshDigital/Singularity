@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 
-namespace SLSKDONET.Utils;
+namespace Singularity.Utils;
 
 /// <summary>
 /// Utility class for string distance calculations and fuzzy matching.

@@ -1,7 +1,7 @@
-using SLSKDONET.Models.Timeline;
-using SLSKDONET.Services.Playlist;
+using Singularity.Models.Timeline;
+using Singularity.Services.Playlist;
 
-namespace SLSKDONET.Services.Timeline;
+namespace Singularity.Services.Timeline;
 
 /// <summary>
 /// Maps the six Spotify-Mix-style preset names (Auto/Fade/Rise/Blend/Wave/Melt) onto a real
@@ -76,21 +76,21 @@ public static class TransitionPresetLibrary
 
     /// <summary>
     /// Maps the DSP-facing <see cref="TransitionType"/> (Cut/Crossfade/EchoOut/FilterSweep/EqSwap/WaveDuck)
-    /// onto <see cref="SLSKDONET.Services.Audio.TransitionType"/>, the smaller vocabulary
-    /// <see cref="SLSKDONET.Services.Audio.TransitionEngine"/>'s automation-curve math understands —
+    /// onto <see cref="Singularity.Services.Audio.TransitionType"/>, the smaller vocabulary
+    /// <see cref="Singularity.Services.Audio.TransitionEngine"/>'s automation-curve math understands —
     /// used for both the Mix editor's waveform overlay curves and AudioPlayerService's live
     /// per-tick gain during real playback. EchoOut/WaveDuck each have a dedicated automation
     /// curve (echo taps / duck pulses) approximating their real TransitionDsp provider's math.
     /// </summary>
-    public static SLSKDONET.Services.Audio.TransitionType ToAutomationType(this TransitionType type) => type switch
+    public static Singularity.Services.Audio.TransitionType ToAutomationType(this TransitionType type) => type switch
     {
-        TransitionType.Cut => SLSKDONET.Services.Audio.TransitionType.Cut,
-        TransitionType.Crossfade => SLSKDONET.Services.Audio.TransitionType.Crossfade,
-        TransitionType.FilterSweep => SLSKDONET.Services.Audio.TransitionType.FilterSweep,
-        TransitionType.EqSwap => SLSKDONET.Services.Audio.TransitionType.EqSwap,
-        TransitionType.EchoOut => SLSKDONET.Services.Audio.TransitionType.EchoOut,
-        TransitionType.WaveDuck => SLSKDONET.Services.Audio.TransitionType.WaveDuck,
-        _ => SLSKDONET.Services.Audio.TransitionType.Crossfade,
+        TransitionType.Cut => Singularity.Services.Audio.TransitionType.Cut,
+        TransitionType.Crossfade => Singularity.Services.Audio.TransitionType.Crossfade,
+        TransitionType.FilterSweep => Singularity.Services.Audio.TransitionType.FilterSweep,
+        TransitionType.EqSwap => Singularity.Services.Audio.TransitionType.EqSwap,
+        TransitionType.EchoOut => Singularity.Services.Audio.TransitionType.EchoOut,
+        TransitionType.WaveDuck => Singularity.Services.Audio.TransitionType.WaveDuck,
+        _ => Singularity.Services.Audio.TransitionType.Crossfade,
     };
 
     /// <summary>Applies custom-mode overrides (nullable fields — only present ones replace the preset default) on top of a built model.</summary>

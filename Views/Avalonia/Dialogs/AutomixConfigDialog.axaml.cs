@@ -1,8 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Views.Avalonia.Dialogs;
+namespace Singularity.Views.Avalonia.Dialogs;
 
 /// <summary>
 /// Code-behind for the Automix Configuration dialog.

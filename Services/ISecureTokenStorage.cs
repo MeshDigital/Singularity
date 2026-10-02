@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Interface for secure, cross-platform token storage.

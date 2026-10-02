@@ -9,26 +9,26 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
-using SLSKDONET.Services;
-using SLSKDONET.Services.InputParsers;
-using SLSKDONET.Services.Audio;
-using SLSKDONET.Services.Entertainment;
-using SLSKDONET.Services.AutoDownload;
-using SLSKDONET.Services.Library;
-using SLSKDONET.ViewModels;
-using SLSKDONET.Services.Input;
-using SLSKDONET.Views;
-using SLSKDONET.Views.Avalonia;
-using SLSKDONET.ViewModels.Settings;
+using Singularity.Configuration;
+using Singularity.Data;
+using Singularity.Services;
+using Singularity.Services.InputParsers;
+using Singularity.Services.Audio;
+using Singularity.Services.Entertainment;
+using Singularity.Services.AutoDownload;
+using Singularity.Services.Library;
+using Singularity.ViewModels;
+using Singularity.Services.Input;
+using Singularity.Views;
+using Singularity.Views.Avalonia;
+using Singularity.ViewModels.Settings;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 
-namespace SLSKDONET;
+namespace Singularity;
 
 /// <summary>
 /// Avalonia application class for cross-platform UI
@@ -205,7 +205,7 @@ public partial class App : Application
                 // Phase 8: Validate FFmpeg availability - Moved to background task
 
                 // Show Splash Screen first
-                var splashScreen = new SLSKDONET.Views.Avalonia.SplashScreen();
+                var splashScreen = new Singularity.Views.Avalonia.SplashScreen();
                 
                 // Set as main window temporarily so it shows up as the app window
                 desktop.MainWindow = splashScreen;
@@ -517,7 +517,7 @@ public partial class App : Application
                 appConfig = new AppConfig();
             }
             if (string.IsNullOrEmpty(appConfig.DownloadDirectory))
-                appConfig.DownloadDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "SLSKDONET");
+                appConfig.DownloadDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Singularity");
             return appConfig;
         });
 
@@ -525,7 +525,7 @@ public partial class App : Application
         services.AddSingleton<IEventBus, EventBusService>();
         
         // Phase 1A: SafeWrite Service - Atomic file operations (ORBIT v1.0)
-        services.AddSingleton<SLSKDONET.Services.IO.IFileWriteService, SLSKDONET.Services.IO.SafeWriteService>();
+        services.AddSingleton<Singularity.Services.IO.IFileWriteService, Singularity.Services.IO.SafeWriteService>();
         
         // Phase 2A: Crash Recovery - Journal & Recovery Services (ORBIT v1.0)
         services.AddSingleton<CrashRecoveryJournal>();
@@ -654,12 +654,12 @@ public partial class App : Application
         services.AddSingleton<PathProviderService>();
         
         // Library Folder Scanner
-        services.AddSingleton<SLSKDONET.Services.Network.ProtocolHardeningService>();
+        services.AddSingleton<Singularity.Services.Network.ProtocolHardeningService>();
         services.AddSingleton<SearchNormalizationService>();
         services.AddSingleton<ISafetyFilterService, SafetyFilterService>();
         services.AddSingleton<SearchResultMatcher>();
         services.AddSingleton<AutoSearchService>();
-        services.AddSingleton<SLSKDONET.Services.Diagnostics.ITrackAuditLogger, SLSKDONET.Services.Diagnostics.TrackAuditLogger>();
+        services.AddSingleton<Singularity.Services.Diagnostics.ITrackAuditLogger, Singularity.Services.Diagnostics.TrackAuditLogger>();
 
         services.AddSingleton<MatchScorer>();
         services.AddSingleton<SoulseekSearchHelper>();
@@ -676,8 +676,8 @@ public partial class App : Application
         // Database
         services.AddDbContextFactory<AppDbContext>();
         services.AddSingleton<SchemaMigratorService>();
-        services.AddSingleton<SLSKDONET.Services.Repositories.ITrackRepository, SLSKDONET.Services.Repositories.TrackRepository>();
-        services.AddSingleton<SLSKDONET.Services.Repositories.ITransitionRepository, SLSKDONET.Services.Repositories.TransitionRepository>();
+        services.AddSingleton<Singularity.Services.Repositories.ITrackRepository, Singularity.Services.Repositories.TrackRepository>();
+        services.AddSingleton<Singularity.Services.Repositories.ITransitionRepository, Singularity.Services.Repositories.TransitionRepository>();
         services.AddSingleton<DatabaseService>();
         services.AddSingleton<IMetadataService, MetadataService>();
 
@@ -762,8 +762,8 @@ public partial class App : Application
 
         
         // Phase 10: Tagging & Mobility
-        services.AddSingleton<SLSKDONET.Services.IO.SafeWriteService>();
-        services.AddSingleton<SLSKDONET.Services.IO.IFileWriteService>(sp => sp.GetRequiredService<SLSKDONET.Services.IO.SafeWriteService>());
+        services.AddSingleton<Singularity.Services.IO.SafeWriteService>();
+        services.AddSingleton<Singularity.Services.IO.IFileWriteService>(sp => sp.GetRequiredService<Singularity.Services.IO.SafeWriteService>());
 
 
         
@@ -829,22 +829,22 @@ public partial class App : Application
             sp.GetRequiredService<Services.PhraseAlignmentService>());
         services.AddSingleton<Services.AnalyzeTrackStructureJob>();
 
-        services.AddSingleton<SLSKDONET.ViewModels.Workstation.WorkstationViewModel>();
-        services.AddSingleton<SLSKDONET.ViewModels.Workstation.CueEditorViewModel>();
-        services.AddSingleton<SLSKDONET.ViewModels.CueForgeViewModel>();
-        services.AddSingleton<SLSKDONET.Engine.Analysis.AnalysisPipeline>(sp =>
-            new SLSKDONET.Engine.Analysis.AnalysisPipeline(
-                sp.GetRequiredService<SLSKDONET.Services.AudioAnalysis.AudioIngestionPipeline>(),
-                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SLSKDONET.Engine.Analysis.AnalysisPipeline>>()));
-        services.AddSingleton<SLSKDONET.Engine.Cueing.CueGenerationService>(sp =>
+        services.AddSingleton<Singularity.ViewModels.Workstation.WorkstationViewModel>();
+        services.AddSingleton<Singularity.ViewModels.Workstation.CueEditorViewModel>();
+        services.AddSingleton<Singularity.ViewModels.CueForgeViewModel>();
+        services.AddSingleton<Singularity.Engine.Analysis.AnalysisPipeline>(sp =>
+            new Singularity.Engine.Analysis.AnalysisPipeline(
+                sp.GetRequiredService<Singularity.Services.AudioAnalysis.AudioIngestionPipeline>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Singularity.Engine.Analysis.AnalysisPipeline>>()));
+        services.AddSingleton<Singularity.Engine.Cueing.CueGenerationService>(sp =>
         {
-            var generator = ActivatorUtilities.CreateInstance<SLSKDONET.Engine.Cueing.CueGenerationService>(sp);
+            var generator = ActivatorUtilities.CreateInstance<Singularity.Engine.Cueing.CueGenerationService>(sp);
             // Build-in cues follow the cue template chosen in the editors (read at generation time).
             var configManager = sp.GetRequiredService<ConfigManager>();
             generator.CountdownBars = (genre, bpm) =>
             {
                 var config = configManager.GetCurrent();
-                var bars = SLSKDONET.Engine.Cueing.DropCountdownCues.ResolveBars(config.DropCountdownMode, genre, bpm, config.CustomCountdownBars);
+                var bars = Singularity.Engine.Cueing.DropCountdownCues.ResolveBars(config.DropCountdownMode, genre, bpm, config.CustomCountdownBars);
                 return bars.Count > 0 ? bars : new[] { 16, 8 }; // "Off" only affects manual editing
             };
             return generator;
@@ -1018,7 +1018,7 @@ public partial class App : Application
         // Task 3: Schedule batch sync of embeddings
         try
         {
-            var embeddingService = Services?.GetService<SLSKDONET.Services.Embeddings.IEmbeddingExtractionService>();
+            var embeddingService = Services?.GetService<Singularity.Services.Embeddings.IEmbeddingExtractionService>();
             if (embeddingService != null)
             {
                 embeddingService.ScheduleBatchSync();

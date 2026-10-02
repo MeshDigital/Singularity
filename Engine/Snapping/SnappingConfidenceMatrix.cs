@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SLSKDONET.Engine.Snapping;
+namespace Singularity.Engine.Snapping;
 
 /// <summary>
 /// Computes structural, harmonic, transient, and energy confidence metrics

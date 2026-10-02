@@ -5,9 +5,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.Library;
+namespace Singularity.Services.Library;
 
 /// <summary>
 /// Task 9.1 — Extensions to the Rekordbox XML export workflow:

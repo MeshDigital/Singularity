@@ -5,11 +5,11 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
+using Singularity.Models;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 
-namespace SLSKDONET.Services.Library;
+namespace Singularity.Services.Library;
 
 public class ColumnConfigurationService : IDisposable
 {

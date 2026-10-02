@@ -3,10 +3,10 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using NAudio.Wave;
 using ReactiveUI;
-using SLSKDONET.Models;
-using SLSKDONET.Services.AudioAnalysis;
+using Singularity.Models;
+using Singularity.Services.AudioAnalysis;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Aggregates the four per-stem waveform rows and the shared zoom/offset controls

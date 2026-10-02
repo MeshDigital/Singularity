@@ -2,9 +2,9 @@ using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media.Imaging;
-using SLSKDONET.Services;
+using Singularity.Services;
 
-namespace SLSKDONET.Views.Converters;
+namespace Singularity.Views.Converters;
 
 /// <summary>
 /// Converts a Spotify album art URL to a local cached file path Bitmap.

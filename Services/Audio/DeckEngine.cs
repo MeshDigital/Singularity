@@ -2,7 +2,7 @@ using System;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
-namespace SLSKDONET.Services.Audio;
+namespace Singularity.Services.Audio;
 
 // ─── Supporting types ─────────────────────────────────────────────────────────
 

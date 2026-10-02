@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models.Timeline;
+namespace Singularity.Models.Timeline;
 
 /// <summary>
 /// DJ-style transition type applied at a clip boundary.

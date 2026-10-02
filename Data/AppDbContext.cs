@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using System.IO;
-using SLSKDONET.Models;
+using Singularity.Models;
 using Microsoft.Data.Sqlite; // Phase 1B
-using SLSKDONET.Data.Entities; // Added for TrackTechnicalEntity
+using Singularity.Data.Entities; // Added for TrackTechnicalEntity
 
-namespace SLSKDONET.Data;
+namespace Singularity.Data;
 
 public class AppDbContext : DbContext
 {
@@ -56,7 +56,7 @@ public class AppDbContext : DbContext
         if (!optionsBuilder.IsConfigured)
         {
             var appData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
-            var dbPath = SLSKDONET.Data.OrbitPaths.LibraryDbPath;
+            var dbPath = Singularity.Data.OrbitPaths.LibraryDbPath;
             Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
 
             // Phase 1B/0: Enable WAL Mode and Busy Timeout for better concurrency
@@ -72,7 +72,7 @@ public class AppDbContext : DbContext
                 options.CommandTimeout(30); // 30 second timeout for long operations
             })
             // Issue #45: apply WAL mode + PRAGMAs before any EF Core operation runs
-            .AddInterceptors(new SLSKDONET.Database.Interceptors.WalModeInterceptor())
+            .AddInterceptors(new Singularity.Database.Interceptors.WalModeInterceptor())
             .ConfigureWarnings(warnings =>
             {
                 // Suppress this warning since we use runtime schema patching via SchemaMigratorService

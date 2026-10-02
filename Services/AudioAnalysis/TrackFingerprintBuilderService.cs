@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Data.Essentia;
-using SLSKDONET.Models;
+using Singularity.Data.Entities;
+using Singularity.Data.Essentia;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// Pure A10.1 builder that maps existing analysis artifacts to a normalized track fingerprint.

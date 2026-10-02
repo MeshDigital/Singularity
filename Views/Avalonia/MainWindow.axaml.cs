@@ -2,11 +2,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
-using SLSKDONET.Configuration;
-using SLSKDONET.Views;
+using Singularity.Configuration;
+using Singularity.Views;
 using System;
 
-namespace SLSKDONET.Views.Avalonia
+namespace Singularity.Views.Avalonia
 {
     public partial class MainWindow : Window
     {
@@ -32,7 +32,7 @@ namespace SLSKDONET.Views.Avalonia
         // A toast that leads somewhere opens it on click (the ✕ button handles its own tap).
         private void OnToastTapped(object? sender, global::Avalonia.Input.TappedEventArgs e)
         {
-            if (e.Handled || sender is not Control { DataContext: SLSKDONET.ViewModels.ToastNotificationViewModel toast } || !toast.IsClickable) return;
+            if (e.Handled || sender is not Control { DataContext: Singularity.ViewModels.ToastNotificationViewModel toast } || !toast.IsClickable) return;
             if (e.Source is global::Avalonia.Visual v && FindAncestor<Button>(v) != null) return;
             if (DataContext is MainViewModel vm) vm.OpenToast(toast);
             e.Handled = true;
@@ -281,8 +281,8 @@ namespace SLSKDONET.Views.Avalonia
                     _hasShownTrayHintThisSession = true;
                     try
                     {
-                        if (exitCheckApp.Services?.GetService(typeof(SLSKDONET.Services.WindowsToastService))
-                            is SLSKDONET.Services.WindowsToastService toastService)
+                        if (exitCheckApp.Services?.GetService(typeof(Singularity.Services.WindowsToastService))
+                            is Singularity.Services.WindowsToastService toastService)
                         {
                             toastService.ShowIfUnfocused(
                                 "ORBIT is still running",

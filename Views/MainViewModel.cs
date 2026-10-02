@@ -7,17 +7,17 @@ using System.Windows.Input;
 using System.Reactive.Disposables;
 using Microsoft.Extensions.DependencyInjection; // Added for GetRequiredService
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Services;
-using SLSKDONET.ViewModels;
+using Singularity.Configuration;
+using Singularity.Services;
+using Singularity.ViewModels;
 using Avalonia.Threading;
 using Avalonia.Controls;
 using System.Collections.Generic; // Added this using directive
-using SLSKDONET.Models;
+using Singularity.Models;
 using System.Reactive.Linq;
 using ReactiveUI;
 
-namespace SLSKDONET.Views;
+namespace Singularity.Views;
 
 /// <summary>
 /// Main window ViewModel - coordinates navigation and global app state.
@@ -156,7 +156,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _rightPanelService.SetFallback(PlayerViewModel, "NOW PLAYING", "🎵");
         
         // Listen to Global Shell Context Calls
-        _disposables.Add(ReactiveUI.MessageBus.Current.Listen<SLSKDONET.Events.OpenInspectorEvent>()
+        _disposables.Add(ReactiveUI.MessageBus.Current.Listen<Singularity.Events.OpenInspectorEvent>()
             .Subscribe(evt =>
             {
                 var source = NormalizeInspectorOpenSource(evt.Source);
@@ -177,7 +177,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 _rightPanelService.OpenPanel(evt.ViewModel, evt.Title, evt.Icon);
             }));
 
-        _disposables.Add(ReactiveUI.MessageBus.Current.Listen<SLSKDONET.Events.CloseInspectorEvent>()
+        _disposables.Add(ReactiveUI.MessageBus.Current.Listen<Singularity.Events.CloseInspectorEvent>()
             .Subscribe(_ =>
             {
                 _rightPanelService.ClosePanel();
@@ -364,7 +364,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }));
 
         // Toast notifications: INotificationService.Show(...) used to only log; render it for real.
-        _disposables.Add(_eventBus.GetEvent<SLSKDONET.Services.ToastRequestedEvent>().Subscribe(evt =>
+        _disposables.Add(_eventBus.GetEvent<Singularity.Services.ToastRequestedEvent>().Subscribe(evt =>
         {
             Dispatcher.UIThread.Post(() => ShowToast(evt));
         }));
@@ -372,10 +372,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         // NotificationEvent is the older of the two toast events and had no subscriber at all, so
         // every warning/error published with it (session conflict, auto-retry, Download Album /
         // Remove Track / Open Folder failures, ...) was silently dropped by the event bus.
-        _disposables.Add(_eventBus.GetEvent<SLSKDONET.Services.NotificationEvent>().Subscribe(evt =>
+        _disposables.Add(_eventBus.GetEvent<Singularity.Services.NotificationEvent>().Subscribe(evt =>
         {
             Dispatcher.UIThread.Post(() => ShowToast(
-                new SLSKDONET.Services.ToastRequestedEvent(evt.Title, evt.Message, evt.Type, evt.Duration), evt.OpenPage));
+                new Singularity.Services.ToastRequestedEvent(evt.Title, evt.Message, evt.Type, evt.Duration), evt.OpenPage));
         }));
         
         // Glass Box Architecture: Analysis Queue Visibility
@@ -1236,7 +1236,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
             if (ShouldCloseInspectorOnRouteTransition(previousPageType, CurrentPageType, _rightPanelService.CurrentPanelVm, PlayerViewModel))
             {
-                ReactiveUI.MessageBus.Current.SendMessage(new SLSKDONET.Events.CloseInspectorEvent());
+                ReactiveUI.MessageBus.Current.SendMessage(new Singularity.Events.CloseInspectorEvent());
             }
 
             // PageType.TheaterMode is never actually produced by ResolvePageType (no page maps to
@@ -1443,7 +1443,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         // track list's own transition badge publishes (see TrackListViewModel), so this behaves
         // identically to the user clicking that badge themselves.
         ReactiveUI.MessageBus.Current.SendMessage(
-            new SLSKDONET.Events.OpenMixTransitionEvent(evt.PlaylistId, evt.OutgoingPlaylistTrackId, evt.IncomingPlaylistTrackId));
+            new Singularity.Events.OpenMixTransitionEvent(evt.PlaylistId, evt.OutgoingPlaylistTrackId, evt.IncomingPlaylistTrackId));
     }
 
     private void UpdateFontSizeResources()
@@ -1537,7 +1537,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    private void ShowToast(SLSKDONET.Services.ToastRequestedEvent evt, string? openPage = null)
+    private void ShowToast(Singularity.Services.ToastRequestedEvent evt, string? openPage = null)
     {
         var toast = new ToastNotificationViewModel(evt.Title, evt.Message, evt.Type, openPage);
         Toasts.Add(toast);

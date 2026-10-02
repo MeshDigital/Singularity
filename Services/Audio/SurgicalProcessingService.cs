@@ -9,11 +9,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-using SLSKDONET.Models;
-using SLSKDONET.Models.Stem;
-using SLSKDONET.Services.AudioAnalysis;
+using Singularity.Models;
+using Singularity.Models.Stem;
+using Singularity.Services.AudioAnalysis;
 
-namespace SLSKDONET.Services.Audio
+namespace Singularity.Services.Audio
 {
     /// <summary>
     /// Phase 2: Surgical Editing Engine.
@@ -36,7 +36,7 @@ namespace SLSKDONET.Services.Audio
 
         /// <summary>
         /// Same idea as <see cref="RenderTransitionPreviewAsync"/>, but built from the real
-        /// preset DSP (<see cref="SLSKDONET.Services.Timeline.TransitionDsp"/>) instead of a
+        /// preset DSP (<see cref="Singularity.Services.Timeline.TransitionDsp"/>) instead of a
         /// fixed triangular FFmpeg crossfade — so the Mix editor's Preview button actually hears
         /// the selected preset (Fade/Rise/Blend/Wave/Melt/...), not a generic approximation.
         /// Both tracks start from their own analysis-suggested (or saved) trigger point —
@@ -46,7 +46,7 @@ namespace SLSKDONET.Services.Audio
         Task<string> RenderTransitionPreviewAsync(
             string trackAPath, double trackATailStartSeconds,
             string trackBPath, double trackBStartSeconds,
-            SLSKDONET.Models.Timeline.TransitionModel model,
+            Singularity.Models.Timeline.TransitionModel model,
             double projectBpm,
             CancellationToken ct = default);
     }
@@ -230,7 +230,7 @@ namespace SLSKDONET.Services.Audio
         public Task<string> RenderTransitionPreviewAsync(
             string trackAPath, double trackATailStartSeconds,
             string trackBPath, double trackBStartSeconds,
-            SLSKDONET.Models.Timeline.TransitionModel model,
+            Singularity.Models.Timeline.TransitionModel model,
             double projectBpm,
             CancellationToken ct = default)
         {
@@ -253,9 +253,9 @@ namespace SLSKDONET.Services.Audio
                 NAudio.Wave.ISampleProvider outgoing = readerA;
                 NAudio.Wave.ISampleProvider incoming = NormalizeFormat(readerB, target);
 
-                var mixed = SLSKDONET.Services.Timeline.TransitionDsp.Build(outgoing, incoming, model, projectBpm);
+                var mixed = Singularity.Services.Timeline.TransitionDsp.Build(outgoing, incoming, model, projectBpm);
 
-                var durationSamples = SLSKDONET.Services.Timeline.TransitionDsp.BeatsToSamples(
+                var durationSamples = Singularity.Services.Timeline.TransitionDsp.BeatsToSamples(
                     model.DurationBeats, projectBpm, target.SampleRate, target.Channels);
 
                 using var writer = new NAudio.Wave.WaveFileWriter(outputPath, target);

@@ -1,6 +1,6 @@
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Configuration;
+namespace Singularity.Configuration;
 
 
 /// <summary>

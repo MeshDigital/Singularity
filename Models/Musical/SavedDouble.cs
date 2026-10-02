@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Models.Musical;
+namespace Singularity.Models.Musical;
 
 public sealed record SavedDouble(
     string TrackAId,

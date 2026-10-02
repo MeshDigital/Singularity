@@ -1,4 +1,4 @@
-namespace SLSKDONET.ViewModels
+namespace Singularity.ViewModels
 {
     public enum ActiveWorkspace
     {

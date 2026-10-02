@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// Computes an onset density curve from an absolute beat grid.

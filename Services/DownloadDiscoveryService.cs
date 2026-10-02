@@ -5,12 +5,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Ranking;
-using SLSKDONET.ViewModels;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Services.Ranking;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// "The Seeker"
@@ -33,7 +33,7 @@ public class DownloadDiscoveryService
     private readonly Network.ProtocolHardeningService _hardeningService;
     private readonly PeerReliabilityService _peerReliability;
     private readonly INetworkHealthService _healthService;
-    private readonly SLSKDONET.Services.Diagnostics.ITrackAuditLogger _auditLogger;
+    private readonly Singularity.Services.Diagnostics.ITrackAuditLogger _auditLogger;
     private readonly DatabaseService _databaseService;
 
     public DownloadDiscoveryService(
@@ -47,7 +47,7 @@ public class DownloadDiscoveryService
         Network.ProtocolHardeningService hardeningService,
         PeerReliabilityService peerReliability,
         INetworkHealthService healthService,
-        SLSKDONET.Services.Diagnostics.ITrackAuditLogger auditLogger,
+        Singularity.Services.Diagnostics.ITrackAuditLogger auditLogger,
         DatabaseService databaseService)
     {
         _logger = logger;

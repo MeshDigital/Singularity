@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace SLSKDONET.Utils;
+namespace Singularity.Utils;
 
 /// <summary>
 /// Utility methods for file naming and formatting.

@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace SLSKDONET.Utils;
+namespace Singularity.Utils;
 
 /// <summary>
 /// Filename normalization utility for cleaning Soulseek search results.

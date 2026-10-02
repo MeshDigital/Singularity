@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace SLSKDONET.Models.Stem;
+namespace Singularity.Models.Stem;
 
 public class StemPreset
 {

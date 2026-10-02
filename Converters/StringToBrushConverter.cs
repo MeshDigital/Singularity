@@ -3,7 +3,7 @@ using Avalonia.Media;
 using System;
 using System.Globalization;
 
-namespace SLSKDONET.Converters;
+namespace Singularity.Converters;
 
 public class StringToBrushConverter : IValueConverter
 {

@@ -4,9 +4,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
-using SLSKDONET.Models.Stem;
+using Singularity.Models.Stem;
 
-namespace SLSKDONET.Services.Audio;
+namespace Singularity.Services.Audio;
 
 public enum Deck { A, B }
 

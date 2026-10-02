@@ -1,4 +1,4 @@
-namespace SLSKDONET.Configuration;
+namespace Singularity.Configuration;
 
 /// <summary>
 /// Phase 2.1: Scoring constants organized by domain.

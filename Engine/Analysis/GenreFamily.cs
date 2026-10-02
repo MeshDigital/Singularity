@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// Broad rhythmic family a track belongs to, for phrase/drop/BPM analysis purposes.

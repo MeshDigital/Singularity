@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.Ranking;
+namespace Singularity.Services.Ranking;
 
 /// <summary>
 /// Track quality tiers used by <see cref="TieredTrackComparer"/>.

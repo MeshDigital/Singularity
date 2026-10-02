@@ -4,10 +4,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SpotifyAPI.Web;
-using SLSKDONET.Models;
-using SLSKDONET.ViewModels;
+using Singularity.Models;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Services.ImportProviders;
+namespace Singularity.Services.ImportProviders;
 
 /// <summary>
 /// Import provider for fetching the user's "Liked Songs" from Spotify.

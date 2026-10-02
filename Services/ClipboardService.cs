@@ -4,7 +4,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public class ClipboardService : IClipboardService
 {

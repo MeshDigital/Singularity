@@ -4,9 +4,9 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
-using SLSKDONET.ViewModels.Downloads;
+using Singularity.ViewModels.Downloads;
 
-namespace SLSKDONET.Views.Avalonia.Dialogs;
+namespace Singularity.Views.Avalonia.Dialogs;
 
 public partial class SpectralForensicsDialog : Window
 {

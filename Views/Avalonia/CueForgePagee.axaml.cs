@@ -3,10 +3,10 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using ReactiveUI;
 using System.Reactive.Linq;
-using SLSKDONET.Models;
-using SLSKDONET.ViewModels;
+using Singularity.Models;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Views.Avalonia;
+namespace Singularity.Views.Avalonia;
 
 public partial class CueForgePagee : UserControl
 {

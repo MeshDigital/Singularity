@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services.Platform;
+namespace Singularity.Services.Platform;
 
 /// <summary>
 /// Linux-specific secure token storage using AES encryption.

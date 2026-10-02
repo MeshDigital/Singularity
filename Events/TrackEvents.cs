@@ -1,8 +1,8 @@
 using System;
-using SLSKDONET.Models;
-using SLSKDONET.ViewModels;
+using Singularity.Models;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Events;
+namespace Singularity.Events;
 
 // NOTE: TrackMetadataUpdatedEvent moved to Models/Events.cs to avoid duplication
 // This namespace intentionally left minimal

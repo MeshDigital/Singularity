@@ -9,9 +9,9 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Services;
+using Singularity.Services;
 
-namespace SLSKDONET.Services.IO
+namespace Singularity.Services.IO
 {
     public class SafeWriteService : IFileWriteService, IDisposable
     {

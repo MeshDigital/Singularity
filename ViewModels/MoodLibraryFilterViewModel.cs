@@ -5,7 +5,7 @@ using System.Reactive.Linq;
 using System.Collections.Specialized;
 using ReactiveUI;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Phase 13 AI Layer – Mood-Based Library Filter ViewModel.

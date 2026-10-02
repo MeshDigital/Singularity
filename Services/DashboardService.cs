@@ -1,16 +1,16 @@
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
-using SLSKDONET.Services.Models;
+using Singularity.Configuration;
+using Singularity.Data;
+using Singularity.Services.Models;
 using Microsoft.EntityFrameworkCore;
-using SLSKDONET.Models;
+using Singularity.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public record LibraryIntelligenceStats(
     int TotalCount,

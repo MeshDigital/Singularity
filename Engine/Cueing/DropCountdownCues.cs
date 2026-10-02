@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
-using SLSKDONET.Engine.Analysis;
-using SLSKDONET.Models;
+using Singularity.Engine.Analysis;
+using Singularity.Models;
 
-namespace SLSKDONET.Engine.Cueing;
+namespace Singularity.Engine.Cueing;
 
 /// <summary>One cue of a drop group before it becomes an OrbitCue or CuePointEntity.</summary>
 public readonly record struct DropGroupCue(double Timestamp, string Name, bool IsDrop, int SlotIndex, string Color, int BarsBefore);

@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 // Library Service Events
 public record LibraryEntryAddedEvent(LibraryEntry Entry);

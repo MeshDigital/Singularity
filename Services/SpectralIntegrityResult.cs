@@ -1,4 +1,4 @@
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Verdict returned by <see cref="IAudioIntegrityService.AnalyseAsync"/>.

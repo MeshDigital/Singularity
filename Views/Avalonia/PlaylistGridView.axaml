@@ -2,10 +2,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:conv="clr-namespace:SLSKDONET.Converters"
-             xmlns:viewConv="clr-namespace:SLSKDONET.Views.Avalonia.Converters"
-             x:Class="SLSKDONET.Views.Avalonia.PlaylistGridView"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:conv="clr-namespace:Singularity.Converters"
+             xmlns:viewConv="clr-namespace:Singularity.Views.Avalonia.Converters"
+             x:Class="Singularity.Views.Avalonia.PlaylistGridView"
              x:DataType="vm:LibraryViewModel">
 
     <UserControl.Resources>

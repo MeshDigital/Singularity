@@ -6,11 +6,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
-using SLSKDONET.Utils;
+using Singularity.Data;
+using Singularity.Models;
+using Singularity.Utils;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Finds and fully removes "ID" placeholder tracks — DJ-tracklist shorthand for a track whose

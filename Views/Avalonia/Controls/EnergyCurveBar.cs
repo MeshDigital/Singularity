@@ -4,9 +4,9 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Views.Avalonia.Controls
+namespace Singularity.Views.Avalonia.Controls
 {
     /// <summary>
     /// Thin horizontal bar showing normalized energy over time with phrase boundary markers.

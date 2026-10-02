@@ -16,13 +16,13 @@ using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Engine.Analysis;
-using SLSKDONET.Engine.Cueing;
-using SLSKDONET.Models;
-using SLSKDONET.Services.AudioAnalysis;
-using SLSKDONET.Services.Rekordbox;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Engine.Analysis;
+using Singularity.Engine.Cueing;
+using Singularity.Models;
+using Singularity.Services.AudioAnalysis;
+using Singularity.Services.Rekordbox;
 
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
@@ -781,11 +781,11 @@ static class CueDetrBench
         string? model = null;
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null && model == null; dir = dir.Parent)
         {
-            var c = Path.Combine(dir.FullName, SLSKDONET.Services.AudioAnalysis.CueDetrService.DefaultModelRelativePath);
+            var c = Path.Combine(dir.FullName, Singularity.Services.AudioAnalysis.CueDetrService.DefaultModelRelativePath);
             if (File.Exists(c) && new FileInfo(c).Length > 1_000_000) model = c;
         }
-        using var service = new SLSKDONET.Services.AudioAnalysis.CueDetrService(
-            NullLogger<SLSKDONET.Services.AudioAnalysis.CueDetrService>.Instance, model);
+        using var service = new Singularity.Services.AudioAnalysis.CueDetrService(
+            NullLogger<Singularity.Services.AudioAnalysis.CueDetrService>.Instance, model);
 
         var sets = new Dictionary<string, Acc>
         {

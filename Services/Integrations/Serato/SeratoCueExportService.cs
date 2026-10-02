@@ -6,10 +6,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Services.IO;
+using Singularity.Data.Entities;
+using Singularity.Services.IO;
 
-namespace SLSKDONET.Services.Integrations.Serato;
+namespace Singularity.Services.Integrations.Serato;
 
 public enum SeratoWriteMode
 {

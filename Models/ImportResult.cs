@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Result of an import operation from any source.

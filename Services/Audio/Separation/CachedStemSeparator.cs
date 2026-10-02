@@ -6,9 +6,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models.Stem;
+using Singularity.Models.Stem;
 
-namespace SLSKDONET.Services.Audio.Separation;
+namespace Singularity.Services.Audio.Separation;
 
 /// <summary>
 /// Decorator that wraps any <see cref="IStemSeparator"/> with cache-through behaviour.

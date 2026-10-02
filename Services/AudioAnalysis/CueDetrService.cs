@@ -9,9 +9,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
-using SLSKDONET.Engine.Analysis.CueDetr;
+using Singularity.Engine.Analysis.CueDetr;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// Runs CUE-DETR (ETH-DISCO — MIT licence, weights from Hugging Face disco-eth/cue-detr, exported

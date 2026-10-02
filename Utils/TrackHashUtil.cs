@@ -1,11 +1,11 @@
-namespace SLSKDONET.Utils;
+namespace Singularity.Utils;
 
 /// <summary>
 /// The single canonical "artist-title" identity hash used to deduplicate a track before it has
 /// been downloaded (no audio content to fingerprint yet). Confirmed, by sampling real downloaded
 /// tracks, to be the dominant format already used across almost this entire library (e.g.
 /// "blainestranger-dragon", "subfocus-miracle-vipmix") — it originated as a computed property on
-/// <see cref="SLSKDONET.Models.Track"/> and needs to be reproducible from anywhere a track's
+/// <see cref="Singularity.Models.Track"/> and needs to be reproducible from anywhere a track's
 /// artist/title is known but no <c>Track</c> instance exists yet (import providers building
 /// <c>SearchQuery</c> objects, for instance).
 ///

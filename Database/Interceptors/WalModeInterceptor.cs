@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
-namespace SLSKDONET.Database.Interceptors;
+namespace Singularity.Database.Interceptors;
 
 /// <summary>
 /// EF Core connection interceptor that applies SQLite WAL mode and performance

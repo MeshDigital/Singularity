@@ -4,7 +4,7 @@ using System.Linq;
 using NAudio.Wave;
 using NAudio.CoreAudioApi;
 
-namespace SLSKDONET.Services.Audio;
+namespace Singularity.Services.Audio;
 
 /// <summary>
 /// Audio output mode for the DAW engine.

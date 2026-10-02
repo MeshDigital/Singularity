@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Models.Musical
+namespace Singularity.Models.Musical
 {
     /// <summary>
     /// Tunable weights for calculating Set Flow Continuity.

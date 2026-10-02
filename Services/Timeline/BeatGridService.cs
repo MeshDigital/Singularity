@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Services.Timeline;
+namespace Singularity.Services.Timeline;
 
 /// <summary>
 /// Grid quantisation resolution expressed as note subdivisions.

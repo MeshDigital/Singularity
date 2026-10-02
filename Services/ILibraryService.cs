@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
+using Singularity.Data.Entities;
+using Singularity.Data;
+using Singularity.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Interface for library persistence and management.

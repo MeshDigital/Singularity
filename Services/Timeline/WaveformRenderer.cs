@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using SkiaSharp;
 
-namespace SLSKDONET.Services.Timeline;
+namespace Singularity.Services.Timeline;
 
 /// <summary>
 /// SkiaSharp-based waveform renderer for timeline clip lanes.
@@ -120,12 +120,12 @@ public static class WaveformRenderer
     }
 
     /// <summary>
-    /// Renders a waveform directly from a <see cref="SLSKDONET.Models.WaveformAnalysisData"/>
+    /// Renders a waveform directly from a <see cref="Singularity.Models.WaveformAnalysisData"/>
     /// instance.  Applies LOD: when <paramref name="width"/> / visible samples ratio is
     /// below one pixel per source sample, the profile is automatically resampled.
     /// </summary>
     public static SKBitmap RenderFromWaveformData(
-        SLSKDONET.Models.WaveformAnalysisData data,
+        Singularity.Models.WaveformAnalysisData data,
         int width,
         int height,
         SKColor waveColor,
@@ -149,14 +149,14 @@ public static class WaveformRenderer
     // ── Task 4.1: RGB tri-band renderer ───────────────────────────────────
 
     /// <summary>
-    /// Renders a three-band RGB waveform from a <see cref="SLSKDONET.Models.WaveformAnalysisData"/>.
+    /// Renders a three-band RGB waveform from a <see cref="Singularity.Models.WaveformAnalysisData"/>.
     /// Bands are alpha-composited on top of each other:
     ///   Bass (low)  → Red (#FF4444)
     ///   Mids        → Green (#44FF88)
     ///   Highs       → Blue (#44AAFF)
     /// </summary>
     public static SKBitmap RenderRgb(
-        SLSKDONET.Models.WaveformAnalysisData data,
+        Singularity.Models.WaveformAnalysisData data,
         int width,
         int height,
         SKColor bgColor,
@@ -279,7 +279,7 @@ public static class WaveformRenderer
     /// </summary>
     public static void OverlayPhraseSections(
         SKBitmap bmp,
-        IReadOnlyList<SLSKDONET.Models.PhraseSegment> phrases,
+        IReadOnlyList<Singularity.Models.PhraseSegment> phrases,
         double trackDurationSeconds,
         float bpm,
         double zoom = 1.0,

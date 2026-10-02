@@ -3,14 +3,14 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using SLSKDONET.Views.Avalonia.Controls;
+using Singularity.Views.Avalonia.Controls;
 using Avalonia.Threading;
-using SLSKDONET.ViewModels.Library;
-using SLSKDONET.Models;
-using SLSKDONET.ViewModels;
-using SLSKDONET.ViewModels.Downloads;
+using Singularity.ViewModels.Library;
+using Singularity.Models;
+using Singularity.ViewModels;
+using Singularity.ViewModels.Downloads;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public class DialogService : IDialogService
 {
@@ -131,7 +131,7 @@ public class DialogService : IDialogService
         });
     }
 
-    public async Task<(string Name, SLSKDONET.Models.SmartPlaylistCriteria Criteria)?> ShowCreateSmartPlaylistAsync()
+    public async Task<(string Name, Singularity.Models.SmartPlaylistCriteria Criteria)?> ShowCreateSmartPlaylistAsync()
     {
         return await Dispatcher.UIThread.InvokeAsync(async () =>
         {
@@ -144,7 +144,7 @@ public class DialogService : IDialogService
             var owner = GetOwnerWindow();
             if (owner != null)
             {
-                return await dialog.ShowDialog<(string, SLSKDONET.Models.SmartPlaylistCriteria)?>(owner);
+                return await dialog.ShowDialog<(string, Singularity.Models.SmartPlaylistCriteria)?>(owner);
             }
 
             return null;

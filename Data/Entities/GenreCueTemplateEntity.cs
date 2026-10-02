@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace SLSKDONET.Data.Entities;
+namespace Singularity.Data.Entities;
 
 /// <summary>
 /// Defines a genre-specific cue point template.

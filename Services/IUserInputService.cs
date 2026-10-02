@@ -1,4 +1,4 @@
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// An abstraction for requesting simple text input from the user.

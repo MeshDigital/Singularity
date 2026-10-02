@@ -2,7 +2,7 @@ using System;
 using NAudio.Dsp;
 using NAudio.Wave;
 
-namespace SLSKDONET.Services.Audio.Separation;
+namespace Singularity.Services.Audio.Separation;
 
 /// <summary>
 /// Per-stem 3-band parametric EQ sample provider using NAudio BiQuadFilter:

@@ -1,7 +1,7 @@
 using System;
-using SLSKDONET.Services;
+using Singularity.Services;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 // Social: presence, 1:1 chat, chat rooms — republished from ISoulseekAdapter's raw C# events
 // onto the app's own event bus so ViewModels can subscribe without holding a direct adapter

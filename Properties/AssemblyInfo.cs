@@ -1,3 +1,3 @@
 using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("SLSKDONET.Tests")]
+[assembly: InternalsVisibleTo("Singularity.Tests")]

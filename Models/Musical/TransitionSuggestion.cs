@@ -1,11 +1,11 @@
 using System;
-using SLSKDONET.Data.Entities;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.Models.Musical
+namespace Singularity.Models.Musical
 {
     public class TransitionSuggestion
     {
-        public SLSKDONET.Data.Entities.TransitionArchetype Archetype { get; set; }
+        public Singularity.Data.Entities.TransitionArchetype Archetype { get; set; }
         public string Reasoning { get; set; } = string.Empty;
         public double BpmDrift { get; set; }
         public double HarmonicCompatibility { get; set; }

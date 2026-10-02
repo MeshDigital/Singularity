@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 
 

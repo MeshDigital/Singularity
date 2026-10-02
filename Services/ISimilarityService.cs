@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using SLSKDONET.Services.Similarity;
+using Singularity.Services.Similarity;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public interface ISimilarityService
 {

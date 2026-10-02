@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
     /// <summary>
     /// Logic layer for Crash Recovery.

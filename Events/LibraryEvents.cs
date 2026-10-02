@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Events;
+namespace Singularity.Events;
 
 /// <summary>
 /// Published when library metadata enrichment completes or makes significant progress.

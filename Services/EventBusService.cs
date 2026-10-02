@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Reactive.Subjects;
 using System.Reactive.Linq;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Unified event bus for application-wide event communication.

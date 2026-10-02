@@ -1,7 +1,7 @@
-using SLSKDONET.Models.Entertainment;
-using SLSKDONET.Models.Musical;
+using Singularity.Models.Entertainment;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.Services.Entertainment;
+namespace Singularity.Services.Entertainment;
 
 /// <summary>
 /// Provides ORBIT's Flow Mode — smart auto-mixing that selects upcoming tracks

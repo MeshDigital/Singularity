@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Models.Entertainment;
-using SLSKDONET.Models.Musical;
-using SLSKDONET.Data.Entities;
+using Singularity.Data;
+using Singularity.Models.Entertainment;
+using Singularity.Models.Musical;
+using Singularity.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace SLSKDONET.Services.Entertainment;
+namespace Singularity.Services.Entertainment;
 
 /// <summary>
 /// Implements ORBIT's Flow Mode engine — scores and selects upcoming tracks

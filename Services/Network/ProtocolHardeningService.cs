@@ -4,10 +4,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
+using Singularity.Configuration;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.Network;
+namespace Singularity.Services.Network;
 
 /// <summary>
 /// "The Shield": Hardens the Soulseek protocol interactions.

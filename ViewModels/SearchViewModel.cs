@@ -14,11 +14,11 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Services.ImportProviders;
-using SLSKDONET.Views;
-using SLSKDONET.Events;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Services.ImportProviders;
+using Singularity.Views;
+using Singularity.Events;
 using DynamicData;
 using DynamicData.Binding;
 using ReactiveUI;
@@ -26,10 +26,10 @@ using System.Reactive;
 using System.Reactive.Concurrency;
 using System.Reactive.Subjects;
 using System.Reactive.Linq;
-using SLSKDONET.Configuration;
+using Singularity.Configuration;
 using System.Reactive.Disposables;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public partial class SearchViewModel : ReactiveObject, IDisposable
 {
@@ -934,8 +934,8 @@ public partial class SearchViewModel : ReactiveObject, IDisposable
         {
             var path = await _fileInteractionService.OpenFileDialogAsync("Select CSV File", new[] 
             { 
-                new SLSKDONET.Services.FileDialogFilter("CSV Files", new List<string> { "csv" }),
-                new SLSKDONET.Services.FileDialogFilter("All Files", new List<string> { "*" })
+                new Singularity.Services.FileDialogFilter("CSV Files", new List<string> { "csv" }),
+                new Singularity.Services.FileDialogFilter("All Files", new List<string> { "*" })
             });
 
             if (!string.IsNullOrEmpty(path))

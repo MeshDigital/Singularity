@@ -9,15 +9,15 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Engine.Analysis;
-using SLSKDONET.Engine.Cueing;
-using SLSKDONET.Engine.Snapping;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Configuration;
+using Singularity.Data.Entities;
+using Singularity.Engine.Analysis;
+using Singularity.Engine.Cueing;
+using Singularity.Engine.Snapping;
+using Singularity.Models;
+using Singularity.Services;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Cue &amp; Loop Forge — dedicated visual workspace for professional DJ cue generation and loop placement.
@@ -1217,7 +1217,7 @@ public sealed class CueForgeViewModel : ReactiveObject, IDisposable
 
     // Delegates to Engine.Analysis.AnalysisPipelineResultBuilder, which AnalyzeTrackStructureJob's
     // background pipeline also calls, so both routes score cues against identical signals.
-    // internal (not private) so SLSKDONET.Tests can cover the real/fallback signal wiring
+    // internal (not private) so Singularity.Tests can cover the real/fallback signal wiring
     // directly, without standing up the full CueForgeViewModel dependency graph.
     internal static Engine.Analysis.AnalysisPipelineResult BuildAnalysisResultFromFeatures(AudioFeaturesEntity f) =>
         Engine.Analysis.AnalysisPipelineResultBuilder.Build(f);

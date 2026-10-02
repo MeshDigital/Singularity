@@ -1,7 +1,7 @@
 using System;
 using ReactiveUI;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Represents a loop point entry in the curation active loops registry.

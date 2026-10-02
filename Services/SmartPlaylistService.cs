@@ -4,11 +4,11 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
-using SLSKDONET.Data.Entities;
+using Singularity.Data;
+using Singularity.Models;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
     public interface ISmartPlaylistService
     {

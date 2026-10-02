@@ -6,9 +6,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Views.Avalonia.Controls
+namespace Singularity.Views.Avalonia.Controls
 {
     public enum VisualizerMode { Mini, Full }
     // VisualizerStyle moved to Models namespace
@@ -119,11 +119,11 @@ namespace SLSKDONET.Views.Avalonia.Controls
             ResolvePlayerService()?.NotifyVisualizerDetached();
         }
 
-        private static SLSKDONET.Services.IAudioPlayerService? ResolvePlayerService()
+        private static Singularity.Services.IAudioPlayerService? ResolvePlayerService()
         {
             if (Design.IsDesignMode) return null;
-            if (Application.Current is not SLSKDONET.App app || app.Services == null) return null;
-            return app.Services.GetService(typeof(SLSKDONET.Services.IAudioPlayerService)) as SLSKDONET.Services.IAudioPlayerService;
+            if (Application.Current is not Singularity.App app || app.Services == null) return null;
+            return app.Services.GetService(typeof(Singularity.Services.IAudioPlayerService)) as Singularity.Services.IAudioPlayerService;
         }
 
         public void Reset()

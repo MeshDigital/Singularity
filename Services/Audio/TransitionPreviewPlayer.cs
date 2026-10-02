@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NAudio.Wave;
 
-namespace SLSKDONET.Services.Audio
+namespace Singularity.Services.Audio
 {
     public interface ITransitionPreviewPlayer : IDisposable
     {
@@ -28,7 +28,7 @@ namespace SLSKDONET.Services.Audio
         Task StartTransitionPreviewAsync(
             string trackATitle, string trackAFilePath, double sourceTriggerSeconds,
             string trackBTitle, string trackBFilePath, double targetTriggerSeconds,
-            SLSKDONET.Models.Timeline.TransitionModel model, double projectBpm,
+            Singularity.Models.Timeline.TransitionModel model, double projectBpm,
             CancellationToken ct = default);
 
         void StopPreview();
@@ -56,9 +56,9 @@ namespace SLSKDONET.Services.Audio
 
         public event EventHandler? PreviewStopped;
 
-        private readonly SLSKDONET.Configuration.AppConfig? _config;
+        private readonly Singularity.Configuration.AppConfig? _config;
 
-        public TransitionPreviewPlayer(ILogger<TransitionPreviewPlayer> logger, ISurgicalProcessingService surgicalService, SLSKDONET.Configuration.AppConfig? config = null)
+        public TransitionPreviewPlayer(ILogger<TransitionPreviewPlayer> logger, ISurgicalProcessingService surgicalService, Singularity.Configuration.AppConfig? config = null)
         {
             _logger = logger;
             _surgicalService = surgicalService;
@@ -85,7 +85,7 @@ namespace SLSKDONET.Services.Audio
         public async Task StartTransitionPreviewAsync(
             string trackATitle, string trackAFilePath, double sourceTriggerSeconds,
             string trackBTitle, string trackBFilePath, double targetTriggerSeconds,
-            SLSKDONET.Models.Timeline.TransitionModel model, double projectBpm,
+            Singularity.Models.Timeline.TransitionModel model, double projectBpm,
             CancellationToken ct = default)
         {
             _logger.LogInformation("🎧 Starting preset-aware Transition Preview: {TrackA} -> {TrackB} ({Preset}), A@{SourceT}s B@{TargetT}s",

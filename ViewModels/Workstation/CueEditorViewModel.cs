@@ -6,11 +6,11 @@ using System.Reactive;
 using System.Reactive.Disposables;
 using System.Threading.Tasks;
 using ReactiveUI;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Services;
 
-namespace SLSKDONET.ViewModels.Workstation;
+namespace Singularity.ViewModels.Workstation;
 
 /// <summary>
 /// Manages cue points for a single workstation deck.

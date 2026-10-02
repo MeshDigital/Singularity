@@ -5,11 +5,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Models;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Services.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// "The Heart" of Phase 3B.

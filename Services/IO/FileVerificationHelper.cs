@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using NAudio.Wave;
 using TagLib;
 
-namespace SLSKDONET.Services.IO
+namespace Singularity.Services.IO
 {
     /// <summary>
     /// Provides file verification methods for SafeWrite operations.

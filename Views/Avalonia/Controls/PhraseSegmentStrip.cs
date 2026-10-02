@@ -4,9 +4,9 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Views.Avalonia.Controls
+namespace Singularity.Views.Avalonia.Controls
 {
     /// <summary>
     /// Renders a horizontal strip of colored phrase segments (Intro/Build/Drop/Outro)

@@ -3,7 +3,7 @@ using Avalonia.Input;
 using System;
 using System.Linq;
 
-namespace SLSKDONET.Views.Avalonia;
+namespace Singularity.Views.Avalonia;
 
 /// <summary>
 /// Phase 6D: Import page for Spotify, CSV, and USB imports.

@@ -11,12 +11,12 @@ using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Layout;
 using Avalonia.Media;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Views; // For RelayCommand and AsyncRelayCommand
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Views; // For RelayCommand and AsyncRelayCommand
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 public class HierarchicalLibraryViewModel : IDisposable
 {

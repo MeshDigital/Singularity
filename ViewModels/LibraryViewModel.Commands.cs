@@ -6,24 +6,24 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Collections.ObjectModel;
 using ReactiveUI;
-using SLSKDONET.Models;
-using SLSKDONET.ViewModels.Library;
-using SLSKDONET.Services.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Views;
-using SLSKDONET.Events;
+using Singularity.Models;
+using Singularity.ViewModels.Library;
+using Singularity.Services.Models;
+using Singularity.Services;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Views;
+using Singularity.Events;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
-using SLSKDONET.Services.Playlist;
-using SLSKDONET.Services.Library;
-using SLSKDONET.Services.Similarity;
-using SLSKDONET.Models.Musical;
+using Singularity.Services.Playlist;
+using Singularity.Services.Library;
+using Singularity.Services.Similarity;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public partial class LibraryViewModel
 {
@@ -1930,7 +1930,7 @@ public partial class LibraryViewModel
         // Prefill the dialog with the selection's actual current values instead of leaving every
         // field blank — a field comes back null (shown as "multiple values") only when the
         // selected tracks disagree on it, which is impossible for a single track.
-        string? CommonOrNull(Func<SLSKDONET.Models.PlaylistTrack, string?> selector)
+        string? CommonOrNull(Func<Singularity.Models.PlaylistTrack, string?> selector)
         {
             var values = selected.Select(t => selector(t.Model) ?? string.Empty).Distinct().ToList();
             return values.Count == 1 ? values[0] : null;

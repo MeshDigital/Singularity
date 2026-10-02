@@ -4,10 +4,10 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
-using SLSKDONET.Services;
-using SLSKDONET.ViewModels;
-using SLSKDONET.ViewModels.Library;
-using SLSKDONET.Views.Avalonia;
+using Singularity.Services;
+using Singularity.ViewModels;
+using Singularity.ViewModels.Library;
+using Singularity.Views.Avalonia;
 
 using System;
 using System.Collections.Specialized;
@@ -15,7 +15,7 @@ using System.ComponentModel;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 public partial class LibraryPlaylistTrackSurface : UserControl
 {

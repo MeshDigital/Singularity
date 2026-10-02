@@ -4,11 +4,11 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models.Stem;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Models.Stem;
 
-namespace SLSKDONET.Services.Audio
+namespace Singularity.Services.Audio
 {
     public class StemPreferenceService
     {

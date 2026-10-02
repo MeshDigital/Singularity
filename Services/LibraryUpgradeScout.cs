@@ -4,13 +4,13 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Services;
 using Microsoft.EntityFrameworkCore;
-using SLSKDONET.Data;
+using Singularity.Data;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Service for identifying library upgrade candidates (Self-Healing Library).

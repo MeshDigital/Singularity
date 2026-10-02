@@ -6,12 +6,12 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Audio;
-using SLSKDONET.ViewModels.Workstation;
+using Singularity.Data.Entities;
+using Singularity.Services;
+using Singularity.Services.Audio;
+using Singularity.ViewModels.Workstation;
 
-namespace SLSKDONET.ViewModels.Workstation;
+namespace Singularity.ViewModels.Workstation;
 
 /// <summary>
 /// Drives the Export dialog for the Workstation page.

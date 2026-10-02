@@ -1,4 +1,4 @@
-namespace SLSKDONET.Data;
+namespace Singularity.Data;
 
 public enum IntegrityLevel
 {

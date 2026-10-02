@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
     /// <summary>
     /// Phase 11.5: Resource Safety - Ensures child processes are terminated when the parent process exits.

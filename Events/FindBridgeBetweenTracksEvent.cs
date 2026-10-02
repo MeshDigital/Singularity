@@ -1,4 +1,4 @@
-namespace SLSKDONET.Events;
+namespace Singularity.Events;
 
 /// <summary>
 /// Event published when user requests to find bridge tracks between two specific tracks.

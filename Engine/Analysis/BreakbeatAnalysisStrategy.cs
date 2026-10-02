@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.Services;
-using SLSKDONET.Services.AudioAnalysis;
+using Singularity.Services;
+using Singularity.Services.AudioAnalysis;
 
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// Breakbeat-family (DnB/Jungle) analysis strategy — 170-180 BPM bracket, sub-bass-dominant

@@ -6,13 +6,13 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
-using SLSKDONET.Events;
-using SLSKDONET.Models;
-using SLSKDONET.Services.AutoDownload;
+using Singularity.Configuration;
+using Singularity.Data;
+using Singularity.Events;
+using Singularity.Models;
+using Singularity.Services.AutoDownload;
 
-namespace SLSKDONET.Services.AutoDownload;
+namespace Singularity.Services.AutoDownload;
 
 /// <summary>
 /// Background service that scans the database for tracks not yet downloaded (Missing, Failed,

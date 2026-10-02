@@ -7,7 +7,7 @@ using System.Text;
 using System.Xml.Linq;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services.Integrations;
+namespace Singularity.Services.Integrations;
 
 /// <summary>
 /// A track record used as input to <see cref="AbletonLiveProjectWriter"/>.

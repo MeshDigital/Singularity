@@ -3,12 +3,12 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Utils;
+using Singularity.Configuration;
+using Singularity.Utils;
 using SpotifyAPI.Web;
 using SpotifyAPI.Web.Auth;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Manages Spotify OAuth authentication using PKCE flow.

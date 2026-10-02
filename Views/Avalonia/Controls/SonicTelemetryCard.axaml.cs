@@ -2,12 +2,12 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
+using Singularity.Data;
+using Singularity.Models;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 public partial class SonicTelemetryCard : UserControl
 {

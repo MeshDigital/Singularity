@@ -7,10 +7,10 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Utils;
+using Singularity.Models;
+using Singularity.Utils;
 
-namespace SLSKDONET.Services.Discovery;
+namespace Singularity.Services.Discovery;
 
 /// <summary>What the playlist sounds like, as far as suggestion ranking cares.</summary>
 public sealed class PlaylistDiscoveryProfile

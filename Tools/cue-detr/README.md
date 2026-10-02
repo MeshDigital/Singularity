@@ -1,7 +1,7 @@
 # CUE-DETR tooling
 
 These are developer scripts behind `Tools/Essentia/models/cue-detr.onnx`. They are not part of the
-app build: `SLSKDONET.csproj` excludes this folder from Content.
+app build: `Singularity.csproj` excludes this folder from Content.
 
 ## Setup
 
@@ -22,7 +22,7 @@ pip install "transformers<5" timm onnx onnxruntime "numpy<2.3" librosa matplotli
 - **`reference.py cues <files…> [--onnx model]`** runs the reference pipeline and prints cue
   times. It is a verbatim port of ETH-DISCO's `predict.py`. Checked on a real track: the pixel
   values are bit-identical to `DetrImageProcessor`, and the cue frames match the original script.
-- **`reference.py fixtures --out ../../Tests/SLSKDONET.Tests/TestData/CueDetr --track <file> --onnx <model>`**
+- **`reference.py fixtures --out ../../Tests/Singularity.Tests/TestData/CueDetr --track <file> --onnx <model>`**
   regenerates the C# parity fixtures used by `CueDetrParityTests`.
 - **`reference.py lut`** prints the viridis byte table embedded in `CueDetrFrontEnd`.
 

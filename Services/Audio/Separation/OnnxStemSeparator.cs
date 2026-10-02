@@ -6,10 +6,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
-using SLSKDONET.Models.Stem;
-using SLSKDONET.Services.Audio; // StemCacheService.GetModelTag
+using Singularity.Models.Stem;
+using Singularity.Services.Audio; // StemCacheService.GetModelTag
 
-namespace SLSKDONET.Services.Audio.Separation;
+namespace Singularity.Services.Audio.Separation;
 
 /// <summary>
 /// A DirectML-accelerated ONNX implementation of Spleeter.

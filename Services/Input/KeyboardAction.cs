@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SLSKDONET.Services.Input;
+namespace Singularity.Services.Input;
 
 /// <summary>Grouping category for <see cref="KeyboardAction"/> values (Epic #119).</summary>
 public enum ActionCategory

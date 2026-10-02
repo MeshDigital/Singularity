@@ -5,12 +5,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data; // For AppDbContext
-using SLSKDONET.Models;
-using SLSKDONET.Services.IO;
+using Singularity.Configuration;
+using Singularity.Data; // For AppDbContext
+using Singularity.Models;
+using Singularity.Services.IO;
 
-namespace SLSKDONET.Services.Library
+namespace Singularity.Services.Library
 {
     public class SmartSorterService
     {

@@ -2,9 +2,9 @@ using System;
 using System.ComponentModel;
 using System.Windows.Input;
 using ReactiveUI;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.ViewModels.Downloads;
+namespace Singularity.ViewModels.Downloads;
 
 public enum DownloadRowPriority
 {

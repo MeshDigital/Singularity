@@ -1,7 +1,7 @@
 using System;
-using SLSKDONET.Views;
+using Singularity.Views;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
 
     public class NotificationEvent

@@ -7,14 +7,14 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models.Musical;
-using SLSKDONET.Services.Similarity;
+using Singularity.Models.Musical;
+using Singularity.Services.Similarity;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// The panel bound to this VM (<c>DoubleInspectorPanel.axaml</c>) is only ever re-shown by a fresh
-/// <see cref="SLSKDONET.Events.OpenInspectorEvent"/> when selection settles at exactly 2 tracks —
+/// <see cref="Singularity.Events.OpenInspectorEvent"/> when selection settles at exactly 2 tracks —
 /// going from a valid pair to a 1-, 3+-, or 0-track selection does NOT re-fire that event, so
 /// without live change notifications the panel kept showing the last real pair's transition data
 /// as if it still applied. Implements <see cref="INotifyPropertyChanged"/> (this class previously

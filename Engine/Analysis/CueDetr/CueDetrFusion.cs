@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.Data.Entities;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.Engine.Analysis.CueDetr;
+namespace Singularity.Engine.Analysis.CueDetr;
 
 /// <summary>Where a track's auto cues come from.</summary>
 public enum CueSourceMode

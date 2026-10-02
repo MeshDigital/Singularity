@@ -1,4 +1,4 @@
-namespace SLSKDONET.Models.Entertainment;
+namespace Singularity.Models.Entertainment;
 
 /// <summary>
 /// Defines the 12 visualizer presets available in the ORBIT Pure Entertainment engine.

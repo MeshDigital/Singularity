@@ -11,7 +11,7 @@ using Avalonia.Media.Imaging;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Generates a mosaic / collage artwork bitmap from a playlist's track album-art URLs.

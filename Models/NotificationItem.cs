@@ -1,7 +1,7 @@
 using System;
 using ReactiveUI;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 public enum NotificationKind
 {

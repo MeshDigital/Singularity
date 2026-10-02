@@ -1,9 +1,9 @@
 using System;
 using System.ComponentModel;
-using SLSKDONET.Models;
-using SLSKDONET.Views;
+using Singularity.Models;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public partial class LibraryViewModel
 {

@@ -4,14 +4,14 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.ViewModels;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.ViewModels;
 using Avalonia.VisualTree; // Added for FindAncestorOfType
 using Microsoft.Extensions.DependencyInjection;
 // using CommunityToolkit.Mvvm.Input; // Removed - using local AsyncRelayCommand
 
-namespace SLSKDONET.Views.Avalonia;
+namespace Singularity.Views.Avalonia;
 
 public partial class PlayerControl : UserControl
 {

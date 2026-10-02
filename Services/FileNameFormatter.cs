@@ -1,9 +1,9 @@
 using System.IO;
 using System.Text.RegularExpressions;
-using SLSKDONET.Models;
-using SLSKDONET.Utils;
+using Singularity.Models;
+using Singularity.Utils;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Formats track filenames using template expressions.

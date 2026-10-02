@@ -9,17 +9,17 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ReactiveUI;
-using SLSKDONET.Configuration;
-using SLSKDONET.Events;
-using SLSKDONET.Models.Flow;
-using SLSKDONET.Models;
-using SLSKDONET.Models.Musical;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Playlist;
-using SLSKDONET.Services.Similarity;
-using SLSKDONET.Services.Telemetry;
+using Singularity.Configuration;
+using Singularity.Events;
+using Singularity.Models.Flow;
+using Singularity.Models;
+using Singularity.Models.Musical;
+using Singularity.Services;
+using Singularity.Services.Playlist;
+using Singularity.Services.Similarity;
+using Singularity.Services.Telemetry;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Powers the Flow Builder mode — lets users assemble a DJ set as an ordered sequence
@@ -41,15 +41,15 @@ public sealed class FlowBuilderViewModel : ReactiveObject, IDisposable
     private readonly PlaylistIntelligenceService _playlistIntelligence;
     private readonly TrackSimilarityService _trackSimilarityService;
     private readonly TransitionStyleClassifier _transitionStyleClassifier;
-    private readonly SLSKDONET.Services.Similarity.SectionVectorService? _sectionVectors;
+    private readonly Singularity.Services.Similarity.SectionVectorService? _sectionVectors;
     private readonly AppConfig           _appConfig;
     private readonly ConfigManager       _configManager;
     private readonly IDialogService _dialogService;
     private readonly IEventBus _eventBus;
     private readonly FlowBuilderSuggestionTelemetryService _telemetryService;
     private readonly MixTransitionViewModel _mixTransitionVm;
-    private readonly SLSKDONET.Services.Audio.ITransitionPreviewPlayer? _transitionPreviewPlayer;
-    private readonly SLSKDONET.Services.Audio.ILibraryPreviewPlayer? _libraryPreviewPlayer;
+    private readonly Singularity.Services.Audio.ITransitionPreviewPlayer? _transitionPreviewPlayer;
+    private readonly Singularity.Services.Audio.ILibraryPreviewPlayer? _libraryPreviewPlayer;
     private FlowTrackCardViewModel? _activePreviewCard;
     private FlowTrackCardViewModel? _activePreviewTrackCard;
     private string? _transitionCacheKey;
@@ -350,9 +350,9 @@ public sealed class FlowBuilderViewModel : ReactiveObject, IDisposable
         IEventBus eventBus,
         FlowBuilderSuggestionTelemetryService telemetryService,
         MixTransitionViewModel mixTransitionVm,
-        SLSKDONET.Services.Similarity.SectionVectorService? sectionVectors = null,
-        SLSKDONET.Services.Audio.ITransitionPreviewPlayer? transitionPreviewPlayer = null,
-        SLSKDONET.Services.Audio.ILibraryPreviewPlayer? libraryPreviewPlayer = null)
+        Singularity.Services.Similarity.SectionVectorService? sectionVectors = null,
+        Singularity.Services.Audio.ITransitionPreviewPlayer? transitionPreviewPlayer = null,
+        Singularity.Services.Audio.ILibraryPreviewPlayer? libraryPreviewPlayer = null)
     {
         _mixTransitionVm = mixTransitionVm;
         _mixTransitionVm.Closed += (_, _) => { IsTransitionEditorOpen = false; ActiveTransitionIndex = -1; };
@@ -627,7 +627,7 @@ public sealed class FlowBuilderViewModel : ReactiveObject, IDisposable
                 SelectedPlaylist.Id, skip: 0, take: 500);
 
             var eligibleTracks = tracks
-                .Where(SLSKDONET.ViewModels.Workstation.WorkstationDeckViewModel.IsTrackReadyForWorkstation)
+                .Where(Singularity.ViewModels.Workstation.WorkstationDeckViewModel.IsTrackReadyForWorkstation)
                 .ToList();
             var hiddenCount = Math.Max(0, tracks.Count - eligibleTracks.Count);
             var hiddenBreakdown = BuildHiddenEligibilityBreakdown(tracks, eligibleTracks);
@@ -727,7 +727,7 @@ public sealed class FlowBuilderViewModel : ReactiveObject, IDisposable
             foreach (var playlist in dialogResult.SelectedPlaylists)
             {
                 var tracks = await _library.LoadPlaylistTracksAsync(playlist.Id);
-                var eligible = tracks.Where(SLSKDONET.ViewModels.Workstation.WorkstationDeckViewModel.IsTrackReadyForWorkstation);
+                var eligible = tracks.Where(Singularity.ViewModels.Workstation.WorkstationDeckViewModel.IsTrackReadyForWorkstation);
 
                 foreach (var track in eligible)
                 {
@@ -843,25 +843,25 @@ public sealed class FlowBuilderViewModel : ReactiveObject, IDisposable
 
         foreach (var track in hiddenTracks)
         {
-            switch (SLSKDONET.ViewModels.Workstation.WorkstationDeckViewModel.GetTrackEligibilityIssue(track))
+            switch (Singularity.ViewModels.Workstation.WorkstationDeckViewModel.GetTrackEligibilityIssue(track))
             {
-                case SLSKDONET.ViewModels.Workstation.WorkstationTrackEligibilityIssue.NotDownloaded:
+                case Singularity.ViewModels.Workstation.WorkstationTrackEligibilityIssue.NotDownloaded:
                     missingDownload++;
                     break;
-                case SLSKDONET.ViewModels.Workstation.WorkstationTrackEligibilityIssue.MissingFile:
+                case Singularity.ViewModels.Workstation.WorkstationTrackEligibilityIssue.MissingFile:
                     missingFile++;
                     break;
-                case SLSKDONET.ViewModels.Workstation.WorkstationTrackEligibilityIssue.MissingHash:
+                case Singularity.ViewModels.Workstation.WorkstationTrackEligibilityIssue.MissingHash:
                     missingHash++;
                     break;
-                case SLSKDONET.ViewModels.Workstation.WorkstationTrackEligibilityIssue.MissingWaveform:
+                case Singularity.ViewModels.Workstation.WorkstationTrackEligibilityIssue.MissingWaveform:
                     missingWaveform++;
                     break;
-                case SLSKDONET.ViewModels.Workstation.WorkstationTrackEligibilityIssue.MissingCues:
+                case Singularity.ViewModels.Workstation.WorkstationTrackEligibilityIssue.MissingCues:
                     missingCues++;
                     break;
-                case SLSKDONET.ViewModels.Workstation.WorkstationTrackEligibilityIssue.MissingAnalysis:
-                case SLSKDONET.ViewModels.Workstation.WorkstationTrackEligibilityIssue.NoTrack:
+                case Singularity.ViewModels.Workstation.WorkstationTrackEligibilityIssue.MissingAnalysis:
+                case Singularity.ViewModels.Workstation.WorkstationTrackEligibilityIssue.NoTrack:
                     other++;
                     break;
             }
@@ -891,7 +891,7 @@ public sealed class FlowBuilderViewModel : ReactiveObject, IDisposable
                 SelectedPlaylist.Id, skip: 0, take: 1000);
 
             var eligibleAll = all
-                .Where(SLSKDONET.ViewModels.Workstation.WorkstationDeckViewModel.IsTrackReadyForWorkstation)
+                .Where(Singularity.ViewModels.Workstation.WorkstationDeckViewModel.IsTrackReadyForWorkstation)
                 .ToList();
 
             // Exclude already-queued hashes

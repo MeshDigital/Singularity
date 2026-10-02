@@ -1,4 +1,4 @@
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Defines where the music player is docked in the UI.

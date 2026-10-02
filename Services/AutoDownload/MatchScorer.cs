@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using SLSKDONET.Models;
-using SLSKDONET.Utils;
+using Singularity.Models;
+using Singularity.Utils;
 
-namespace SLSKDONET.Services.AutoDownload;
+namespace Singularity.Services.AutoDownload;
 
 /// <summary>
 /// MatchScorer — Deterministic scoring function for automatic download candidates.

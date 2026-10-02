@@ -2,7 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Helpers
+namespace Singularity.Helpers
 {
     public static class TaskExtensions
     {

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
     /// <summary>
     /// Global context for drag-and-drop operations.

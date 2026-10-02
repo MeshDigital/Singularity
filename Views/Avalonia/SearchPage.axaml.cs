@@ -1,10 +1,10 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using System.Linq;
-using SLSKDONET.Views;
-using SLSKDONET.ViewModels;
+using Singularity.Views;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Views.Avalonia
+namespace Singularity.Views.Avalonia
 {
     public partial class SearchPage : UserControl
     {
@@ -13,7 +13,7 @@ namespace SLSKDONET.Views.Avalonia
             InitializeComponent();
             
             // Wire up VirtualGrid interaction
-            var grid = this.FindControl<SLSKDONET.Views.Avalonia.Controls.VirtualGrid>("ResultsGrid");
+            var grid = this.FindControl<Singularity.Views.Avalonia.Controls.VirtualGrid>("ResultsGrid");
             if (grid != null)
             {
                 grid.DoubleTapped += (s, e) => {
@@ -112,7 +112,7 @@ namespace SLSKDONET.Views.Avalonia
                 var files = e.Data.GetFiles();
                 var csvFile = files?.FirstOrDefault(f => f.Name.EndsWith(".csv", System.StringComparison.OrdinalIgnoreCase));
 
-                if (csvFile != null && DataContext is SLSKDONET.ViewModels.SearchViewModel vm)
+                if (csvFile != null && DataContext is Singularity.ViewModels.SearchViewModel vm)
                 {
                     // Auto-switch to CSV mode and populate path
                     // vm.CurrentSearchMode = Models.SearchInputMode.CsvFile; // Logic is now inferred from extension in SearchViewModel

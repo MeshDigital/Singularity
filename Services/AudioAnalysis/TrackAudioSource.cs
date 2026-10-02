@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// Abstraction over a source audio file that the ingestion pipeline can decode.

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace SLSKDONET.Data.Essentia;
+namespace Singularity.Data.Essentia;
 
 // DTOs for mapping Essentia's JSON output
 public class EssentiaOutput

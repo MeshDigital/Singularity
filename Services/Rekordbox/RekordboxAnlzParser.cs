@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace SLSKDONET.Services.Rekordbox;
+namespace Singularity.Services.Rekordbox;
 
 /// <summary>
 /// One raw phrase entry from a Rekordbox ANLZ "PSSI" (song structure) tag, before conversion

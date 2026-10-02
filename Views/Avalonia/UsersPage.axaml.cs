@@ -2,9 +2,9 @@ using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Views.Avalonia
+namespace Singularity.Views.Avalonia
 {
     public partial class UsersPage : UserControl
     {

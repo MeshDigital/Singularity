@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using SLSKDONET.Models.Musical;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.Models.Flow;
+namespace Singularity.Models.Flow;
 
 public sealed record SuggestedFlowAffectedTransition(
     int EdgeIndex,

@@ -5,7 +5,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Represents the current state of an analysis worker thread.
@@ -76,8 +76,8 @@ public class ActiveThreadInfo : INotifyPropertyChanged
         set => SetField(ref _integrityScore, value);
     }
 
-    private SLSKDONET.Data.AnalysisStage _currentStage;
-    public SLSKDONET.Data.AnalysisStage CurrentStage
+    private Singularity.Data.AnalysisStage _currentStage;
+    public Singularity.Data.AnalysisStage CurrentStage
     {
         get => _currentStage;
         set 
@@ -93,10 +93,10 @@ public class ActiveThreadInfo : INotifyPropertyChanged
 
     private void UpdateStages()
     {
-        var stages = Enum.GetValues<SLSKDONET.Data.AnalysisStage>();
+        var stages = Enum.GetValues<Singularity.Data.AnalysisStage>();
         if (ActiveStages.Count == 0)
         {
-            foreach (var s in stages.Where(x => x != SLSKDONET.Data.AnalysisStage.Complete))
+            foreach (var s in stages.Where(x => x != Singularity.Data.AnalysisStage.Complete))
             {
                 ActiveStages.Add(new StageIndicator { Label = s.ToString(), Stage = s });
             }
@@ -150,7 +150,7 @@ public class ActiveThreadInfo : INotifyPropertyChanged
     public class StageIndicator : INotifyPropertyChanged
     {
         public string Label { get; set; } = string.Empty;
-        public SLSKDONET.Data.AnalysisStage Stage { get; set; }
+        public Singularity.Data.AnalysisStage Stage { get; set; }
         
         private Avalonia.Media.IBrush _color = Avalonia.Media.Brushes.Gray;
         public Avalonia.Media.IBrush Color { get => _color; set { _color = value; OnPropertyChanged(); OnPropertyChanged(nameof(GlowColor)); } }

@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Events;
+namespace Singularity.Events;
 
 /// <summary>
 /// The Library's selected playlist changed (null/empty id: no real playlist, e.g. All Tracks).

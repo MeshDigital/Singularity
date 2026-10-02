@@ -1,6 +1,6 @@
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// Reusable pairwise harmonic scorer for A10.x similarity and optimizer layers.

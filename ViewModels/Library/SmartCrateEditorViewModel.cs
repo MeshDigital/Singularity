@@ -6,12 +6,12 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.ViewModels;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 public class SmartCrateEditorViewModel : ReactiveObject
 {

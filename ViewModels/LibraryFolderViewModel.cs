@@ -1,9 +1,9 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using SLSKDONET.Data.Entities;
+using Singularity.Data.Entities;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public class LibraryFolderViewModel : INotifyPropertyChanged
 {

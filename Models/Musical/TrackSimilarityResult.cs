@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace SLSKDONET.Models.Musical;
+namespace Singularity.Models.Musical;
 
 public enum TrackSimilarityProfile
 {

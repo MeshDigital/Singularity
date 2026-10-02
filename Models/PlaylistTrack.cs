@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Represents a single track within a playlist.
@@ -195,9 +195,9 @@ public class PlaylistTrack
     public string? QualityDetails { get; set; }
 
     /// <summary>
-    /// Human-readable spectral analysis verdict produced by <see cref="SLSKDONET.Services.IAudioIntegrityService"/>.
+    /// Human-readable spectral analysis verdict produced by <see cref="Singularity.Services.IAudioIntegrityService"/>.
     /// E.g. "GenuineLossless", "TranscodedHighBitrate", "TranscodedLowBitrate".
-    /// Populated by <see cref="SLSKDONET.Services.PostDownloadSpectralScanService"/> after download completes.
+    /// Populated by <see cref="Singularity.Services.PostDownloadSpectralScanService"/> after download completes.
     /// </summary>
     public string? SpectralVerdictText { get; set; }
 
@@ -211,7 +211,7 @@ public class PlaylistTrack
     public double? SpectralCrestFactorDb { get; set; }
     public double? SpectralNoiseFloorDbfs { get; set; }
 
-    public SLSKDONET.Data.IntegrityLevel Integrity { get; set; } = SLSKDONET.Data.IntegrityLevel.None;
+    public Singularity.Data.IntegrityLevel Integrity { get; set; } = Singularity.Data.IntegrityLevel.None;
     
     /// <summary>
     /// Phase 2.1: Flagged by Safety Filter (High Risk)
@@ -274,8 +274,8 @@ public class PlaylistTrack
     public string? DiscoveryReason { get; set; } // [NEW] Phase 7: Match Reasoning
 
     // Phase 10.5: Reliability & Transparency
-    public SLSKDONET.Data.Entities.CurationConfidence CurationConfidence { get; set; } = SLSKDONET.Data.Entities.CurationConfidence.None;
-    public SLSKDONET.Data.Entities.DataSource Source { get; set; } = SLSKDONET.Data.Entities.DataSource.Unknown;
+    public Singularity.Data.Entities.CurationConfidence CurationConfidence { get; set; } = Singularity.Data.Entities.CurationConfidence.None;
+    public Singularity.Data.Entities.DataSource Source { get; set; } = Singularity.Data.Entities.DataSource.Unknown;
 
     // Phase 13: Per-Track Filter Overrides
     public string? PreferredFormats { get; set; }

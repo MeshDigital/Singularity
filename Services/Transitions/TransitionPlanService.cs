@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Engine.Transitions;
+using Singularity.Data.Entities;
+using Singularity.Engine.Transitions;
 
-namespace SLSKDONET.Services.Transitions;
+namespace Singularity.Services.Transitions;
 
 /// <summary>
 /// Loads what <see cref="TransitionPlanner"/> needs from the library (analysis + cues) and plans

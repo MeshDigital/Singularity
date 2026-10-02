@@ -8,13 +8,13 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
-using SLSKDONET.Services;
-using SLSKDONET.Views; // For AsyncRelayCommand (if strict match needed)
-using SLSKDONET.Models; // For Events
+using Singularity.Configuration;
+using Singularity.Data;
+using Singularity.Services;
+using Singularity.Views; // For AsyncRelayCommand (if strict match needed)
+using Singularity.Models; // For Events
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public class LibrarySourcesViewModel : INotifyPropertyChanged, IDisposable
 {

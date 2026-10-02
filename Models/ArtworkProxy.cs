@@ -4,9 +4,9 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
-using SLSKDONET.Services;
+using Singularity.Services;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// A lightweight proxy for lazy loading of artwork in virtualized lists.

@@ -4,16 +4,16 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Models;
+using Singularity.Services;
 
 
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-using SLSKDONET.Views;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public partial class ImportHistoryViewModel : INotifyPropertyChanged
 {

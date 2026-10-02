@@ -5,11 +5,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Data;
-using SLSKDONET.Configuration;
+using Singularity.Models;
+using Singularity.Data;
+using Singularity.Configuration;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
     public class MissionControlService : IDisposable
     {
@@ -203,7 +203,7 @@ namespace SLSKDONET.Services
                 operations.Add(new MissionOperation
                 {
                     Id = globalId,
-                    Type = SLSKDONET.Models.OperationType.Download,
+                    Type = Singularity.Models.OperationType.Download,
                     Title = $"{dl.Model.Artist} - {dl.Model.Title}",
                     Subtitle = dl.State.ToString(),
                     Progress = dl.Progress / 100.0,
@@ -226,7 +226,7 @@ namespace SLSKDONET.Services
             {
                 operations.Add(new MissionOperation
                 {
-                    Type = SLSKDONET.Models.OperationType.Search,
+                    Type = Singularity.Models.OperationType.Search,
                     Title = $"Searching ({activeSearchCount} active)",
                     Subtitle = $"{activeSearchCount} active queries",
                     Progress = 0.5,

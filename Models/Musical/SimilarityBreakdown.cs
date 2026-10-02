@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace SLSKDONET.Models.Musical
+namespace Singularity.Models.Musical
 {
     // ============================================================
     // Phase 5.0: Transparent Match Engine — Output & Control Models

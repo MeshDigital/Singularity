@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace SLSKDONET.Migrations
+namespace Singularity.Migrations
 {
     /// <inheritdoc />
     public partial class AddInstrumentalProbabilityAndArousal : Migration

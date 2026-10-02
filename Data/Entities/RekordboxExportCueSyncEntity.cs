@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace SLSKDONET.Data.Entities;
+namespace Singularity.Data.Entities;
 
 /// <summary>
 /// Records the cue set ORBIT most recently confirmed as in-sync for one (export target file,
@@ -10,7 +10,7 @@ namespace SLSKDONET.Data.Entities;
 /// track still match this snapshot, Rekordbox hasn't touched them since ORBIT last wrote them,
 /// so a fresh cue edit made in Cue Forge is safe to write through. If they differ, the DJ
 /// hand-edited cues directly in Rekordbox since then, so those edits are preserved instead.
-/// See <see cref="SLSKDONET.Services.Library.Rekordbox.RekordboxXmlMerger"/>.
+/// See <see cref="Singularity.Services.Library.Rekordbox.RekordboxXmlMerger"/>.
 /// </summary>
 [Table("RekordboxExportCueSync")]
 public class RekordboxExportCueSyncEntity

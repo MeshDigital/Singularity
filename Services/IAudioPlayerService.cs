@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
     public interface IAudioPlayerService : IDisposable
     {
@@ -76,10 +76,10 @@ namespace SLSKDONET.Services
         /// <param name="presetName">Display name of the Mix preset (e.g. "Wave"), if any — carried
         /// through purely for UI visibility (see <see cref="CrossfadeStartedEventArgs.PresetName"/>),
         /// not used by the DSP itself.</param>
-        void PreloadNext(string uri, double? trackLoudnessLufs = null, SLSKDONET.Models.Timeline.TransitionModel? transition = null, double? transitionBpm = null,
+        void PreloadNext(string uri, double? trackLoudnessLufs = null, Singularity.Models.Timeline.TransitionModel? transition = null, double? transitionBpm = null,
             double? sourceTriggerSeconds = null, double? targetTriggerSeconds = null, string? presetName = null);
         /// <param name="outgoingBpm">File BPM of the track being mixed out of; enables tempo matching.</param>
-        void SetPendingTransitionForNext(string filePath, SLSKDONET.Models.Timeline.TransitionModel? transition, double? transitionBpm,
+        void SetPendingTransitionForNext(string filePath, Singularity.Models.Timeline.TransitionModel? transition, double? transitionBpm,
             double? sourceTriggerSeconds = null, double? targetTriggerSeconds = null, string? presetName = null, double? outgoingBpm = null);
 
         /// <summary>Discards any preloaded next track.</summary>

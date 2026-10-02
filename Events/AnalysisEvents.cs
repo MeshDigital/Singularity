@@ -1,14 +1,14 @@
 using System;
-using SLSKDONET.Data.Essentia;
+using Singularity.Data.Essentia;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 // Audio Analysis Pipeline (Phase 3 Integration + Phase 1 Progress)
 public record TrackAnalysisCompletedEvent(string TrackGlobalId, bool Success, string? ErrorMessage = null) { public Guid? DatabaseId { get; init; } }
 public record TrackAnalysisStartedEvent(string TrackGlobalId, string FileName) { public Guid? DatabaseId { get; init; } }
 
 /// <summary>
-/// Published by <see cref="SLSKDONET.Services.AnalyzeTrackStructureJob"/> when structural analysis
+/// Published by <see cref="Singularity.Services.AnalyzeTrackStructureJob"/> when structural analysis
 /// (drop detection, phrase boundary detection, auto-cue generation) completes or fails.
 /// </summary>
 public record TrackStructureAnalysisCompletedEvent(

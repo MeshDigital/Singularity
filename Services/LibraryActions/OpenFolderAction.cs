@@ -4,9 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Services.LibraryActions;
+namespace Singularity.Services.LibraryActions;
 
 /// <summary>
 /// Opens Windows Explorer to the folder containing the downloaded track file

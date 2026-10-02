@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace SLSKDONET.Services.Rekordbox;
+namespace Singularity.Services.Rekordbox;
 
 /// <summary>
 /// Locates every local Rekordbox analysis cache (USBANLZ) root, shared by every service that reads

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Concurrent;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Timeline;
+using Singularity.Models;
+using Singularity.Services.Timeline;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Caches downsampled waveform RMS profiles per track key and target bin count.

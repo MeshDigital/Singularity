@@ -8,10 +8,10 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Models;
+using Singularity.Services;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>A single joined chat room: live roster + message thread (shares the same thread UI as 1:1 chat).</summary>
 public class RoomViewModel : ReactiveObject, IDisposable

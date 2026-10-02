@@ -1,7 +1,7 @@
 using Avalonia.Controls;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Views.Avalonia.Controls
+namespace Singularity.Views.Avalonia.Controls
 {
     /// <summary>
     /// Code-behind for SetlistHealthBar.axaml

@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace SLSKDONET.Migrations
+namespace Singularity.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration

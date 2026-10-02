@@ -1,9 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using SLSKDONET.ViewModels.Downloads;
+using Singularity.ViewModels.Downloads;
 
-namespace SLSKDONET.Views.Avalonia
+namespace Singularity.Views.Avalonia
 {
     public partial class DownloadsPage : UserControl
     {

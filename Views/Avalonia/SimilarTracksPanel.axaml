@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:avConverters="clr-namespace:SLSKDONET.Views.Avalonia.Converters"
-             x:Class="SLSKDONET.Views.Avalonia.SimilarTracksPanel"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:avConverters="clr-namespace:Singularity.Views.Avalonia.Converters"
+             x:Class="Singularity.Views.Avalonia.SimilarTracksPanel"
              x:DataType="vm:SimilarTracksViewModel"
              Background="#1A1A1A" Foreground="White">
 

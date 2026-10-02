@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services.Discovery;
+namespace Singularity.Services.Discovery;
 
 /// <summary>One playlist's saved Discover results.</summary>
 public sealed class DiscoveryCacheEntry

@@ -7,11 +7,11 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Views;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 /// <summary>
 /// Manages the list of projects/playlists in the library.

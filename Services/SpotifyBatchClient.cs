@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SpotifyAPI.Web; // For response models if needed, or we can use dynamic/custom
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// A thread-safe, throttled, and batched client for Spotify API requests.
@@ -45,7 +45,7 @@ public class SpotifyBatchClient
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (!_http.DefaultRequestHeaders.Contains("User-Agent"))
         {
-            _http.DefaultRequestHeaders.Add("User-Agent", "Orbit/1.2.2 (SLSKDONET)");
+            _http.DefaultRequestHeaders.Add("User-Agent", "Orbit/1.2.2 (Singularity)");
         }
     }
 

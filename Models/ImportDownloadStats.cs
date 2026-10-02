@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace SLSKDONET.Models
+namespace Singularity.Models
 {
     /// <summary>
     /// Statistics for download status of an import/playlist.

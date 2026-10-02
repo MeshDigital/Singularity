@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 
-namespace SLSKDONET.Views.Avalonia;
+namespace Singularity.Views.Avalonia;
 
 public partial class SplashScreen : Window
 {

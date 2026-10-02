@@ -1,6 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="using:SLSKDONET.Views.Avalonia.Controls">
+        xmlns:controls="using:Singularity.Views.Avalonia.Controls">
   <Design.PreviewWith>
     <controls:StrategyCard />
   </Design.PreviewWith>

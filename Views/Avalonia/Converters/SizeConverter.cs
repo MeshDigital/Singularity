@@ -2,10 +2,10 @@ using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 
-namespace SLSKDONET.Models
+namespace Singularity.Models
 {
     // Keeping inside Models namespace for compatibility with existing XAML reference
-    // "xmlns:models="clr-namespace:SLSKDONET.Models""
+    // "xmlns:models="clr-namespace:Singularity.Models""
     public class SizeConverter : IValueConverter
     {
         public static readonly SizeConverter Instance = new();

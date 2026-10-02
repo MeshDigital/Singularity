@@ -4,7 +4,7 @@ using System.Linq;
 using NWaves.Transforms;
 using NWaves.Windows;
 
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// Computes a half-wave rectified spectral flux novelty curve — the primary signal

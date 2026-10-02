@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 // Player Events
 public record TrackPlaybackStartedEvent(string FilePath, string Artist, string Title);

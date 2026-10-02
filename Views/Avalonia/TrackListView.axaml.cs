@@ -2,12 +2,12 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
-using SLSKDONET.Services;
-using SLSKDONET.ViewModels;
-using SLSKDONET.ViewModels.Library;
-using SLSKDONET.Views.Avalonia.Controls;
+using Singularity.Services;
+using Singularity.ViewModels;
+using Singularity.ViewModels.Library;
+using Singularity.Views.Avalonia.Controls;
 
-namespace SLSKDONET.Views.Avalonia;
+namespace Singularity.Views.Avalonia;
 
 public partial class TrackListView : UserControl
 {

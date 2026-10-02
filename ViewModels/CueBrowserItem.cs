@@ -1,4 +1,4 @@
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Lightweight entry for the Cue Forge playlist browser.

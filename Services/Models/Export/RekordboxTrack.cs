@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Services.Models.Export;
+namespace Singularity.Services.Models.Export;
 
 /// <summary>
 /// Represents a TRACK element in the Rekordbox XML schema.
@@ -74,5 +74,5 @@ public class RekordboxTrack
     /// <summary>
     /// Cue points for Rekordbox export.
     /// </summary>
-    public System.Collections.Generic.List<SLSKDONET.Models.OrbitCue> CuePoints { get; set; } = new();
+    public System.Collections.Generic.List<Singularity.Models.OrbitCue> CuePoints { get; set; } = new();
 }

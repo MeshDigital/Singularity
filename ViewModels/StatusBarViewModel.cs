@@ -3,11 +3,11 @@ using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Windows.Input;
 using ReactiveUI;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Models;
+using Singularity.Services;
 using Avalonia.Threading;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Share health tier, used by the Status Bar LED indicator.
@@ -381,7 +381,7 @@ public class StatusBarViewModel : ReactiveObject, IDisposable
             .DisposeWith(_disposables);
 
         // Phase 10.5: Bulk Operation Subscriptions
-        eventBus.GetEvent<SLSKDONET.Services.BulkOperationStartedEvent>()
+        eventBus.GetEvent<Singularity.Services.BulkOperationStartedEvent>()
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(e =>
             {
@@ -391,7 +391,7 @@ public class StatusBarViewModel : ReactiveObject, IDisposable
             })
             .DisposeWith(_disposables);
 
-        eventBus.GetEvent<SLSKDONET.Services.BulkOperationProgressEvent>()
+        eventBus.GetEvent<Singularity.Services.BulkOperationProgressEvent>()
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(e =>
             {
@@ -399,7 +399,7 @@ public class StatusBarViewModel : ReactiveObject, IDisposable
             })
             .DisposeWith(_disposables);
 
-        eventBus.GetEvent<SLSKDONET.Services.BulkOperationCompletedEvent>()
+        eventBus.GetEvent<Singularity.Services.BulkOperationCompletedEvent>()
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(e =>
             {

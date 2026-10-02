@@ -8,11 +8,11 @@ using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Data;
-using SLSKDONET.Services;
-using SLSKDONET.Views;
+using Singularity.Data;
+using Singularity.Services;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 public sealed class LargestFileRowViewModel
 {

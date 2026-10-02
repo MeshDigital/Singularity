@@ -1,10 +1,10 @@
 using System;
 using System.Text.Json;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Data.Essentia;
-using SLSKDONET.Services.Timeline;
+using Singularity.Data.Entities;
+using Singularity.Data.Essentia;
+using Singularity.Services.Timeline;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 /// <summary>
 /// Task 1.5 — Derives a complete beat-grid from Essentia rhythm output and

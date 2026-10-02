@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ReactiveUI;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 public class BulkRenameResult
 {

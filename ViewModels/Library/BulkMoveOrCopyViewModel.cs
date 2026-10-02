@@ -1,6 +1,6 @@
 using ReactiveUI;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 public class BulkMoveOrCopyResult
 {

@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels.Settings"
-             x:Class="SLSKDONET.Views.Avalonia.Settings.KeyboardMappingsPage"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Settings"
+             x:Class="Singularity.Views.Avalonia.Settings.KeyboardMappingsPage"
              x:DataType="vm:KeyboardMappingsViewModel"
              Background="Transparent">
 

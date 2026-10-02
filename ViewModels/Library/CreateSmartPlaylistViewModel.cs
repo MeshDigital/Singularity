@@ -2,9 +2,9 @@ using System;
 using System.Reactive.Linq;
 using System.Windows.Input;
 using ReactiveUI;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.ViewModels.Library
+namespace Singularity.ViewModels.Library
 {
     public class CreateSmartPlaylistViewModel : ReactiveObject
     {

@@ -3,7 +3,7 @@ using System.Diagnostics;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Logs a warning whenever the UI thread was blocked long enough for a user to notice. A 100ms

@@ -2,10 +2,10 @@ using System;
 using System.ComponentModel;
 using System.Reactive.Disposables;
 using System.Runtime.CompilerServices;
-using SLSKDONET.Services;
+using Singularity.Services;
 using Avalonia.Threading;
 
-namespace SLSKDONET.ViewModels
+namespace Singularity.ViewModels
 {
     public class BulkOperationViewModel : INotifyPropertyChanged, IDisposable
     {

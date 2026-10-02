@@ -6,8 +6,8 @@ matplotlib, scipy, pillow.
     # cue points for audio files (PyTorch model, or --onnx to run the exported model)
     python reference.py cues track1.flac track2.mp3 [--onnx ../Essentia/models/cue-detr.onnx]
 
-    # regenerate the C# parity fixtures (Tests/SLSKDONET.Tests/TestData/CueDetr)
-    python reference.py fixtures --out ../../Tests/SLSKDONET.Tests/TestData/CueDetr --track some.flac
+    # regenerate the C# parity fixtures (Tests/Singularity.Tests/TestData/CueDetr)
+    python reference.py fixtures --out ../../Tests/Singularity.Tests/TestData/CueDetr --track some.flac
 
     # the viridis byte table used by the C# port
     python reference.py lut

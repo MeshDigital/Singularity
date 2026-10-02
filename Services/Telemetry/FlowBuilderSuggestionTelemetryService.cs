@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using SLSKDONET.Data;
-using SLSKDONET.Models.Flow;
-using SLSKDONET.Models.Musical;
+using Singularity.Data;
+using Singularity.Models.Flow;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.Services.Telemetry;
+namespace Singularity.Services.Telemetry;
 
 public sealed class FlowBuilderSuggestionTelemetryService
 {

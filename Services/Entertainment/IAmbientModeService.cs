@@ -1,6 +1,6 @@
-using SLSKDONET.Models.Entertainment;
+using Singularity.Models.Entertainment;
 
-namespace SLSKDONET.Services.Entertainment;
+namespace Singularity.Services.Entertainment;
 
 /// <summary>
 /// Controls ORBIT's Ambient Mode — the passive, atmospheric visual state

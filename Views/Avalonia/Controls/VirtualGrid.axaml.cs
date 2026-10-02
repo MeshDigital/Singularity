@@ -14,9 +14,9 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Controls.Primitives;
 using Avalonia.VisualTree;
-using SLSKDONET.Helpers;
+using Singularity.Helpers;
 
-namespace SLSKDONET.Views.Avalonia.Controls
+namespace Singularity.Views.Avalonia.Controls
 {
     public partial class VirtualGrid : UserControl
     {

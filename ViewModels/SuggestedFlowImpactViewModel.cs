@@ -2,9 +2,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using ReactiveUI;
-using SLSKDONET.Models.Flow;
+using Singularity.Models.Flow;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public sealed class SuggestedFlowImpactRowViewModel
 {

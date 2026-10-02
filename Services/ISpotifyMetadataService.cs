@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using SLSKDONET.Models;
+using Singularity.Models;
 using SpotifyAPI.Web;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public interface ISpotifyMetadataService
 {

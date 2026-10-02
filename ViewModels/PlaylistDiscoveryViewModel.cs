@@ -10,16 +10,16 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Configuration;
-using SLSKDONET.Events;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Audio;
-using SLSKDONET.Services.Discovery;
-using SLSKDONET.Utils;
-using SLSKDONET.Views;
+using Singularity.Configuration;
+using Singularity.Events;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Services.Audio;
+using Singularity.Services.Discovery;
+using Singularity.Utils;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Discover sidepanel tab: tracks worth adding to the selected playlist, from Beatport and

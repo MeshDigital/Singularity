@@ -91,7 +91,7 @@ RANKING_QUICK_REFERENCE.md
 RANKING_TECHNICAL_DEEPDIVE.md
 RATING_LIKES_PLAN.md
 SEARCH_RANKING_OPTIMIZATION.md
-SLSKDONET_LEARNINGS.md
+Singularity_LEARNINGS.md
 SPOTIFY_PKCE_FLOW_ANALYSIS.md
 
 
@@ -101,3 +101,4 @@ Tools/Essentia/models/
 
 # Test fixtures are data, not local state
 !Tests/**/TestData/**/*.json
+__pycache__/

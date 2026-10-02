@@ -5,9 +5,9 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Avalonia.Input;
-using SLSKDONET.Services.Input;
+using Singularity.Services.Input;
 
-namespace SLSKDONET.ViewModels.Workstation;
+namespace Singularity.ViewModels.Workstation;
 
 /// <summary>
 /// ViewModel for the F1 keyboard-shortcut overlay.

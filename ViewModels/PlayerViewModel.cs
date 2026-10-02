@@ -5,14 +5,14 @@ using System.Linq;
 using System.Windows.Input;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Models.Entertainment;
-using SLSKDONET.Models.Musical;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Entertainment;
-using SLSKDONET.Services.Similarity;
-using SLSKDONET.Views;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Models.Entertainment;
+using Singularity.Models.Musical;
+using Singularity.Services;
+using Singularity.Services.Entertainment;
+using Singularity.Services.Similarity;
+using Singularity.Views;
 
 // using DraggingService; // TODO: Fix drag-drop library reference
 
@@ -21,7 +21,7 @@ using System.Reactive.Linq;
 using System.Reactive.Disposables;
 using ReactiveUI;
 
-namespace SLSKDONET.ViewModels
+namespace Singularity.ViewModels
 {
     using System.ComponentModel;
     using System.Runtime.CompilerServices;
@@ -46,19 +46,19 @@ namespace SLSKDONET.ViewModels
         private readonly IAudioPlayerService _playerService;
         private readonly AppConfig? _config;
         private readonly ConfigManager? _configManager;
-        private readonly SLSKDONET.Services.Repositories.ITransitionRepository? _transitionRepository;
-        private readonly SLSKDONET.Services.Repositories.ITrackRepository? _trackRepository;
+        private readonly Singularity.Services.Repositories.ITransitionRepository? _transitionRepository;
+        private readonly Singularity.Services.Repositories.ITrackRepository? _trackRepository;
         private readonly ICuePointService? _cuePointService;
         private readonly IDialogService? _dialogService;
-        private readonly SLSKDONET.Services.AnalysisQueueService? _analysisQueueService;
+        private readonly Singularity.Services.AnalysisQueueService? _analysisQueueService;
         // Singletons — stopped whenever real queue/playlist playback starts (see LoadTrackCore),
         // so a Mix Editor waveform click-preview or a Library row hover-preview never keeps
         // playing underneath the track the user actually pressed play on. Both are self-contained
         // WASAPI outputs (never hijack this main player), so nothing crashes if they overlap —
         // they'd just audibly mix together, which is the actual problem this prevents.
-        private readonly SLSKDONET.Services.Audio.ILibraryPreviewPlayer? _libraryPreviewPlayer;
-        private readonly SLSKDONET.Services.Audio.ITransitionPreviewPlayer? _transitionPreviewPlayer;
-        private static readonly SLSKDONET.Engine.Transitions.TransitionEngine _pointSuggestionEngine = new();
+        private readonly Singularity.Services.Audio.ILibraryPreviewPlayer? _libraryPreviewPlayer;
+        private readonly Singularity.Services.Audio.ITransitionPreviewPlayer? _transitionPreviewPlayer;
+        private static readonly Singularity.Engine.Transitions.TransitionEngine _pointSuggestionEngine = new();
 
         /// <summary>The same singleton instance the CONTEXT sidepanel's "Mix" tab uses (see
         /// SidebarViewModel) — shared so loading a pair here and loading one via a badge click
@@ -750,7 +750,7 @@ namespace SLSKDONET.ViewModels
         // Phase 5C: UI Throttling
         private DateTime _lastTimeUpdate = DateTime.MinValue;
 
-        public PlayerViewModel(IAudioPlayerService playerService, DatabaseService databaseService, IEventBus eventBus, ArtworkCacheService artworkCacheService, INavigationService navigationService, IRightPanelService rightPanelService, IAmbientModeService? ambientModeService = null, IFlowModeService? flowModeService = null, AppConfig? config = null, ConfigManager? configManager = null, SLSKDONET.Services.Repositories.ITransitionRepository? transitionRepository = null, MixTransitionViewModel? mixTransitionViewModel = null, SLSKDONET.Services.Repositories.ITrackRepository? trackRepository = null, ICuePointService? cuePointService = null, IDialogService? dialogService = null, SLSKDONET.Services.AnalysisQueueService? analysisQueueService = null, SLSKDONET.Services.Audio.ILibraryPreviewPlayer? libraryPreviewPlayer = null, SLSKDONET.Services.Audio.ITransitionPreviewPlayer? transitionPreviewPlayer = null, SLSKDONET.Services.Transitions.TransitionPlanService? transitionPlanService = null)
+        public PlayerViewModel(IAudioPlayerService playerService, DatabaseService databaseService, IEventBus eventBus, ArtworkCacheService artworkCacheService, INavigationService navigationService, IRightPanelService rightPanelService, IAmbientModeService? ambientModeService = null, IFlowModeService? flowModeService = null, AppConfig? config = null, ConfigManager? configManager = null, Singularity.Services.Repositories.ITransitionRepository? transitionRepository = null, MixTransitionViewModel? mixTransitionViewModel = null, Singularity.Services.Repositories.ITrackRepository? trackRepository = null, ICuePointService? cuePointService = null, IDialogService? dialogService = null, Singularity.Services.AnalysisQueueService? analysisQueueService = null, Singularity.Services.Audio.ILibraryPreviewPlayer? libraryPreviewPlayer = null, Singularity.Services.Audio.ITransitionPreviewPlayer? transitionPreviewPlayer = null, Singularity.Services.Transitions.TransitionPlanService? transitionPlanService = null)
         {
             _playerService = playerService;
             _databaseService = databaseService;
@@ -1388,7 +1388,7 @@ namespace SLSKDONET.ViewModels
                 if (string.IsNullOrWhiteSpace(selected.GlobalId) || string.IsNullOrWhiteSpace(neighbor.GlobalId))
                     return;
 
-                if (global::Avalonia.Application.Current is not SLSKDONET.App app || app.Services is null)
+                if (global::Avalonia.Application.Current is not Singularity.App app || app.Services is null)
                     return;
 
                 var similarity = app.Services.GetService(typeof(TrackSimilarityService)) as TrackSimilarityService;
@@ -1570,7 +1570,7 @@ namespace SLSKDONET.ViewModels
 
             var playlistId = outgoing.Model?.PlaylistId ?? Guid.Empty;
             ReactiveUI.MessageBus.Current.SendMessage(
-                new SLSKDONET.Events.OpenMixTransitionEvent(playlistId, outgoing.Id, incomingId));
+                new Singularity.Events.OpenMixTransitionEvent(playlistId, outgoing.Id, incomingId));
         }
 
         /// <summary>
@@ -1613,7 +1613,7 @@ namespace SLSKDONET.ViewModels
             if (playlistId == Guid.Empty) return;
 
             ReactiveUI.MessageBus.Current.SendMessage(
-                new SLSKDONET.Events.OpenMixTransitionEvent(playlistId, CurrentTrack.Id, next.Id));
+                new Singularity.Events.OpenMixTransitionEvent(playlistId, CurrentTrack.Id, next.Id));
         }
 
         private void LoadCurrentPairIntoMixPanel()
@@ -1642,7 +1642,7 @@ namespace SLSKDONET.ViewModels
             try
             {
                 // Global persistence (Library + all Project instances)
-                if (global::Avalonia.Application.Current is SLSKDONET.App app && app.Services != null)
+                if (global::Avalonia.Application.Current is Singularity.App app && app.Services != null)
                 {
                     var libraryService = app.Services.GetService(typeof(ILibraryService)) as ILibraryService;
                     if (libraryService != null)
@@ -2008,7 +2008,7 @@ namespace SLSKDONET.ViewModels
             _preloadedQueueIndex = null;
         }
 
-        private readonly SLSKDONET.Services.Transitions.TransitionPlanService? _transitionPlanService;
+        private readonly Singularity.Services.Transitions.TransitionPlanService? _transitionPlanService;
 
         private async Task AttachSavedTransitionAsync(string preloadedPath, PlaylistTrackViewModel? outgoing, PlaylistTrackViewModel incoming)
         {
@@ -2025,7 +2025,7 @@ namespace SLSKDONET.ViewModels
             // source of exact analysed BPMs, which the engine uses to tempo-match the incoming deck.
             var score = Services.Playlist.TrackPairCompatibilityScorer.Score(
                 outgoing.CamelotDisplay, incoming.CamelotDisplay, outgoing.Energy, incoming.Energy);
-            (SLSKDONET.Engine.Transitions.TransitionPlan Plan, SLSKDONET.Engine.Transitions.TrackStructure Outgoing, SLSKDONET.Engine.Transitions.TrackStructure Incoming)? planned = null;
+            (Singularity.Engine.Transitions.TransitionPlan Plan, Singularity.Engine.Transitions.TrackStructure Outgoing, Singularity.Engine.Transitions.TrackStructure Incoming)? planned = null;
             if (_transitionPlanService != null
                 && outgoing.Model?.TrackUniqueHash is { Length: > 0 } outHash
                 && incoming.Model?.TrackUniqueHash is { Length: > 0 } inHash)
@@ -2045,7 +2045,7 @@ namespace SLSKDONET.ViewModels
                 outgoingBpm = p.Outgoing.Bpm;
             }
 
-            SLSKDONET.Models.Timeline.TransitionModel model;
+            Singularity.Models.Timeline.TransitionModel model;
             string presetName;
             double? sourceTrigger;
             double? targetTrigger;

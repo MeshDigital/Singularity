@@ -7,10 +7,10 @@ using System;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Timeline;
+using Singularity.Models;
+using Singularity.Services.Timeline;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 /// <summary>
 /// Full-canvas RGB waveform renderer with interactive cue/loop overlays,

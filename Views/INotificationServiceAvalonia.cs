@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Views;
+namespace Singularity.Views;
 
 /// <summary>
 /// Avalonia-compatible notification service interface.

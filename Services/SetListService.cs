@@ -4,12 +4,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Models.Musical;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
     public class SetListService
     {

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.Services;
+using Singularity.Services;
 
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// Four-on-the-floor family (House/Techno/Trance/EDM) analysis strategy — narrower per-subgenre

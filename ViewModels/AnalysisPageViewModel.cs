@@ -11,12 +11,12 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Library;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Services.Library;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Processing state for the analysis queue.

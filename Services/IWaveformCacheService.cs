@@ -1,6 +1,6 @@
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public interface IWaveformCacheService
 {

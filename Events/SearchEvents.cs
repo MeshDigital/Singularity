@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 public record ExternalDiscoveryRequestedEvent(string TrackHash);
 public record SearchHardCapTriggeredEvent(string Query, int HardResultCap, int HardFileCap, string Reason);

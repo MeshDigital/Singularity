@@ -1,9 +1,9 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Services.Platform;
+using Singularity.Services.Platform;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Factory for creating platform-specific secure token storage implementations.

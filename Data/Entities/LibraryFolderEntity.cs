@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Data.Entities;
+namespace Singularity.Data.Entities;
 
 /// <summary>
 /// Represents a user-configured folder to scan for music files

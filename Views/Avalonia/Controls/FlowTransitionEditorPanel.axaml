@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:views="clr-namespace:SLSKDONET.Views.Avalonia"
-             x:Class="SLSKDONET.Views.Avalonia.Controls.FlowTransitionEditorPanel"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:views="clr-namespace:Singularity.Views.Avalonia"
+             x:Class="Singularity.Views.Avalonia.Controls.FlowTransitionEditorPanel"
              x:DataType="vm:FlowBuilderViewModel">
 
     <!-- Mix + cue workspace for one transition of the set. Same MixTransitionViewModel/persistence

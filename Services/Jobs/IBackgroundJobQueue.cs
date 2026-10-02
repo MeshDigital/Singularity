@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Services.Jobs;
+namespace Singularity.Services.Jobs;
 
 /// <summary>
 /// A unit of work that can be queued for background execution.

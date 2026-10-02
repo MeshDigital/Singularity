@@ -1,9 +1,9 @@
 using System.Threading.Tasks;
-using SLSKDONET.Models;
-using SLSKDONET.ViewModels;
-using SLSKDONET.ViewModels.Downloads;
+using Singularity.Models;
+using Singularity.ViewModels;
+using Singularity.ViewModels.Downloads;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public interface IDialogService
 {

@@ -1,6 +1,6 @@
 using ReactiveUI;
 
-namespace SLSKDONET.Models
+namespace Singularity.Models
 {
     public class FileMoveOperation : ReactiveObject
     {

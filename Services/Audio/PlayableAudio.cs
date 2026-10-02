@@ -7,7 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using NAudio.Wave;
 
-namespace SLSKDONET.Services.Audio;
+namespace Singularity.Services.Audio;
 
 /// <summary>
 /// Opens any library file for playback. NAudio decodes FLAC/Opus/Ogg through Windows Media

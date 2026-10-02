@@ -1,10 +1,10 @@
 using System;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Services.InputParsers;
+using Singularity.Models;
+using Singularity.Services.InputParsers;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Phase 4.6 Hotfix: Search String Normalization Service.

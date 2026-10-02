@@ -2,9 +2,9 @@ using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
-using SLSKDONET.Services;
+using Singularity.Services;
 
-namespace SLSKDONET.Views.Avalonia.Converters;
+namespace Singularity.Views.Avalonia.Converters;
 
 /// <summary>
 /// Presence dot fill: green=Online, yellow=Away, gray=Offline, transparent=Unknown.

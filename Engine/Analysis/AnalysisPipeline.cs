@@ -5,12 +5,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Engine.Snapping;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Audio;
-using SLSKDONET.Services.AudioAnalysis;
+using Singularity.Engine.Snapping;
+using Singularity.Models;
+using Singularity.Services.Audio;
+using Singularity.Services.AudioAnalysis;
 
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// Compiled result of the curation analysis pipeline.

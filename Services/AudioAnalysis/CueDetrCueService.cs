@@ -7,10 +7,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Engine.Analysis.CueDetr;
+using Singularity.Data;
+using Singularity.Engine.Analysis.CueDetr;
 
-namespace SLSKDONET.Services.AudioAnalysis;
+namespace Singularity.Services.AudioAnalysis;
 
 public sealed record CueDetrRegenResult(bool Success, int CueCount, int AiPoints, int Agreed, bool RanModel, string? Error = null);
 

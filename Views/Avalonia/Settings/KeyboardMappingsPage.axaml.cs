@@ -4,9 +4,9 @@ using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Platform.Storage;
-using SLSKDONET.ViewModels.Settings;
+using Singularity.ViewModels.Settings;
 
-namespace SLSKDONET.Views.Avalonia.Settings;
+namespace Singularity.Views.Avalonia.Settings;
 
 /// <summary>
 /// Code-behind for <see cref="KeyboardMappingsPage"/>.

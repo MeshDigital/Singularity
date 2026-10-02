@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
  
 public enum TrackViewMode
 {

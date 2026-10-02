@@ -2,9 +2,9 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Services.LibraryActions;
+namespace Singularity.Services.LibraryActions;
 
 /// <summary>
 /// Removes selected tracks from the current playlist

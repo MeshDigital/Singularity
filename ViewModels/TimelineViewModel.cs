@@ -5,10 +5,10 @@ using System.Reactive;
 using System.Reactive.Disposables;
 using System.Text.Json;
 using ReactiveUI;
-using SLSKDONET.Models.Timeline;
-using SLSKDONET.Services.Timeline;
+using Singularity.Models.Timeline;
+using Singularity.Services.Timeline;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Task 7.5 — Command pattern for undo/redo

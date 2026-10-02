@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.Services.Timeline;
+using Singularity.Services.Timeline;
 
-namespace SLSKDONET.Services.Audio
+namespace Singularity.Services.Audio
 {
     public enum SnappingMode
     {

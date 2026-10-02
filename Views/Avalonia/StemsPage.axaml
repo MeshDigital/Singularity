@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:stemViews="clr-namespace:SLSKDONET.Views.Avalonia"
-             x:Class="SLSKDONET.Views.Avalonia.StemsPage"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:stemViews="clr-namespace:Singularity.Views.Avalonia"
+             x:Class="Singularity.Views.Avalonia.StemsPage"
              x:DataType="vm:StemMixerViewModel"
              Background="#1A1A1A">
 

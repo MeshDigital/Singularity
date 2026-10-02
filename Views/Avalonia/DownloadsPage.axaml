@@ -2,11 +2,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels.Downloads"
-             xmlns:m="clr-namespace:SLSKDONET.Models"
-             xmlns:c="clr-namespace:SLSKDONET.Views.Avalonia.Controls"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Downloads"
+             xmlns:m="clr-namespace:Singularity.Models"
+             xmlns:c="clr-namespace:Singularity.Views.Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
-             x:Class="SLSKDONET.Views.Avalonia.DownloadsPage"
+             x:Class="Singularity.Views.Avalonia.DownloadsPage"
              x:DataType="vm:DownloadCenterViewModel"
              Background="#1E1E1E" Foreground="White">
     

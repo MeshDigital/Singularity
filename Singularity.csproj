@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>Singularity</AssemblyName>
-    <RootNamespace>SLSKDONET</RootNamespace>
+    <RootNamespace>Singularity</RootNamespace>
     <Version>0.1.0-alpha</Version>
     <Authors>SLSK_CSV Contributors</Authors>
     <Description>Soulseek batch downloader using Soulseek.NET - Cross-platform with Avalonia UI</Description>
@@ -19,7 +19,7 @@
 
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>SLSKDONET.Tests</_Parameter1>
+      <_Parameter1>Singularity.Tests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 

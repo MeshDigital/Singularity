@@ -8,13 +8,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Utils;
-using SLSKDONET.Models;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Utils;
+using Singularity.Models;
 using SpotifyAPI.Web;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// "The Gravity Well" - A resilient service for fetching, caching, and matching Spotify metadata.

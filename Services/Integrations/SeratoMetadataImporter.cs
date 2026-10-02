@@ -5,9 +5,9 @@ using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using TagLib;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.Integrations;
+namespace Singularity.Services.Integrations;
 
 /// <summary>
 /// Result of a DJ-metadata import from an external library format.

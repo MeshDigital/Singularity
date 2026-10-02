@@ -1,4 +1,4 @@
-namespace SLSKDONET.Database.Enums;
+namespace Singularity.Database.Enums;
 
 /// <summary>
 /// Defines the track physical download states.

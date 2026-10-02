@@ -2,12 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:conv="clr-namespace:SLSKDONET.Views.Avalonia.Converters"
-             xmlns:controls="clr-namespace:SLSKDONET.Views.Avalonia.Controls"
-             xmlns:settingsViews="clr-namespace:SLSKDONET.Views.Avalonia.Settings"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
+             xmlns:conv="clr-namespace:Singularity.Views.Avalonia.Converters"
+             xmlns:controls="clr-namespace:Singularity.Views.Avalonia.Controls"
+             xmlns:settingsViews="clr-namespace:Singularity.Views.Avalonia.Settings"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
-             x:Class="SLSKDONET.Views.Avalonia.SettingsPage"
+             x:Class="Singularity.Views.Avalonia.SettingsPage"
              Background="#1E1E1E" Foreground="White">
 
     <UserControl.Resources>

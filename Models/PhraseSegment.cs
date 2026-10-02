@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Models
+namespace Singularity.Models
 {
     /// <summary>
     /// Represents a detected structural segment of a track (e.g. Intro, Drop).

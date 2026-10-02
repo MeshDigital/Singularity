@@ -4,11 +4,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.ViewModels;
+using Singularity.Models;
+using Singularity.ViewModels;
 using SpotifyAPI.Web;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Centralized orchestrator for all import operations.

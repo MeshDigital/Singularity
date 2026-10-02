@@ -8,13 +8,13 @@ using Avalonia.Controls.Selection; // Added for ITreeDataGridRowSelectionModel
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.ViewModels;
-using SLSKDONET.ViewModels.Library;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.ViewModels;
+using Singularity.ViewModels.Library;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Views.Avalonia;
+namespace Singularity.Views.Avalonia;
 
 public partial class LibraryPage : UserControl
 {
@@ -153,7 +153,7 @@ public partial class LibraryPage : UserControl
     private void OpenDiscover_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is LibraryViewModel { SelectedProject: { } project } && project.Id != Guid.Empty)
-            ReactiveUI.MessageBus.Current.SendMessage(new SLSKDONET.Events.OpenPlaylistDiscoverEvent(project.Id, project.SourceTitle));
+            ReactiveUI.MessageBus.Current.SendMessage(new Singularity.Events.OpenPlaylistDiscoverEvent(project.Id, project.SourceTitle));
     }
 
     private void CloseRemovalHistory_Click(object? sender, RoutedEventArgs e)

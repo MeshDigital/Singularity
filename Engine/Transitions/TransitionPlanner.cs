@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SLSKDONET.Engine.Transitions;
+namespace Singularity.Engine.Transitions;
 
 /// <summary>What the planner needs to know about one track. Times in seconds.</summary>
 public sealed record TrackStructure

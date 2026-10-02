@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Services.Audio;
+namespace Singularity.Services.Audio;
 
 /// <summary>
 /// Turns raw FFT magnitudes (AudioPlayerService's 2048-point, unscaled, Hann-windowed mono FFT)

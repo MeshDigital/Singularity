@@ -2,10 +2,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:ctrl="clr-namespace:SLSKDONET.Views.Avalonia.Controls"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:ctrl="clr-namespace:Singularity.Views.Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
-             x:Class="SLSKDONET.Views.Avalonia.CueForgePagee"
+             x:Class="Singularity.Views.Avalonia.CueForgePagee"
              x:DataType="vm:CueForgeViewModel"
              Background="#141414"
              Focusable="True">

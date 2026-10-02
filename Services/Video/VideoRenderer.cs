@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
 
-namespace SLSKDONET.Services.Video;
+namespace Singularity.Services.Video;
 
 /// <summary>
 /// Configuration for a video export job.
@@ -196,7 +196,7 @@ public sealed class VideoRenderer
         if (!string.IsNullOrWhiteSpace(customPath))
             return customPath;
 
-        return SLSKDONET.Services.AudioAnalysis.AudioIngestionPipeline.ResolveFfmpegPath();
+        return Singularity.Services.AudioAnalysis.AudioIngestionPipeline.ResolveFfmpegPath();
     }
 
     private static void CopyBitmapToBuffer(SKBitmap bmp, byte[] buffer)

@@ -3,13 +3,13 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
-using SLSKDONET.Models;
-using SLSKDONET.ViewModels;
-using SLSKDONET.ViewModels.Workstation;
+using Singularity.Models;
+using Singularity.ViewModels;
+using Singularity.ViewModels.Workstation;
 using System;
 using System.Reactive.Linq;
 
-namespace SLSKDONET.Views.Avalonia.Workstation;
+namespace Singularity.Views.Avalonia.Workstation;
 
 public partial class WorkstationDeckRow : UserControl
 {

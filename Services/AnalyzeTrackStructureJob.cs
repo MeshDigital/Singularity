@@ -5,13 +5,13 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Services.Audio;
-using SLSKDONET.Services.AudioAnalysis;
-using SLSKDONET.Services.Embeddings;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Services.Audio;
+using Singularity.Services.AudioAnalysis;
+using Singularity.Services.Embeddings;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Background job that orchestrates full structural audio analysis and auto-cue generation for a single track.

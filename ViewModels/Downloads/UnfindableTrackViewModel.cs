@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using ReactiveUI;
 
-namespace SLSKDONET.ViewModels.Downloads;
+namespace Singularity.ViewModels.Downloads;
 
 /// <summary>
 /// One track that <see cref="Services.AutoDownload.GhostAcquisitionOrchestrator"/> gave up

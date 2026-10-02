@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// Published on the event bus whenever <see cref="Services.EngineDiagnosticsService"/> records a

@@ -1,8 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Views.Avalonia
+namespace Singularity.Views.Avalonia
 {
     public partial class AnalysisPage : UserControl
     {

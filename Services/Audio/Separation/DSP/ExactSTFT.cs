@@ -4,7 +4,7 @@ using MathNet.Numerics;
 using MathNet.Numerics.IntegralTransforms;
 using System.Numerics; // For Complex
 
-namespace SLSKDONET.Services.Audio.Separation.DSP;
+namespace Singularity.Services.Audio.Separation.DSP;
 
 /// <summary>
 /// Implements Short-Time Fourier Transform (STFT) exactly matching librosa's default behavior,

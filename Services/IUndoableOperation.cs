@@ -1,4 +1,4 @@
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Represents a reversible structural action in the workstation timeline.

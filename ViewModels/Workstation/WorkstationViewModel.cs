@@ -10,17 +10,17 @@ using System.Threading.Tasks;
 using ReactiveUI;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
-using SLSKDONET.Models.Stem;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Audio;
-using SLSKDONET.Services.Audio.Separation;
-using SLSKDONET.Services.Similarity;
-using SLSKDONET.Views;
+using Singularity.Configuration;
+using Singularity.Data;
+using Singularity.Models;
+using Singularity.Models.Stem;
+using Singularity.Services;
+using Singularity.Services.Audio;
+using Singularity.Services.Audio.Separation;
+using Singularity.Services.Similarity;
+using Singularity.Views;
 
-namespace SLSKDONET.ViewModels.Workstation;
+namespace Singularity.ViewModels.Workstation;
 
 /// <summary>
 /// The two workspaces inside the Workstation page. Enum member names kept as
@@ -349,7 +349,7 @@ public sealed class WorkstationViewModel : ReactiveObject, IDisposable
     private readonly ConfigManager            _configManager;
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
     private readonly ILogger<WorkstationViewModel>? _logger;
-    private readonly SLSKDONET.Services.Library.PlaylistExportService? _playlistExporter;
+    private readonly Singularity.Services.Library.PlaylistExportService? _playlistExporter;
     private readonly IDialogService? _dialogService;
     private readonly INotificationService? _notificationService;
     private readonly BpmSyncService           _bpmSync = new();
@@ -880,7 +880,7 @@ public sealed class WorkstationViewModel : ReactiveObject, IDisposable
         AppConfig appConfig, ConfigManager configManager,
         IDbContextFactory<AppDbContext> dbFactory,
         ILogger<WorkstationViewModel>? logger = null,
-        SLSKDONET.Services.Library.PlaylistExportService? playlistExporter = null,
+        Singularity.Services.Library.PlaylistExportService? playlistExporter = null,
         IDialogService? dialogService = null,
         INotificationService? notificationService = null)
     {

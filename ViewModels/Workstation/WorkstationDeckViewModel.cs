@@ -8,18 +8,18 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using Microsoft.EntityFrameworkCore;
 using ReactiveUI;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Audio;
-using SLSKDONET.Services.Audio.Separation;
-using SLSKDONET.Models.Stem;
-using SLSKDONET.ViewModels;
-using SLSKDONET.Views;
+using Singularity.Data;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Services.Audio;
+using Singularity.Services.Audio.Separation;
+using Singularity.Models.Stem;
+using Singularity.ViewModels;
+using Singularity.Views;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace SLSKDONET.ViewModels.Workstation;
+namespace Singularity.ViewModels.Workstation;
 
 public enum WorkstationTrackEligibilityIssue
 {
@@ -730,8 +730,8 @@ public sealed class WorkstationDeckViewModel : ReactiveObject, IDisposable
         {
             if (App.Current is App app && app.Services != null)
             {
-                var notificationService = app.Services.GetService(typeof(SLSKDONET.Views.INotificationService)) as SLSKDONET.Views.INotificationService;
-                notificationService?.Show("Track Not Local", $"'{track.Artist} - {track.Title}' is a cloud/ghost track. Queuing for download...", SLSKDONET.Views.NotificationType.Information);
+                var notificationService = app.Services.GetService(typeof(Singularity.Views.INotificationService)) as Singularity.Views.INotificationService;
+                notificationService?.Show("Track Not Local", $"'{track.Artist} - {track.Title}' is a cloud/ghost track. Queuing for download...", Singularity.Views.NotificationType.Information);
 
                 track.AvailabilityState = TrackAvailabilityState.QueuedForDownload;
                 track.Status = TrackStatus.Missing;
@@ -767,7 +767,7 @@ public sealed class WorkstationDeckViewModel : ReactiveObject, IDisposable
                     Serilog.Log.Warning(ex, "WorkstationDeckViewModel: failed to persist database state for {Hash}", track.TrackUniqueHash);
                 }
 
-                var downloadManager = app.Services.GetService(typeof(SLSKDONET.Services.DownloadManager)) as SLSKDONET.Services.DownloadManager;
+                var downloadManager = app.Services.GetService(typeof(Singularity.Services.DownloadManager)) as Singularity.Services.DownloadManager;
                 downloadManager?.QueueTracks(new List<PlaylistTrack> { track });
             }
 

@@ -2,7 +2,7 @@ using System;
 using System.Numerics;
 using NWaves.Transforms;
 
-namespace SLSKDONET.Engine.Analysis.CueDetr;
+namespace Singularity.Engine.Analysis.CueDetr;
 
 /// <summary>
 /// Input side of CUE-DETR (ETH-DISCO, "Cue Point Estimation using Object Detection", MIT

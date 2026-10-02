@@ -1,7 +1,7 @@
 using System;
 using NAudio.Wave;
 
-namespace SLSKDONET.Services.Audio;
+namespace Singularity.Services.Audio;
 
 /// <summary>
 /// Master Bus for the DAW timeline.

@@ -2,10 +2,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:controls="clr-namespace:SLSKDONET.Views.Avalonia.Controls"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:controls="clr-namespace:Singularity.Views.Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="340" d:DesignHeight="900"
-             x:Class="SLSKDONET.Views.Avalonia.Controls.LibraryTrackInspector"
+             x:Class="Singularity.Views.Avalonia.Controls.LibraryTrackInspector"
              x:DataType="vm:PlaylistTrackViewModel">
 
     <Border Background="#1A1B1C" BorderBrush="#2D2D2D" BorderThickness="1,0,0,0">

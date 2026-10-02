@@ -1,6 +1,6 @@
-using SLSKDONET.Models.Musical;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.Models.Entertainment;
+namespace Singularity.Models.Entertainment;
 
 /// <summary>
 /// Represents the live runtime state of ORBIT's Flow Mode engine.

@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Utils;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Utils;
 using Soulseek;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Orchestrates the ranking of search results.

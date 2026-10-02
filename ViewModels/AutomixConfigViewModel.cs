@@ -2,11 +2,11 @@ using System;
 using System.Collections.ObjectModel;
 using System.Reactive;
 using ReactiveUI;
-using SLSKDONET.Configuration;
-using SLSKDONET.Services.Playlist;
-using SLSKDONET.ViewModels.Library;
+using Singularity.Configuration;
+using Singularity.Services.Playlist;
+using Singularity.ViewModels.Library;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Preview item for first-5-transitions live preview panel

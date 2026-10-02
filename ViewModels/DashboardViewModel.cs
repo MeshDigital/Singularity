@@ -2,10 +2,10 @@ using System;
 using System.Reactive.Disposables;
 using System.Windows.Input;
 using ReactiveUI;
-using SLSKDONET.Configuration;
-using SLSKDONET.Services;
+using Singularity.Configuration;
+using Singularity.Services;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>
 /// Coordinates the three-column shell state (left navigation, center content, right panel)

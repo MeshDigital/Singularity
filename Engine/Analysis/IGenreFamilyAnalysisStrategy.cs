@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using SLSKDONET.Services;
+using Singularity.Services;
 
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// Per-genre-family signal weighting and BPM/phrase-template adjustments for phrase/drop/cue

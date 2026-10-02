@@ -1,4 +1,4 @@
-namespace SLSKDONET.Configuration;
+namespace Singularity.Configuration;
 
 /// <summary>
 /// User-configurable weights for the ranking algorithm.

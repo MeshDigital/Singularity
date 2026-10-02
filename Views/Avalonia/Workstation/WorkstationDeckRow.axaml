@@ -2,11 +2,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels.Workstation"
-             xmlns:orbitControls="clr-namespace:SLSKDONET.Views.Avalonia.Controls"
-             xmlns:views="clr-namespace:SLSKDONET.Views.Avalonia"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Workstation"
+             xmlns:orbitControls="clr-namespace:Singularity.Views.Avalonia.Controls"
+             xmlns:views="clr-namespace:Singularity.Views.Avalonia"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="120"
-             x:Class="SLSKDONET.Views.Avalonia.Workstation.WorkstationDeckRow"
+             x:Class="Singularity.Views.Avalonia.Workstation.WorkstationDeckRow"
              x:DataType="vm:WorkstationDeckViewModel">
 
     <UserControl.Styles>

@@ -1,4 +1,4 @@
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// JSON-serializable shape for one entry of <c>AudioFeaturesEntity.NoveltyDropSignaturesJson</c>.

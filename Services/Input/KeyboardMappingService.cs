@@ -5,7 +5,7 @@ using System.Threading;
 using Avalonia.Input;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services.Input;
+namespace Singularity.Services.Input;
 
 /// <summary>
 /// Singleton that owns the active <see cref="KeyboardProfile"/> and resolves key presses.

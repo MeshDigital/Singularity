@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace SLSKDONET.Services.Discovery;
+namespace Singularity.Services.Discovery;
 
 /// <summary>
 /// Answers "do I already have this?" for Discover suggestions, across library files and every

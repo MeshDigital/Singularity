@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Input;
 
-namespace SLSKDONET.Views;
+namespace Singularity.Views;
 
 /// <summary>
 /// A simple synchronous command implementation for Avalonia.

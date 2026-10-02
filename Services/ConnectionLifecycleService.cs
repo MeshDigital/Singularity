@@ -6,12 +6,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Views;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Views;
 using Soulseek;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Phase B — deterministic connection lifecycle state machine.

@@ -2,10 +2,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels.Downloads"
-             xmlns:controls="clr-namespace:SLSKDONET.Views.Avalonia.Controls"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Downloads"
+             xmlns:controls="clr-namespace:Singularity.Views.Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="450" d:DesignHeight="800"
-             x:Class="SLSKDONET.Views.Avalonia.Controls.TrackInspector"
+             x:Class="Singularity.Views.Avalonia.Controls.TrackInspector"
              x:DataType="vm:UnifiedTrackViewModel">
     
     <Border Background="#1A1B1C" BorderBrush="#2D2D2D" BorderThickness="1,0,0,0">

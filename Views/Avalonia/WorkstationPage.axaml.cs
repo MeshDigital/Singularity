@@ -5,17 +5,17 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
 using ReactiveUI;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.ViewModels.Workstation;
-using SLSKDONET.Views.Avalonia.Controls;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.ViewModels.Workstation;
+using Singularity.Views.Avalonia.Controls;
 using System;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 
-namespace SLSKDONET.Views.Avalonia;
+namespace Singularity.Views.Avalonia;
 
 public partial class WorkstationPage : UserControl
 {

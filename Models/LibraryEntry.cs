@@ -1,8 +1,8 @@
 using System;
 
-using SLSKDONET.Models.Musical;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 /// <summary>
 /// The main global index for unique, downloaded files.
@@ -106,7 +106,7 @@ public class LibraryEntry
     public int? FrequencyCutoff { get; set; }
     public bool? IsTrustworthy { get; set; }
     public string? QualityDetails { get; set; }
-    public SLSKDONET.Data.IntegrityLevel Integrity { get; set; } = SLSKDONET.Data.IntegrityLevel.None;
+    public Singularity.Data.IntegrityLevel Integrity { get; set; } = Singularity.Data.IntegrityLevel.None;
     public bool IsTranscoded { get; set; } = false; // Phase 10: Spectral FLAC auditing
 
     // Phase 17: Technical Audio Analysis

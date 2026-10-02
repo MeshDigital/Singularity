@@ -1,11 +1,11 @@
 using System;
 
-namespace SLSKDONET.Events;
+namespace Singularity.Events;
 
 /// <summary>
 /// Published when the user clicks a Mix transition badge between two adjacent playlist rows.
-/// Picked up by <see cref="SLSKDONET.ViewModels.SidebarViewModel"/> to open the "Mix" tab in
-/// the CONTEXT sidepanel and load the pair into <see cref="SLSKDONET.ViewModels.MixTransitionViewModel"/>.
+/// Picked up by <see cref="Singularity.ViewModels.SidebarViewModel"/> to open the "Mix" tab in
+/// the CONTEXT sidepanel and load the pair into <see cref="Singularity.ViewModels.MixTransitionViewModel"/>.
 /// </summary>
 public sealed class OpenMixTransitionEvent
 {

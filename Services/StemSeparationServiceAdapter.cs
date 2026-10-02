@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using SLSKDONET.Models.Stem;
-using SLSKDONET.Services.Audio.Separation;
+using Singularity.Models.Stem;
+using Singularity.Services.Audio.Separation;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public sealed class StemSeparationServiceAdapter : IStemSeparationService
 {

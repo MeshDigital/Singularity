@@ -1,7 +1,7 @@
 using System;
 using ReactiveUI;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 /// <summary>
 /// Configurable constraints for the automix playlist generation flow.

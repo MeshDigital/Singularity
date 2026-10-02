@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.Models;
+using Singularity.Models;
 using Microsoft.Extensions.Logging;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Diagnostic service for network health monitoring

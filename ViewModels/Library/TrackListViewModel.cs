@@ -10,18 +10,18 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Configuration;
-using SLSKDONET.Events;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Views;
+using Singularity.Configuration;
+using Singularity.Events;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Views;
 using System.Reactive.Disposables;
-using SLSKDONET.Data.Essentia;
-using SLSKDONET.Services.Audio;
+using Singularity.Data.Essentia;
+using Singularity.Services.Audio;
 
 using System.Collections.Specialized;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 /// <summary>
 /// Manages track lists, filtering, and search functionality.
@@ -41,9 +41,9 @@ public class TrackListViewModel : ReactiveObject, IDisposable
     private readonly IBulkOperationCoordinator _bulkCoordinator;
     private readonly INotificationService? _notificationService;
     private readonly ILibraryPreviewPlayer _previewPlayer;
-    private readonly SLSKDONET.Services.Repositories.ITransitionRepository _transitionRepository;
-    private readonly SLSKDONET.Services.Similarity.SimilarityIndex _similarityIndex;
-    private readonly SLSKDONET.Services.Playlist.PlaylistOptimizer _playlistOptimizer;
+    private readonly Singularity.Services.Repositories.ITransitionRepository _transitionRepository;
+    private readonly Singularity.Services.Similarity.SimilarityIndex _similarityIndex;
+    private readonly Singularity.Services.Playlist.PlaylistOptimizer _playlistOptimizer;
 
     public TrackOperationsViewModel? Operations { get; set; }
 
@@ -776,9 +776,9 @@ public class TrackListViewModel : ReactiveObject, IDisposable
         AppConfig config,
         IBulkOperationCoordinator bulkCoordinator,
         ILibraryPreviewPlayer previewPlayer,
-        SLSKDONET.Services.Repositories.ITransitionRepository transitionRepository,
-        SLSKDONET.Services.Similarity.SimilarityIndex similarityIndex,
-        SLSKDONET.Services.Playlist.PlaylistOptimizer playlistOptimizer,
+        Singularity.Services.Repositories.ITransitionRepository transitionRepository,
+        Singularity.Services.Similarity.SimilarityIndex similarityIndex,
+        Singularity.Services.Playlist.PlaylistOptimizer playlistOptimizer,
         INotificationService? notificationService = null)
     {
         _logger = logger;
@@ -1430,7 +1430,7 @@ public class TrackListViewModel : ReactiveObject, IDisposable
 
         var playlistId = outgoing.Model?.PlaylistId ?? Guid.Empty;
         ReactiveUI.MessageBus.Current.SendMessage(
-            new SLSKDONET.Events.OpenMixTransitionEvent(playlistId, outgoing.Id, incomingId));
+            new Singularity.Events.OpenMixTransitionEvent(playlistId, outgoing.Id, incomingId));
     }
 
     private bool _isMixModeEnabled;

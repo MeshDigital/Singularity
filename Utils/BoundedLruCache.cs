@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SLSKDONET.Utils;
+namespace Singularity.Utils;
 
 /// <summary>
 /// Fixed-capacity, thread-safe least-recently-used cache. Once at capacity, adding a new entry

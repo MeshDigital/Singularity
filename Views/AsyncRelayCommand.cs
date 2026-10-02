@@ -3,7 +3,7 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Windows.Input;
 
-namespace SLSKDONET.Views;
+namespace Singularity.Views;
 
 /// <summary>
 /// An ICommand implementation that supports asynchronous operations.

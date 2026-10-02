@@ -2,10 +2,10 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Models;
+using Singularity.Services;
 
-namespace SLSKDONET.Services.ImportProviders;
+namespace Singularity.Services.ImportProviders;
 
 /// <summary>
 /// Import provider for pasted tracklists from YouTube comments, SoundCloud, etc.

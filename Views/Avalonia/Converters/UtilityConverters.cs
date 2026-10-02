@@ -3,7 +3,7 @@ using System;
 using System.Globalization;
 using Avalonia;
 
-namespace SLSKDONET.Views.Avalonia.Converters
+namespace Singularity.Views.Avalonia.Converters
 {
     public class RepeatModeIconConverter : IValueConverter
     {

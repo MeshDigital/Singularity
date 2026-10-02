@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Service dedicated to checking and resolving file paths for library entries.

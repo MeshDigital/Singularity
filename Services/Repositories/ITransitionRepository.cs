@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using SLSKDONET.Models.Timeline;
+using Singularity.Models.Timeline;
 
-namespace SLSKDONET.Services.Repositories;
+namespace Singularity.Services.Repositories;
 
 /// <summary>
 /// Persists Mix-style transition configuration for adjacent track pairs within a playlist.

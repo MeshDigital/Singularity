@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SLSKDONET.Services.Discovery;
+namespace Singularity.Services.Discovery;
 
 /// <summary>Where a playlist suggestion was found.</summary>
 [Flags]

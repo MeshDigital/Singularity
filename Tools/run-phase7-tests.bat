@@ -11,18 +11,18 @@ echo.
 
 echo [1] Running all Phase 7 tests...
 echo.
-dotnet test Tests/SLSKDONET.Tests/SLSKDONET.Tests.csproj -v normal --filter "FullyQualifiedName~UserWorkspace"
+dotnet test Tests/Singularity.Tests/Singularity.Tests.csproj -v normal --filter "FullyQualifiedName~UserWorkspace"
 
 if %ERRORLEVEL% EQU 0 (
     echo.
     echo [SUCCESS] All Phase 7 tests passed!
     echo.
     echo [2] Running UserWorkspaceViewModelTests only...
-    dotnet test Tests/SLSKDONET.Tests/SLSKDONET.Tests.csproj -v normal --filter "ClassName~UserWorkspaceViewModelTests"
+    dotnet test Tests/Singularity.Tests/Singularity.Tests.csproj -v normal --filter "ClassName~UserWorkspaceViewModelTests"
     
     echo.
     echo [3] Running Navigation Integration Tests only...
-    dotnet test Tests/SLSKDONET.Tests/SLSKDONET.Tests.csproj -v normal --filter "ClassName~UserWorkspaceNavigationIntegrationTests"
+    dotnet test Tests/Singularity.Tests/Singularity.Tests.csproj -v normal --filter "ClassName~UserWorkspaceNavigationIntegrationTests"
 ) else (
     echo.
     echo [FAILED] Some tests failed. Review output above.

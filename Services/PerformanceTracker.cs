@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Threading;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>One recorded timing — a page navigation dispatch, a ViewModel's async load, etc.</summary>
 public sealed record PerfTiming(string Label, TimeSpan Duration, DateTime AtUtc);

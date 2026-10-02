@@ -3,9 +3,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SpotifyAPI.Web;
-using SLSKDONET.Services.Models;
+using Singularity.Services.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Service to enrich local tracks with deep metadata from Spotify (Audio Features).
@@ -473,5 +473,5 @@ public class SpotifyTrackViewModel
     public bool InLibrary { get; set; }
 
     /// <summary>Lazily loads the track's art from its (remote) URL on first access. Assigned by the consumer since this is a plain data model with no DI access of its own.</summary>
-    public SLSKDONET.Models.ArtworkProxy? Artwork { get; set; }
+    public Singularity.Models.ArtworkProxy? Artwork { get; set; }
 }

@@ -1,9 +1,9 @@
 using System;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
-using SLSKDONET.Models.Timeline;
+using Singularity.Models.Timeline;
 
-namespace SLSKDONET.Services.Timeline;
+namespace Singularity.Services.Timeline;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CrossfadeProvider

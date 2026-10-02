@@ -1,6 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="SLSKDONET.Views.Avalonia.Controls.SetlistHealthBar"
+             x:Class="Singularity.Views.Avalonia.Controls.SetlistHealthBar"
              Background="Transparent"
              Height="50"
              Padding="0">

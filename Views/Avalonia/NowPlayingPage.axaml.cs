@@ -1,10 +1,10 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia;
-using SLSKDONET.Services;
-using SLSKDONET.ViewModels;
+using Singularity.Services;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Views.Avalonia
+namespace Singularity.Views.Avalonia
 {
     public partial class NowPlayingPage : UserControl
     {

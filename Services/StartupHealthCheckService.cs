@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
+using Singularity.Configuration;
 
-namespace SLSKDONET.Services
+namespace Singularity.Services
 {
     /// <summary>
     /// Validates availability of critical external dependencies on startup.

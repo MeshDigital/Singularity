@@ -1,8 +1,8 @@
 using System;
 using System.Threading;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services.Models;
+namespace Singularity.Services.Models;
 
 /// <summary>
 /// Internal state tracking context for a download managed by DownloadManager.

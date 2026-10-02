@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using SLSKDONET.ViewModels.Workstation;
+using Singularity.ViewModels.Workstation;
 
-namespace SLSKDONET.Services.Playlist;
+namespace Singularity.Services.Playlist;
 
 /// <summary>
 /// Row-friendly (non-canvas) façade over the harmonic/energy compatibility formulas the

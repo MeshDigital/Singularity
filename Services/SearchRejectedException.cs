@@ -1,7 +1,7 @@
 using System;
-using SLSKDONET.Models;
+using Singularity.Models;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public class SearchRejectedException : Exception
 {

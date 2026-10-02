@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,7 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 public class FolderScanSummary
 {
@@ -393,7 +393,7 @@ public class LibraryFolderScannerService
             {
                 if (!string.IsNullOrWhiteSpace(entry.UniqueHash))
                 {
-                    _eventBus.Publish(new SLSKDONET.Models.TrackAnalysisRequestedEvent(entry.UniqueHash));
+                    _eventBus.Publish(new Singularity.Models.TrackAnalysisRequestedEvent(entry.UniqueHash));
                 }
             }
         }

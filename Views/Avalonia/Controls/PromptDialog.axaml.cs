@@ -4,7 +4,7 @@ using Avalonia.Interactivity;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 public partial class PromptDialog : Window, INotifyPropertyChanged
 {

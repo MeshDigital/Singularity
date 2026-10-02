@@ -7,7 +7,7 @@ using Serilog.Formatting.Compact;
 using System;
 using System.IO;
 
-namespace SLSKDONET
+namespace Singularity
 {
     class Program
     {
@@ -25,7 +25,7 @@ namespace SLSKDONET
 
             // Determine a deterministic log directory
             var currentDirectory = Directory.GetCurrentDirectory();
-            var csprojInCurrentDir = File.Exists(Path.Combine(currentDirectory, "SLSKDONET.csproj"));
+            var csprojInCurrentDir = File.Exists(Path.Combine(currentDirectory, "Singularity.csproj"));
             var isDevelopment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") == "Development" || csprojInCurrentDir;
 
             var logDirectory = isDevelopment

@@ -9,13 +9,13 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Services.InputParsers;
-using SLSKDONET.Services.Ranking;
-using SLSKDONET.Utils;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Services.InputParsers;
+using Singularity.Services.Ranking;
+using Singularity.Utils;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Orchestrates search operations including Soulseek searches, result ranking, and album grouping.

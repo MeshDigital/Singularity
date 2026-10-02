@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.Models.Discovery;
+namespace Singularity.Models.Discovery;
 
 /// <summary>
 /// A safe DTO for Spotify playlists that avoids runtime type resolution issues.

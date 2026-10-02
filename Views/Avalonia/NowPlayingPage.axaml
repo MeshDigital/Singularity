@@ -1,9 +1,9 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:SLSKDONET.ViewModels"
-             xmlns:controls="clr-namespace:SLSKDONET.Views.Avalonia.Controls"
-             xmlns:views="clr-namespace:SLSKDONET.Views.Avalonia"
-             x:Class="SLSKDONET.Views.Avalonia.NowPlayingPage"
+             xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:controls="clr-namespace:Singularity.Views.Avalonia.Controls"
+             xmlns:views="clr-namespace:Singularity.Views.Avalonia"
+             x:Class="Singularity.Views.Avalonia.NowPlayingPage"
              x:DataType="vm:PlayerViewModel"
              Background="#0F131A">
 

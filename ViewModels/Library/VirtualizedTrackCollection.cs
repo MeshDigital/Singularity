@@ -6,14 +6,14 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
+using Singularity.Models;
+using Singularity.Services;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
 using System.Reactive.Disposables;
-using SLSKDONET.Helpers;
+using Singularity.Helpers;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 /// <summary>
 /// A collection that virtualizes data by loading tracks in pages from the database.

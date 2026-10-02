@@ -4,12 +4,12 @@ using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Models;
-using SLSKDONET.Utils;
+using Singularity.Configuration;
+using Singularity.Models;
+using Singularity.Utils;
 using SpotifyAPI.Web;
 
-namespace SLSKDONET.Services.InputParsers;
+namespace Singularity.Services.InputParsers;
 
 /// <summary>
 /// Spotify API-based playlist/album fetcher (Client Credentials flow).

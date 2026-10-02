@@ -9,10 +9,10 @@ using Microsoft.Extensions.Logging;
 using NAudio.Wave;
 using NWaves.Transforms;
 using NWaves.Windows;
-using SLSKDONET.Services.AudioAnalysis;
+using Singularity.Services.AudioAnalysis;
 using TagLib;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Professional spectral-integrity service that detects whether an audio file is a genuine

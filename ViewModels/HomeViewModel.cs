@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Models;
-using SLSKDONET.Models;
+using Singularity.Configuration;
+using Singularity.Data;
+using Singularity.Services;
+using Singularity.Services.Models;
+using Singularity.Models;
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -12,11 +12,11 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
-using SLSKDONET.Views;
+using Singularity.Views;
 using System.Reactive.Linq;
 using System.Collections.Generic;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 public class HomeViewModel : INotifyPropertyChanged, IDisposable
 {

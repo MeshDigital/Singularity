@@ -6,13 +6,13 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Engine.Cueing;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Services.Audio;
+using Singularity.Data.Entities;
+using Singularity.Engine.Cueing;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Services.Audio;
 
-namespace SLSKDONET.ViewModels;
+namespace Singularity.ViewModels;
 
 /// <summary>How a placed or moved cue lands on the track's grid.</summary>
 public enum CueSnapMode { Off, Beat, Bar, Phrase }
@@ -71,7 +71,7 @@ public sealed class TrackCueEditorViewModel : ReactiveObject
 
     /// <summary>Regenerates this track's auto cues and returns (ok, message). Set by the host; the
     /// same service as the library's right-click "Regenerate Cues" (ORBIT / + CUE-DETR / CUE-DETR only).</summary>
-    public Func<string, string?, SLSKDONET.Engine.Analysis.CueDetr.CueSourceMode, Task<(bool Ok, string Message)>>? CueGenerator { get; set; }
+    public Func<string, string?, Singularity.Engine.Analysis.CueDetr.CueSourceMode, Task<(bool Ok, string Message)>>? CueGenerator { get; set; }
 
     /// <summary>Cues were regenerated or explicitly saved — the host re-plans the transition from them.</summary>
     public event EventHandler? CuesChanged;
@@ -95,14 +95,14 @@ public sealed class TrackCueEditorViewModel : ReactiveObject
         if (TrackHash is not { } hash || CueGenerator == null) return;
         var mode = modeText switch
         {
-            "compare" => SLSKDONET.Engine.Analysis.CueDetr.CueSourceMode.Compare,
-            "ai" => SLSKDONET.Engine.Analysis.CueDetr.CueSourceMode.AiOnly,
-            _ => SLSKDONET.Engine.Analysis.CueDetr.CueSourceMode.Orbit,
+            "compare" => Singularity.Engine.Analysis.CueDetr.CueSourceMode.Compare,
+            "ai" => Singularity.Engine.Analysis.CueDetr.CueSourceMode.AiOnly,
+            _ => Singularity.Engine.Analysis.CueDetr.CueSourceMode.Orbit,
         };
         // Unsaved edits are saved first: they become your own cues, which generation never replaces.
         if (IsDirty && !await SaveAsync()) return;
         IsGenerating = true;
-        StatusText = mode == SLSKDONET.Engine.Analysis.CueDetr.CueSourceMode.Orbit ? "Generating cues…" : "Generating cues with CUE-DETR (~10 s the first time)…";
+        StatusText = mode == Singularity.Engine.Analysis.CueDetr.CueSourceMode.Orbit ? "Generating cues…" : "Generating cues with CUE-DETR (~10 s the first time)…";
         try
         {
             var (ok, message) = await CueGenerator(hash, _filePath, mode);

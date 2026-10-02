@@ -4,9 +4,9 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
-using SLSKDONET.ViewModels.Downloads;
+using Singularity.ViewModels.Downloads;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 public partial class StandardTrackRow : UserControl
 {

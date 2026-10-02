@@ -1,6 +1,6 @@
 using System;
 
-namespace SLSKDONET.ViewModels.Library;
+namespace Singularity.ViewModels.Library;
 
 public sealed class PlaylistUpgradeCandidateViewModel
 {

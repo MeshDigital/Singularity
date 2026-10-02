@@ -10,10 +10,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Input;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 using Avalonia.Skia;
 
-namespace SLSKDONET.Views.Avalonia.Controls
+namespace Singularity.Views.Avalonia.Controls
 {
     /// <summary>
     /// Animated "genre galaxy" — each genre orbits as a coloured planet, sized by track count,

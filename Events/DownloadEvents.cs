@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using SLSKDONET.ViewModels;
+using Singularity.ViewModels;
 
-namespace SLSKDONET.Models;
+namespace Singularity.Models;
 
 // Download Manager Events
 public record TrackUpdatedEvent(PlaylistTrackViewModel Track);

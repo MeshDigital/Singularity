@@ -4,14 +4,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Models.Musical;
-using SLSKDONET.Services.AudioAnalysis;
-using SLSKDONET.Services.Similarity;
+using Singularity.Configuration;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Models.Musical;
+using Singularity.Services.AudioAnalysis;
+using Singularity.Services.Similarity;
 
-namespace SLSKDONET.Services.Playlist;
+namespace Singularity.Services.Playlist;
 
 public sealed class PlaylistIntelligenceService
 {

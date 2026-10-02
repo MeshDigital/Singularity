@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SLSKDONET.Engine.Analysis;
+namespace Singularity.Engine.Analysis;
 
 /// <summary>
 /// Computes 12-dimensional chroma vectors and tracks harmonic rhythm resets, chord-loop shifts, and modulations.

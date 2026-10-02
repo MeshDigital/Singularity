@@ -1,8 +1,8 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:converters="clr-namespace:SLSKDONET.Views.Avalonia.Converters"
-             xmlns:conv_root="clr-namespace:SLSKDONET.Converters"
-             x:Class="SLSKDONET.App"
+             xmlns:converters="clr-namespace:Singularity.Views.Avalonia.Converters"
+             xmlns:conv_root="clr-namespace:Singularity.Converters"
+             x:Class="Singularity.App"
              RequestedThemeVariant="Dark">
     
     <Application.Resources>

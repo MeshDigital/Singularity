@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Data;
-using SLSKDONET.Models.Musical;
+using Singularity.Data.Entities;
+using Singularity.Data;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.Engine.Transitions;
+namespace Singularity.Engine.Transitions;
 
 public sealed class TransitionSuggestion
 {

@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using SLSKDONET.Configuration;
-using SLSKDONET.Data;
-using SLSKDONET.Models;
-using SLSKDONET.Services;
-using SLSKDONET.Services.AutoDownload;
+using Singularity.Configuration;
+using Singularity.Data;
+using Singularity.Models;
+using Singularity.Services;
+using Singularity.Services.AutoDownload;
 
-namespace SLSKDONET.Examples;
+namespace Singularity.Examples;
 
 /// <summary>
 /// Example usage of AutoDownloadStrictMode services.

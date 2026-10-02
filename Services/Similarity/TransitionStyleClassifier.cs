@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Models;
-using SLSKDONET.Models.Musical;
+using Singularity.Data.Entities;
+using Singularity.Models;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.Services.Similarity;
+namespace Singularity.Services.Similarity;
 
 /// <summary>
 /// Pure A10.7 classifier that labels a transition without changing any A10 score.

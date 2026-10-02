@@ -1,4 +1,4 @@
-namespace SLSKDONET.Events;
+namespace Singularity.Events;
 
 /// <summary>
 /// Event published to stream granular download status updates to the UI's Live Console.

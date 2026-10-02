@@ -4,9 +4,9 @@ using System.IO;
 using Avalonia.Media;
 using Soulseek;
 using ReactiveUI;
-using SLSKDONET.Services;
+using Singularity.Services;
 
-namespace SLSKDONET.ViewModels
+namespace Singularity.ViewModels
 {
     public class AnalyzedSearchResultViewModel : ReactiveObject
     {

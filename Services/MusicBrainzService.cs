@@ -6,12 +6,12 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Data;
-using SLSKDONET.Data.Entities;
-using SLSKDONET.Services.Models;
-using SLSKDONET.Services.Repositories;
+using Singularity.Data;
+using Singularity.Data.Entities;
+using Singularity.Services.Models;
+using Singularity.Services.Repositories;
 
-namespace SLSKDONET.Services;
+namespace Singularity.Services;
 
 /// <summary>
 /// Service for interacting with the MusicBrainz API to fetch deep metadata and resolve ISRCs.

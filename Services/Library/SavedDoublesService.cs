@@ -6,9 +6,9 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Models.Musical;
+using Singularity.Models.Musical;
 
-namespace SLSKDONET.Services.Library;
+namespace Singularity.Services.Library;
 
 public sealed class SavedDoublesService : ISavedDoublesService
 {

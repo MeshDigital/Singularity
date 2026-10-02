@@ -1,9 +1,9 @@
 using Avalonia.Input;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using SLSKDONET.ViewModels.Workstation;
+using Singularity.ViewModels.Workstation;
 
-namespace SLSKDONET.Views.Avalonia.Controls;
+namespace Singularity.Views.Avalonia.Controls;
 
 public partial class KeyboardOverlayView : UserControl
 {
