@@ -1314,7 +1314,6 @@ public class LibraryService : ILibraryService
             CuePointsJson = !string.IsNullOrWhiteSpace(entity.TechnicalDetails?.CuePointsJson)
                 ? entity.TechnicalDetails!.CuePointsJson
                 : entity.CuePointsJson,
-            CuePointCount = entity.CuePointCount,
             Energy = entity.Energy > 0 ? entity.Energy : (entity.AudioFeatures?.Energy > 0 ? (double?)entity.AudioFeatures.Energy : null),
             Danceability = entity.Danceability > 0 ? entity.Danceability : (entity.AudioFeatures?.Danceability > 0 ? (double?)entity.AudioFeatures.Danceability : null),
             Valence = entity.Valence > 0 ? entity.Valence : (entity.AudioFeatures?.Valence > 0 ? (double?)entity.AudioFeatures.Valence : null),
@@ -1771,20 +1770,6 @@ public class LibraryService : ILibraryService
         return await _databaseService.LoadAllAudioFeaturesAsync().ConfigureAwait(false);
     }
 
-    // Phase 15
-    public async Task<List<StyleDefinitionEntity>> GetStyleDefinitionsAsync()
-    {
-        try
-        {
-            return await _databaseService.LoadAllStyleDefinitionsAsync().ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load style definitions");
-            return new List<StyleDefinitionEntity>();
-        }
-    }
-
     // Phase 11.5: Verification logic
     public async Task MarkTrackAsVerifiedAsync(string trackHash)
     {
@@ -2129,16 +2114,6 @@ public class LibraryService : ILibraryService
             _logger.LogError(ex, "Error finding cross-references for {Artist} - {Title}", artist, title);
             return new List<PlaylistTrack>();
         }
-    }
-
-    public async Task<List<TrackPhraseEntity>> GetPhrasesByHashAsync(string trackHash)
-    {
-        return await _databaseService.GetPhrasesByHashAsync(trackHash);
-    }
-
-    public async Task SavePhrasesAsync(List<TrackPhraseEntity> phrases)
-    {
-        await _databaseService.SavePhrasesAsync(phrases);
     }
 
     private async Task InitializeDefaultPlaylistsAsync()

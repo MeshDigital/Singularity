@@ -879,31 +879,6 @@ public class SchemaMigratorService
                 }
             }
 
-            // 1C. StemPreferences Table (Phase 5: Engagement)
-            if (!TableExists("StemPreferences"))
-            {
-                _logger.LogInformation("Patching Schema: Creating StemPreferences table...");
-                command.CommandText = @"
-                    CREATE TABLE ""StemPreferences"" (
-                        ""Id"" TEXT NOT NULL CONSTRAINT ""PK_StemPreferences"" PRIMARY KEY,
-                        ""TrackUniqueHash"" TEXT NOT NULL,
-                        ""AlwaysMutedJson"" TEXT NULL,
-                        ""AlwaysSoloJson"" TEXT NULL,
-                        ""LastModified"" TEXT NOT NULL,
-                        CONSTRAINT ""FK_StemPreferences_LibraryEntries_TrackUniqueHash"" FOREIGN KEY (""TrackUniqueHash"") REFERENCES ""LibraryEntries"" (""UniqueHash"") ON DELETE CASCADE
-                    );
-                    CREATE UNIQUE INDEX ""IX_StemPreferences_TrackUniqueHash"" ON ""StemPreferences"" (""TrackUniqueHash"");
-                ";
-                await command.ExecuteNonQueryAsync();
-                
-                // Trigger migration from JSON file if it exists
-                _ = Task.Run(async () =>
-                {
-                    try { await MigrateStemPreferencesFromJsonAsync(); }
-                    catch (Exception ex) { _logger.LogError(ex, "Background stem preferences JSON migration failed"); }
-                });
-            }
-
             // Phase: Library Entry Enrichment Retry
             if (!ColumnExists("LibraryEntries", "EnrichmentAttempts"))
             {
@@ -1212,102 +1187,6 @@ public class SchemaMigratorService
                 _logger.LogInformation("Patching Schema: Adding WaveformBlobSampleCount to audio_features...");
                 command.CommandText = @"ALTER TABLE ""audio_features"" ADD COLUMN ""WaveformBlobSampleCount"" INTEGER NOT NULL DEFAULT 0;";
                 await command.ExecuteNonQueryAsync();
-            }
-
-            // 1C. AnalysisRuns Table (Phase 21: Analysis Run Tracking)
-            if (!TableExists("analysis_runs"))
-            {
-                _logger.LogInformation("Patching Schema: Creating AnalysisRuns table (Run Tracking & Error Logging)...");
-                command.CommandText = @"
-                    CREATE TABLE ""analysis_runs"" (
-                        ""RunId"" TEXT NOT NULL CONSTRAINT ""PK_analysis_runs"" PRIMARY KEY,
-                        ""TrackUniqueHash"" TEXT NOT NULL,
-                        ""TrackTitle"" TEXT NOT NULL DEFAULT '',
-                        ""FilePath"" TEXT NOT NULL DEFAULT '',
-
-                        -- Run Metadata
-                        ""StartedAt"" TEXT NOT NULL,
-                        ""CompletedAt"" TEXT NULL,
-                        ""DurationMs"" INTEGER NOT NULL DEFAULT 0,
-
-                        -- Status Tracking
-                        ""Status"" INTEGER NOT NULL DEFAULT 0,
-                        ""RetryAttempt"" INTEGER NOT NULL DEFAULT 0,
-                        ""WorkerThreadId"" INTEGER NOT NULL DEFAULT 0,
-
-                        -- Error Handling
-                        ""ErrorMessage"" TEXT NULL,
-                        ""ErrorStackTrace"" TEXT NULL,
-                        ""FailedStage"" TEXT NULL,
-
-                        -- Partial Success Tracking
-                        ""WaveformGenerated"" INTEGER NOT NULL DEFAULT 0,
-                        ""FfmpegAnalysisCompleted"" INTEGER NOT NULL DEFAULT 0,
-                        ""EssentiaAnalysisCompleted"" INTEGER NOT NULL DEFAULT 0,
-                        ""DatabaseSaved"" INTEGER NOT NULL DEFAULT 0,
-
-                        -- Performance Metrics
-                        ""FfmpegDurationMs"" INTEGER NOT NULL DEFAULT 0,
-                        ""EssentiaDurationMs"" INTEGER NOT NULL DEFAULT 0,
-                        ""DatabaseSaveDurationMs"" INTEGER NOT NULL DEFAULT 0,
-
-                        -- Provenance
-                        ""AnalysisVersion"" TEXT NOT NULL DEFAULT '',
-                        ""TriggerSource"" TEXT NOT NULL DEFAULT '',
-                        ""Tier"" INTEGER NOT NULL DEFAULT 1
-                    );
-                    CREATE INDEX ""IX_analysis_runs_TrackUniqueHash"" ON ""analysis_runs"" (""TrackUniqueHash"");
-                    CREATE INDEX ""IX_analysis_runs_Status"" ON ""analysis_runs"" (""Status"");
-                    CREATE INDEX ""IX_analysis_runs_StartedAt"" ON ""analysis_runs"" (""StartedAt"");
-                ";
-                await command.ExecuteNonQueryAsync();
-                _logger.LogInformation("✅ AnalysisRuns table created successfully");
-            }
-            else
-            {
-                // Patch existing table
-                if (!ColumnExists("analysis_runs", "Tier"))
-                {
-                    _logger.LogInformation("Patching Schema: Adding Tier to AnalysisRuns...");
-                    command.CommandText = @"ALTER TABLE ""analysis_runs"" ADD COLUMN ""Tier"" INTEGER NOT NULL DEFAULT 1;";
-                    await command.ExecuteNonQueryAsync();
-                }
-                if (!ColumnExists("analysis_runs", "AnalysisVersion"))
-                {
-                    _logger.LogInformation("Patching Schema: Adding AnalysisVersion to AnalysisRuns...");
-                    command.CommandText = @"ALTER TABLE ""analysis_runs"" ADD COLUMN ""AnalysisVersion"" TEXT NOT NULL DEFAULT '';";
-                    await command.ExecuteNonQueryAsync();
-                }
-                if (!ColumnExists("analysis_runs", "TriggerSource"))
-                {
-                    _logger.LogInformation("Patching Schema: Adding TriggerSource to AnalysisRuns...");
-                    command.CommandText = @"ALTER TABLE ""analysis_runs"" ADD COLUMN ""TriggerSource"" TEXT NOT NULL DEFAULT '';";
-                    await command.ExecuteNonQueryAsync();
-                }
-                if (!ColumnExists("analysis_runs", "BpmConfidence"))
-                {
-                    _logger.LogInformation("Patching Schema: Adding BpmConfidence to AnalysisRuns...");
-                    command.CommandText = @"ALTER TABLE ""analysis_runs"" ADD COLUMN ""BpmConfidence"" REAL NOT NULL DEFAULT 0;";
-                    await command.ExecuteNonQueryAsync();
-                }
-                if (!ColumnExists("analysis_runs", "KeyConfidence"))
-                {
-                    _logger.LogInformation("Patching Schema: Adding KeyConfidence to AnalysisRuns...");
-                    command.CommandText = @"ALTER TABLE ""analysis_runs"" ADD COLUMN ""KeyConfidence"" REAL NOT NULL DEFAULT 0;";
-                    await command.ExecuteNonQueryAsync();
-                }
-                if (!ColumnExists("analysis_runs", "IntegrityScore"))
-                {
-                    _logger.LogInformation("Patching Schema: Adding IntegrityScore to AnalysisRuns...");
-                    command.CommandText = @"ALTER TABLE ""analysis_runs"" ADD COLUMN ""IntegrityScore"" REAL NOT NULL DEFAULT 0;";
-                    await command.ExecuteNonQueryAsync();
-                }
-                if (!ColumnExists("analysis_runs", "CurrentStage"))
-                {
-                    _logger.LogInformation("Patching Schema: Adding CurrentStage to AnalysisRuns...");
-                    command.CommandText = @"ALTER TABLE ""analysis_runs"" ADD COLUMN ""CurrentStage"" INTEGER NOT NULL DEFAULT 0;";
-                    await command.ExecuteNonQueryAsync();
-                }
             }
 
             // 1D. Tracks Table
@@ -1859,99 +1738,6 @@ public class SchemaMigratorService
                 }
             }
 
-            // 7. Phase 17: TrackPhrases Table
-            if (!TableExists("TrackPhrases"))
-            {
-                _logger.LogInformation("Patching Schema: Creating TrackPhrases table...");
-                command.CommandText = @"
-                    CREATE TABLE ""TrackPhrases"" (
-                        ""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,
-                        ""TrackUniqueHash"" TEXT NOT NULL,
-                        ""Type"" INTEGER NOT NULL,
-                        ""StartTimeSeconds"" REAL NOT NULL,
-                        ""EndTimeSeconds"" REAL NOT NULL,
-                        ""EnergyLevel"" REAL NOT NULL DEFAULT 0,
-                        ""Confidence"" REAL NOT NULL DEFAULT 0,
-                        ""OrderIndex"" INTEGER NOT NULL DEFAULT 0,
-                        ""Label"" TEXT NULL,
-                        ""SectionEmbeddingJson"" TEXT NULL,
-                        ""EmbeddingMagnitude"" REAL NOT NULL DEFAULT 0,
-                        ""EmbeddingModel"" TEXT NOT NULL DEFAULT ''
-                    );
-                    CREATE INDEX ""IX_TrackPhrases_TrackUniqueHash"" ON ""TrackPhrases"" (""TrackUniqueHash"");
-                ";
-                await command.ExecuteNonQueryAsync();
-            }
-
-            if (TableExists("TrackPhrases"))
-            {
-                if (!ColumnExists("TrackPhrases", "SectionEmbeddingJson"))
-                {
-                    command.CommandText = @"ALTER TABLE ""TrackPhrases"" ADD COLUMN ""SectionEmbeddingJson"" TEXT NULL;";
-                    await command.ExecuteNonQueryAsync();
-                }
-
-                if (!ColumnExists("TrackPhrases", "EmbeddingMagnitude"))
-                {
-                    command.CommandText = @"ALTER TABLE ""TrackPhrases"" ADD COLUMN ""EmbeddingMagnitude"" REAL NOT NULL DEFAULT 0;";
-                    await command.ExecuteNonQueryAsync();
-                }
-
-                if (!ColumnExists("TrackPhrases", "EmbeddingModel"))
-                {
-                    command.CommandText = @"ALTER TABLE ""TrackPhrases"" ADD COLUMN ""EmbeddingModel"" TEXT NOT NULL DEFAULT '';";
-                    await command.ExecuteNonQueryAsync();
-                }
-            }
-
-            // 8. Phase 17: GenreCueTemplates Table
-            if (!TableExists("GenreCueTemplates"))
-            {
-                _logger.LogInformation("Patching Schema: Creating GenreCueTemplates table...");
-                command.CommandText = @"
-                    CREATE TABLE ""GenreCueTemplates"" (
-                        ""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,
-                        ""GenreName"" TEXT NOT NULL,
-                        ""DisplayName"" TEXT NULL,
-                        ""IsBuiltIn"" INTEGER NOT NULL DEFAULT 0,
-                        ""Cue1Target"" INTEGER NOT NULL DEFAULT 0,
-                        ""Cue1OffsetBars"" INTEGER NOT NULL DEFAULT 0,
-                        ""Cue1Color"" TEXT NOT NULL DEFAULT '#FF0000',
-                        ""Cue1Label"" TEXT NULL,
-                        ""Cue2Target"" INTEGER NOT NULL DEFAULT 0,
-                        ""Cue2OffsetBars"" INTEGER NOT NULL DEFAULT 0,
-                        ""Cue2Color"" TEXT NOT NULL DEFAULT '#00FF00',
-                        ""Cue2Label"" TEXT NULL,
-                        ""Cue3Target"" INTEGER NOT NULL DEFAULT 0,
-                        ""Cue3OffsetBars"" INTEGER NOT NULL DEFAULT 0,
-                        ""Cue3Color"" TEXT NOT NULL DEFAULT '#0000FF',
-                        ""Cue3Label"" TEXT NULL,
-                        ""Cue4Target"" INTEGER NOT NULL DEFAULT 0,
-                        ""Cue4OffsetBars"" INTEGER NOT NULL DEFAULT 0,
-                        ""Cue4Color"" TEXT NOT NULL DEFAULT '#FFFF00',
-                        ""Cue4Label"" TEXT NULL,
-                        ""Cue5Target"" INTEGER NULL,
-                        ""Cue5OffsetBars"" INTEGER NULL,
-                        ""Cue5Color"" TEXT NULL,
-                        ""Cue5Label"" TEXT NULL,
-                        ""Cue6Target"" INTEGER NULL,
-                        ""Cue6OffsetBars"" INTEGER NULL,
-                        ""Cue6Color"" TEXT NULL,
-                        ""Cue6Label"" TEXT NULL,
-                        ""Cue7Target"" INTEGER NULL,
-                        ""Cue7OffsetBars"" INTEGER NULL,
-                        ""Cue7Color"" TEXT NULL,
-                        ""Cue7Label"" TEXT NULL,
-                        ""Cue8Target"" INTEGER NULL,
-                        ""Cue8OffsetBars"" INTEGER NULL,
-                        ""Cue8Color"" TEXT NULL,
-                        ""Cue8Label"" TEXT NULL
-                    );
-                    CREATE INDEX ""IX_GenreCueTemplates_GenreName"" ON ""GenreCueTemplates"" (""GenreName"");
-                ";
-                await command.ExecuteNonQueryAsync();
-            }
-
             // 9. Phase 20: Smart Playlists (Projects Table)
             if (TableExists("Projects"))
             {
@@ -2488,42 +2274,6 @@ public class SchemaMigratorService
                 }
             }
 
-            // Phase 3: Set-Prep Intelligence tables
-            if (!TableExists("SetLists"))
-            {
-                _logger.LogInformation("Patching Schema: Creating SetLists table...");
-                command.CommandText = @"
-                    CREATE TABLE ""SetLists"" (
-                        ""Id"" TEXT NOT NULL CONSTRAINT ""PK_SetLists"" PRIMARY KEY,
-                        ""Name"" TEXT NOT NULL,
-                        ""CreatedAt"" TEXT NOT NULL,
-                        ""LastModifiedAt"" TEXT NOT NULL,
-                        ""FlowHealth"" REAL NOT NULL,
-                        ""ForensicLogsJson"" TEXT NULL
-                    );";
-                await command.ExecuteNonQueryAsync();
-            }
-
-            if (!TableExists("SetTracks"))
-            {
-                _logger.LogInformation("Patching Schema: Creating SetTracks table...");
-                command.CommandText = @"
-                    CREATE TABLE ""SetTracks"" (
-                        ""Id"" TEXT NOT NULL CONSTRAINT ""PK_SetTracks"" PRIMARY KEY,
-                        ""SetListId"" TEXT NOT NULL,
-                        ""TrackUniqueHash"" TEXT NOT NULL,
-                        ""Position"" INTEGER NOT NULL,
-                        ""TransitionType"" TEXT NOT NULL,
-                        ""ManualOffset"" REAL NOT NULL,
-                        ""TransitionReasoning"" TEXT NULL,
-                        ""DjNotes"" TEXT NULL,
-                        CONSTRAINT ""FK_SetTracks_SetLists_SetListId"" FOREIGN KEY (""SetListId"") REFERENCES ""SetLists"" (""Id"") ON DELETE CASCADE
-                    );
-                    CREATE INDEX ""IX_SetTracks_SetListId"" ON ""SetTracks"" (""SetListId"");
-                ";
-                await command.ExecuteNonQueryAsync();
-            }
-
             // 15. Soft Clear: IsClearedFromDownloadCenter
             if (TableExists("PlaylistTracks"))
             {
@@ -2602,26 +2352,6 @@ public class SchemaMigratorService
                 {
                     _logger.LogInformation("Patching Schema: Adding {Col} to PlaylistTracks...", col);
                     command.CommandText = $@"ALTER TABLE ""PlaylistTracks"" ADD COLUMN ""{col}"" {colType};";
-                    await command.ExecuteNonQueryAsync();
-                }
-            }
-
-            // 17. CuePoints loop support
-            if (TableExists("CuePoints"))
-            {
-                if (!ColumnExists("CuePoints", "IsLoop"))
-                {
-                    command.CommandText = @"ALTER TABLE ""CuePoints"" ADD COLUMN ""IsLoop"" INTEGER NOT NULL DEFAULT 0;";
-                    await command.ExecuteNonQueryAsync();
-                }
-                if (!ColumnExists("CuePoints", "LoopEndSeconds"))
-                {
-                    command.CommandText = @"ALTER TABLE ""CuePoints"" ADD COLUMN ""LoopEndSeconds"" REAL NOT NULL DEFAULT 0;";
-                    await command.ExecuteNonQueryAsync();
-                }
-                if (!ColumnExists("CuePoints", "SlotIndex"))
-                {
-                    command.CommandText = @"ALTER TABLE ""CuePoints"" ADD COLUMN ""SlotIndex"" INTEGER NOT NULL DEFAULT -1;";
                     await command.ExecuteNonQueryAsync();
                 }
             }
@@ -2870,28 +2600,6 @@ public class SchemaMigratorService
                 await command.ExecuteNonQueryAsync();
             }
 
-            // 29. Rekordbox export cue-sync snapshots: enables a three-way merge so a cue edit made
-            // in Cue Forge after a track's first Rekordbox export still propagates on re-export,
-            // while a hand-edit made directly inside Rekordbox since ORBIT's last known-good sync is
-            // still preserved (previously all-or-nothing: any existing cues blocked every future
-            // ORBIT cue update for that track, forever).
-            if (!TableExists("RekordboxExportCueSync"))
-            {
-                _logger.LogInformation("Patching Schema: Creating RekordboxExportCueSync table...");
-                command.CommandText = @"
-                    CREATE TABLE ""RekordboxExportCueSync"" (
-                        ""Id"" TEXT NOT NULL CONSTRAINT ""PK_RekordboxExportCueSync"" PRIMARY KEY,
-                        ""TargetPath"" TEXT NOT NULL,
-                        ""TrackUniqueHash"" TEXT NOT NULL,
-                        ""CueSnapshot"" TEXT NOT NULL DEFAULT '',
-                        ""UpdatedAtUtc"" TEXT NOT NULL
-                    );
-                    CREATE UNIQUE INDEX ""IX_RekordboxExportCueSync_TargetPath_Hash"" ON ""RekordboxExportCueSync"" (""TargetPath"", ""TrackUniqueHash"");
-                ";
-                await command.ExecuteNonQueryAsync();
-                _logger.LogInformation("✅ RekordboxExportCueSync table created.");
-            }
-
             // 30. Watch-folder auto-import: lets LibraryFolderWatchService know which registered
             // library folders should get a live FileSystemWatcher instead of relying entirely on
             // manual "Scan All" clicks.
@@ -2899,91 +2607,6 @@ public class SchemaMigratorService
             {
                 _logger.LogInformation("Patching Schema: Adding IsWatched to LibraryFolders...");
                 command.CommandText = @"ALTER TABLE ""LibraryFolders"" ADD COLUMN ""IsWatched"" INTEGER NOT NULL DEFAULT 0;";
-                await command.ExecuteNonQueryAsync();
-            }
-
-            // 31. Mix (Spotify-Mix-parity): saved per-track-pair transition config, keyed by the
-            // outgoing/incoming PlaylistTracks.Id pair so the same two tracks can carry different
-            // transitions in different playlists.
-            if (!TableExists("PlaylistTrackTransitions"))
-            {
-                _logger.LogInformation("Patching Schema: Creating PlaylistTrackTransitions table...");
-                command.CommandText = @"
-                    CREATE TABLE ""PlaylistTrackTransitions"" (
-                        ""Id"" TEXT NOT NULL CONSTRAINT ""PK_PlaylistTrackTransitions"" PRIMARY KEY,
-                        ""PlaylistId"" TEXT NOT NULL,
-                        ""OutgoingPlaylistTrackId"" TEXT NOT NULL,
-                        ""IncomingPlaylistTrackId"" TEXT NOT NULL,
-                        ""PresetName"" TEXT NOT NULL DEFAULT 'Auto',
-                        ""TransitionType"" TEXT NOT NULL DEFAULT 'Crossfade',
-                        ""DurationBars"" INTEGER NOT NULL DEFAULT 16,
-                        ""EchoDecayFactor"" REAL NULL,
-                        ""FilterStartFrequency"" REAL NULL,
-                        ""FilterEndFrequency"" REAL NULL,
-                        ""EqLowGain"" REAL NULL,
-                        ""EqMidGain"" REAL NULL,
-                        ""EqHighGain"" REAL NULL,
-                        ""SourceTriggerSeconds"" REAL NULL,
-                        ""TargetTriggerSeconds"" REAL NULL,
-                        ""WaveDuckDepth"" REAL NULL,
-                        ""FilterSweepRising"" INTEGER NULL,
-                        ""EqSwapLow"" INTEGER NULL,
-                        ""EqSwapMid"" INTEGER NULL,
-                        ""EqSwapHigh"" INTEGER NULL,
-                        ""EqLowCrossoverHz"" REAL NULL,
-                        ""EqHighCrossoverHz"" REAL NULL,
-                        ""UpdatedAtUtc"" TEXT NOT NULL
-                    );
-                    CREATE UNIQUE INDEX ""IX_PlaylistTrackTransitions_Pair"" ON ""PlaylistTrackTransitions"" (""OutgoingPlaylistTrackId"", ""IncomingPlaylistTrackId"");
-                    CREATE INDEX ""IX_PlaylistTrackTransitions_PlaylistId"" ON ""PlaylistTrackTransitions"" (""PlaylistId"");
-                ";
-                await command.ExecuteNonQueryAsync();
-                _logger.LogInformation("✅ PlaylistTrackTransitions table created.");
-            }
-
-            // 32. Mix: cue/tempo/key/vocal-aware mix-out/mix-in trigger points (TransitionEngine.
-            // OptimizeTransition), added after the table above shipped without them.
-            if (TableExists("PlaylistTrackTransitions") && !ColumnExists("PlaylistTrackTransitions", "SourceTriggerSeconds"))
-            {
-                _logger.LogInformation("Patching Schema: Adding SourceTriggerSeconds/TargetTriggerSeconds to PlaylistTrackTransitions...");
-                command.CommandText = @"ALTER TABLE ""PlaylistTrackTransitions"" ADD COLUMN ""SourceTriggerSeconds"" REAL NULL;";
-                await command.ExecuteNonQueryAsync();
-                command.CommandText = @"ALTER TABLE ""PlaylistTrackTransitions"" ADD COLUMN ""TargetTriggerSeconds"" REAL NULL;";
-                await command.ExecuteNonQueryAsync();
-            }
-
-            // 33. Mix Custom mode: Wave preset's duck depth and Rise preset's sweep direction —
-            // TransitionModel already had both fields, but nothing persisted a custom override for
-            // either, so a saved Wave/Melt transition silently fell back to TransitionModel's
-            // hardcoded default instead of whatever TransitionPresetLibrary.Build would have
-            // produced for that preset.
-            if (TableExists("PlaylistTrackTransitions") && !ColumnExists("PlaylistTrackTransitions", "WaveDuckDepth"))
-            {
-                _logger.LogInformation("Patching Schema: Adding WaveDuckDepth/FilterSweepRising to PlaylistTrackTransitions...");
-                command.CommandText = @"ALTER TABLE ""PlaylistTrackTransitions"" ADD COLUMN ""WaveDuckDepth"" REAL NULL;";
-                await command.ExecuteNonQueryAsync();
-                command.CommandText = @"ALTER TABLE ""PlaylistTrackTransitions"" ADD COLUMN ""FilterSweepRising"" INTEGER NULL;";
-                await command.ExecuteNonQueryAsync();
-            }
-
-            // 34. Mix Custom mode: real EQ band-swap controls. The original EqLowGain/MidGain/
-            // HighGain columns (above) were dead weight — never set, never read — because they're
-            // shaped as gain overrides, not the swap-toggle + crossover-Hz shape the live engine's
-            // EqBandSwapConfig actually needs. These are the correctly-shaped replacement; the old
-            // columns are left in place (still unused) rather than dropped, to avoid a destructive
-            // migration for a handful of always-null columns.
-            if (TableExists("PlaylistTrackTransitions") && !ColumnExists("PlaylistTrackTransitions", "EqSwapLow"))
-            {
-                _logger.LogInformation("Patching Schema: Adding EqSwapLow/Mid/High + crossover columns to PlaylistTrackTransitions...");
-                command.CommandText = @"ALTER TABLE ""PlaylistTrackTransitions"" ADD COLUMN ""EqSwapLow"" INTEGER NULL;";
-                await command.ExecuteNonQueryAsync();
-                command.CommandText = @"ALTER TABLE ""PlaylistTrackTransitions"" ADD COLUMN ""EqSwapMid"" INTEGER NULL;";
-                await command.ExecuteNonQueryAsync();
-                command.CommandText = @"ALTER TABLE ""PlaylistTrackTransitions"" ADD COLUMN ""EqSwapHigh"" INTEGER NULL;";
-                await command.ExecuteNonQueryAsync();
-                command.CommandText = @"ALTER TABLE ""PlaylistTrackTransitions"" ADD COLUMN ""EqLowCrossoverHz"" REAL NULL;";
-                await command.ExecuteNonQueryAsync();
-                command.CommandText = @"ALTER TABLE ""PlaylistTrackTransitions"" ADD COLUMN ""EqHighCrossoverHz"" REAL NULL;";
                 await command.ExecuteNonQueryAsync();
             }
 
@@ -3013,19 +2636,6 @@ public class SchemaMigratorService
                 await command.ExecuteNonQueryAsync();
             }
 
-            // 36. Mix "Double Drop" transition: loops a bar-aligned tail of the outgoing track
-            // once or twice before crossfading into the incoming track's drop. LoopEnabled isn't
-            // a separate column — TransitionType itself carries "DoubleDrop" as one of its
-            // values, same as every other preset here.
-            if (TableExists("PlaylistTrackTransitions") && !ColumnExists("PlaylistTrackTransitions", "LoopBars"))
-            {
-                _logger.LogInformation("Patching Schema: Adding LoopBars/LoopRepeats to PlaylistTrackTransitions...");
-                command.CommandText = @"ALTER TABLE ""PlaylistTrackTransitions"" ADD COLUMN ""LoopBars"" INTEGER NULL;";
-                await command.ExecuteNonQueryAsync();
-                command.CommandText = @"ALTER TABLE ""PlaylistTrackTransitions"" ADD COLUMN ""LoopRepeats"" INTEGER NULL;";
-                await command.ExecuteNonQueryAsync();
-            }
-
             // 37. Index audio_features.TrackUniqueHash. The EF model declares it (AppDbContext:
             // HasIndex(af => af.TrackUniqueHash)), but this schema is built by raw-SQL patches, not
             // EF migrations, so it never physically existed — every PlaylistTracks -> AudioFeatures
@@ -3047,56 +2657,4 @@ public class SchemaMigratorService
         }
     }
 
-    private async Task MigrateStemPreferencesFromJsonAsync()
-    {
-        try
-        {
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var jsonPath = System.IO.Path.Combine(appData, "Singularity", "stem_preferences.json");
-
-            if (!System.IO.File.Exists(jsonPath)) return;
-
-            _logger.LogInformation("Migrating Stem Preferences from JSON to SQLite...");
-            var jsonContent = await System.IO.File.ReadAllTextAsync(jsonPath);
-            var preferences = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, StemPreference>>(jsonContent);
-
-            if (preferences == null || !preferences.Any()) return;
-
-            using (var scope = new SqliteConnection($"Data Source={Singularity.Data.OrbitPaths.LibraryDbPath}"))
-            {
-                await scope.OpenAsync();
-                foreach (var (trackId, pref) in preferences)
-                {
-                    using (var cmd = scope.CreateCommand())
-                    {
-                        cmd.CommandText = @"
-                            INSERT OR IGNORE INTO ""StemPreferences"" (""Id"", ""TrackUniqueHash"", ""AlwaysMutedJson"", ""AlwaysSoloJson"", ""LastModified"")
-                            VALUES (@Id, @Hash, @Muted, @Solo, @Modified)";
-                        
-                        cmd.Parameters.AddWithValue("@Id", Guid.NewGuid().ToString());
-                        cmd.Parameters.AddWithValue("@Hash", trackId);
-                        cmd.Parameters.AddWithValue("@Muted", System.Text.Json.JsonSerializer.Serialize(pref.AlwaysMuted));
-                        cmd.Parameters.AddWithValue("@Solo", System.Text.Json.JsonSerializer.Serialize(pref.AlwaysSolo));
-                        cmd.Parameters.AddWithValue("@Modified", DateTime.Now.ToString("O"));
-                        
-                        await cmd.ExecuteNonQueryAsync();
-                    }
-                }
-            }
-
-            _logger.LogInformation("Successfully migrated {Count} stem preferences. Archiving JSON file.", preferences.Count);
-            System.IO.File.Move(jsonPath, jsonPath + ".old", overwrite: true);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to migrate stem preferences from JSON");
-        }
-    }
-
-    // Helper class for migration
-    private class StemPreference
-    {
-        public List<int> AlwaysMuted { get; set; } = new();
-        public List<int> AlwaysSolo { get; set; } = new();
-    }
 }

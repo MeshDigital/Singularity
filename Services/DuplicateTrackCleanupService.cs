@@ -138,26 +138,15 @@ public sealed class DuplicateTrackCleanupService
 
     private static async Task RepointHashReferencesAsync(AppDbContext db, string fromHash, string toHash, CancellationToken ct)
     {
-        // Many-rows-per-hash tables (multiple cue points / analysis runs per track are normal):
-        // always repoint every row, no collision risk.
+        // Many-rows-per-hash tables: always repoint every row, no collision risk.
         await db.PlaylistTracks.Where(t => t.TrackUniqueHash == fromHash)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.TrackUniqueHash, toHash), ct).ConfigureAwait(false);
-        await db.CuePoints.Where(c => c.TrackUniqueHash == fromHash)
-            .ExecuteUpdateAsync(s => s.SetProperty(c => c.TrackUniqueHash, toHash), ct).ConfigureAwait(false);
-        await db.AnalysisRuns.Where(a => a.TrackUniqueHash == fromHash)
-            .ExecuteUpdateAsync(s => s.SetProperty(a => a.TrackUniqueHash, toHash), ct).ConfigureAwait(false);
 
         // One-row-per-hash tables: repoint only if the survivor doesn't already have a row there
         // (avoids a unique-constraint collision, e.g. audio_features.TrackUniqueHash is UNIQUE) —
         // otherwise the survivor's existing data wins and the loser's copy is simply dropped rather
-        // than left orphaned (none of these three are FK-cascaded from LibraryEntries in the real
+        // than left orphaned (neither is FK-cascaded from LibraryEntries in the real
         // schema, so nothing else will clean them up).
-        if (!await db.StemPreferences.AnyAsync(s => s.TrackUniqueHash == toHash, ct).ConfigureAwait(false))
-            await db.StemPreferences.Where(s => s.TrackUniqueHash == fromHash)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.TrackUniqueHash, toHash), ct).ConfigureAwait(false);
-        else
-            await db.StemPreferences.Where(s => s.TrackUniqueHash == fromHash).ExecuteDeleteAsync(ct).ConfigureAwait(false);
-
         if (!await db.AudioFeatures.AnyAsync(f => f.TrackUniqueHash == toHash, ct).ConfigureAwait(false))
             await db.AudioFeatures.Where(f => f.TrackUniqueHash == fromHash)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.TrackUniqueHash, toHash), ct).ConfigureAwait(false);

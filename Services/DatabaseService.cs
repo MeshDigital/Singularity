@@ -681,16 +681,6 @@ public class DatabaseService
         return await _trackRepository.GetPagedPlaylistTracksAsync(playlistId, skip, take, filter, downloadedOnly, hashFilter, camelotKeyFilter, sortColumn, sortDescending, qualityTier);
     }
 
-    public async Task<List<TrackPhraseEntity>> GetPhrasesByHashAsync(string trackHash)
-    {
-        return await _trackRepository.GetPhrasesByHashAsync(trackHash);
-    }
-
-    public async Task SavePhrasesAsync(List<TrackPhraseEntity> phrases)
-    {
-        await _trackRepository.SavePhrasesAsync(phrases);
-    }
-
     public async Task<int> GetTotalLibraryTrackCountAsync(string? filter = null, bool? downloadedOnly = null, IEnumerable<string>? hashFilter = null, string? camelotKeyFilter = null, string? qualityTier = null)
     {
         return await _trackRepository.GetTotalLibraryTrackCountAsync(filter, downloadedOnly, hashFilter, camelotKeyFilter, qualityTier);
@@ -2140,12 +2130,6 @@ public class DatabaseService
     public async Task UpdateLibraryEntriesGenresAsync(Dictionary<string, List<string>> artistGenreMap)
     {
         await _trackRepository.UpdateLibraryEntriesGenresAsync(artistGenreMap);
-    }
-    // Phase 15: Style Lab
-    public async Task<List<StyleDefinitionEntity>> LoadAllStyleDefinitionsAsync()
-    {
-        using var context = new AppDbContext();
-        return await context.StyleDefinitions.AsNoTracking().ToListAsync();
     }
 
     // Phase 16.2: Vibe Match

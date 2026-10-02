@@ -684,7 +684,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
     public string ProvenanceTooltip => $"Confidence: {Model.CurationConfidence}\nSource: {Model.Source}";
 
     public string? DetectedSubGenre => Model.DetectedSubGenre;
-    public Avalonia.Media.IBrush VibeColor => GetGenreColor(DetectedSubGenre);
 
     public string VibeTooltip
     {
@@ -700,22 +699,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
             
             return list.Count > 0 ? string.Join("\n", list) : "No AI analysis data";
         }
-    }
-
-    // public record VibePill(string Icon, string Label, Avalonia.Media.IBrush Color); // Moved to VibePillRecord.cs
-
-    // 1. Define the colors (Helper)
-    private static Avalonia.Media.IBrush GetGenreColor(string? genre)
-    {
-        return genre?.ToLower() switch
-        {
-            "techno" => Avalonia.Media.Brushes.MediumPurple,
-            "house" => Avalonia.Media.Brushes.DeepPink,
-            "dnb" or "drum and bass" => Avalonia.Media.Brushes.OrangeRed,
-            "ambient" => Avalonia.Media.Brushes.Teal,
-            "dubstep" => Avalonia.Media.Brushes.Indigo,
-            _ => Avalonia.Media.Brushes.SlateGray
-        };
     }
 
     private WaveformAnalysisData? _cachedWaveformData;
@@ -1216,7 +1199,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
              OnPropertyChanged(nameof(DetectedSubGenre));
              OnPropertyChanged(nameof(PrimaryGenre));
              OnPropertyChanged(nameof(MatchConfidence));
-             OnPropertyChanged(nameof(VibeColor));
              OnPropertyChanged(nameof(VibeTooltip));
              OnPropertyChanged(nameof(InstrumentalProbability));
 

@@ -1370,99 +1370,8 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
 
     public string ForensicDetails => $"Verdict: {ForensicVerdict}\nBIT: {BitrateLed}\nKEY: {KeyLed}\nPEAK: {PeakLed}";
 
-    // Phase 12.7: Vibe Color Mapping
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Avalonia.Media.IBrush> _vibeColorCache = new();
-    // One VM instance exists per visible track row, and VibeColor's getter re-fires on every
-    // OnMetadataUpdated — without this guard, every row with an uncached genre kicked off its own
-    // full GetStyleDefinitionsAsync DB query concurrently, on every re-render before the cache
-    // warmed. Static/shared like the cache above: only one fetch needs to be in flight at a time
-    // regardless of how many rows are asking for it.
-    private static Task? _vibeStylesLoadTask;
-    private static readonly object _vibeStylesLoadLock = new();
-
-    public Avalonia.Media.IBrush VibeColor => GetVibeColor(DetectedSubGenre);
-
-    private Avalonia.Media.IBrush GetVibeColor(string? genre)
-    {
-        if (string.IsNullOrEmpty(genre)) return Avalonia.Media.Brushes.Transparent;
-        if (_vibeColorCache.TryGetValue(genre, out var brush)) return brush;
-
-        lock (_vibeStylesLoadLock)
-        {
-            _vibeStylesLoadTask ??= Task.Run(async () =>
-            {
-                try
-                {
-                    var styles = await _libraryService.GetStyleDefinitionsAsync();
-                    foreach (var style in styles)
-                    {
-                        if (Avalonia.Media.Color.TryParse(style.ColorHex, out var color))
-                        {
-                            _vibeColorCache[style.Name] = new Avalonia.Media.SolidColorBrush(color);
-                        }
-                    }
-                }
-                finally
-                {
-                    lock (_vibeStylesLoadLock) { _vibeStylesLoadTask = null; }
-                }
-            });
-        }
-
-        // Every row currently showing Gray for an uncached genre needs its own notification once
-        // the shared fetch lands — this VM's own property-changed, chained onto the shared task
-        // rather than only the task that happened to start it.
-        _ = _vibeStylesLoadTask.ContinueWith(_ =>
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(VibeColor))),
-            TaskScheduler.Default);
-
-        return Avalonia.Media.Brushes.Gray;
-    }
-
     public string PreparationStatus => IsPrepared ? "Prepared" : "Raw";
     public Avalonia.Media.IBrush PreparationColor => IsPrepared ? Avalonia.Media.Brushes.DodgerBlue : Avalonia.Media.Brushes.Gray;
-
-    // Phase 13C: Vibe Pills
-    public record VibePill(string Icon, string Label, Avalonia.Media.IBrush Color, string Description);
-    
-    public System.Collections.Generic.IEnumerable<VibePill> VibePills
-    {
-        get
-        {
-            var pills = new System.Collections.Generic.List<VibePill>();
-            
-            // 💃 Dance Pill (High Danceability)
-            if (Model.Danceability > 0.75)
-            {
-                pills.Add(new VibePill("💃", "Dance", Avalonia.Media.Brushes.DeepPink, "High Danceability detected by AI"));
-            }
-            
-            // 🎻 Inst Pill (Instrumental)
-            if (Model.QualityConfidence > 0.8) // High spectral quality often correlates with clean instrumentals/stable phase
-            {
-                 // Actually we'll use a specific threshold based on new fields if available
-                 // For now, let's use the MoodTag if it matches
-                 if (Model.MoodTag == "Relaxed")
-                 {
-                     pills.Add(new VibePill("🎻", "Inst", Avalonia.Media.Brushes.RoyalBlue, "Instrumental / Chill Vibe"));
-                 }
-            }
-
-            // 🔥 Hard Pill (Aggressive/High Energy)
-            if (Model.Energy > 0.8 || Model.MoodTag == "Aggressive")
-            {
-                pills.Add(new VibePill("🔥", "Hard", Avalonia.Media.Brushes.OrangeRed, "High Energy / Aggressive Vibe"));
-            }
-
-            // ✨ Vibe Pill (Primary Genre/Subgenre classification)
-            if (!string.IsNullOrEmpty(DetectedSubGenre))
-            {
-                pills.Add(new VibePill("✨", DetectedSubGenre, VibeColor, $"Genre: {DetectedSubGenre} (Conf: {SubGenreConfidence:P0})"));
-            }
-            
-            return pills;
-        }
-    }
 
     public WaveformAnalysisData WaveformData => new WaveformAnalysisData
     {
@@ -2232,9 +2141,7 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
                 this.RaisePropertyChanged(nameof(PreparationColor));
                 this.RaisePropertyChanged(nameof(PrimaryGenre));
                 this.RaisePropertyChanged(nameof(DetectedSubGenre));
-                this.RaisePropertyChanged(nameof(VibeColor));
                 this.RaisePropertyChanged(nameof(SubGenreConfidence));
-                this.RaisePropertyChanged(nameof(VibePills));
                 
                 // Curation & Trust
                 this.RaisePropertyChanged(nameof(CurationConfidence));

@@ -675,65 +675,6 @@ public class TrackListViewModel : ReactiveObject, IDisposable
 
     public PlaylistTrackViewModel? LeadSelectedTrack => SelectedTracks.FirstOrDefault();
 
-    // Phase 15: Style Filters
-    public ObservableCollection<StyleFilterItem> StyleFilters { get; } = new();
-
-    private void OnStyleFilterChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(StyleFilterItem.IsSelected))
-        {
-            RefreshFilteredTracks();
-        }
-    }
-
-    private bool _isLoadingStyles;
-    public async Task LoadStyleFiltersAsync()
-    {
-        if (_isLoadingStyles) return;
-        _isLoadingStyles = true;
-        
-        try 
-        {
-            var styles = await _libraryService.GetStyleDefinitionsAsync();
-            
-            _logger.LogInformation("Loading {Count} style definitions from database", styles.Count);
-            
-            // Deduplicate by Name to prevent redundant UI chips (User's specific request)
-            var uniqueStyles = styles
-                .GroupBy(s => s.Name)
-                .Select(g => g.First())
-                .OrderBy(s => s.Name)
-                .ToList();
-            
-            // Updates on UI Thread
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                // Detach event handlers before clearing
-                foreach (var item in StyleFilters) 
-                    item.PropertyChanged -= OnStyleFilterChanged;
-                
-                StyleFilters.Clear();
-
-                foreach (var style in uniqueStyles)
-                {
-                    var item = new StyleFilterItem(style);
-                    item.PropertyChanged += OnStyleFilterChanged;
-                    StyleFilters.Add(item);
-                }
-                
-                _logger.LogInformation("Loaded {Count} unique style filters into UI", StyleFilters.Count);
-            }, DispatcherPriority.Normal);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load style filters");
-        }
-        finally
-        {
-            _isLoadingStyles = false;
-        }
-    }
-
     public System.Windows.Input.ICommand ToggleColumnFilterStripCommand { get; }
     public System.Windows.Input.ICommand SelectAllTracksCommand { get; }
     public System.Windows.Input.ICommand DeselectAllTracksCommand { get; }
@@ -868,9 +809,6 @@ public class TrackListViewModel : ReactiveObject, IDisposable
         // Phase 6D: Local UI sync for track moves
         _disposables.Add(eventBus.GetEvent<TrackMovedEvent>().Subscribe(evt => OnTrackMoved(evt)));
 
-        // Phase 15: Refresh filters when definitions change
-        _disposables.Add(eventBus.GetEvent<StyleDefinitionsUpdatedEvent>().Subscribe(evt => { _ = LoadStyleFiltersAsync(); }));
-        
         // Phase 11.6: Refresh UI when track is added (cloned)
         _disposables.Add(eventBus.GetEvent<TrackAddedEvent>().Subscribe(OnTrackAdded));
 
@@ -906,8 +844,6 @@ public class TrackListViewModel : ReactiveObject, IDisposable
             .Subscribe(_ => UpdateLimitedTracks())
             .DisposeWith(_disposables);
 
-        // Initial Load
-        _ = LoadStyleFiltersAsync();
     }
     
     // Explicit handler to support attach/detach
@@ -958,11 +894,6 @@ public class TrackListViewModel : ReactiveObject, IDisposable
             }
             CurrentProjectTracks.Clear();
             
-            foreach (var style in StyleFilters)
-            {
-                style.PropertyChanged -= OnStyleFilterChanged;
-            }
-            StyleFilters.Clear();
         }
 
         _isDisposed = true;
@@ -1135,11 +1066,7 @@ public class TrackListViewModel : ReactiveObject, IDisposable
         {
              // Use in-memory tracks (useful for Smart Playlists that aren't DB crates)
              _logger.LogInformation("RefreshFilteredTracks: Using in-memory tracks (Count: {Count})", CurrentProjectTracks.Count);
-             // Computed once here instead of inside FilterTracks (which used to re-run this
-             // Where().ToList() for every single track being filtered — visible input lag on
-             // large projects with style filters active).
-             var selectedStyles = StyleFilters.Where(s => s.IsSelected).ToList();
-             var filtered = ApplyInMemorySort(CurrentProjectTracks.Where(t => FilterTracks(t, selectedStyles)).ToList());
+             var filtered = ApplyInMemorySort(CurrentProjectTracks.Where(t => FilterTracks(t)).ToList());
 
              var oldVtcMemory = FilteredTracks as VirtualizedTrackCollection;
              FilteredTracks = new ObservableCollection<PlaylistTrackViewModel>(filtered);
@@ -1215,7 +1142,7 @@ public class TrackListViewModel : ReactiveObject, IDisposable
         return string.Join(" ", parts);
     }
 
-    private bool FilterTracks(object obj, System.Collections.Generic.List<StyleFilterItem> selectedStyles)
+    private bool FilterTracks(object obj)
     {
         if (obj is not PlaylistTrackViewModel track) return false;
 
@@ -1233,25 +1160,6 @@ public class TrackListViewModel : ReactiveObject, IDisposable
                 return false;
         }
 
-        // Phase 15: Style Filtering
-        // If NO styles are selected, show ALL (ignore this filter level).
-        // If ANY styles are selected, track must match ONE of them.
-        if (selectedStyles.Any())
-        {
-            var trackStyle = track.Model.DetectedSubGenre;
-            if (string.IsNullOrEmpty(trackStyle)) return false; // No style = filtered out if filter active
-
-            bool match = false;
-            foreach (var style in selectedStyles)
-            {
-                 if (string.Equals(trackStyle, style.Style.Name, StringComparison.OrdinalIgnoreCase))
-                 {
-                     match = true;
-                     break;
-                 }
-            }
-            if (!match) return false;
-        }
         
         // Phase 22: The Bouncer (Quality Control)
         if (IsBouncerActive)

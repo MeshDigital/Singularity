@@ -127,7 +127,6 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
     // Commands
     public ICommand RefreshDashboardCommand { get; }
     public ICommand NavigateToSearchCommand { get; }
-    public ICommand NavigateToAnalysisCommand { get; }
     public ICommand QuickSearchCommand { get; }
     public ICommand ClearDeadLettersCommand { get; }
     public ICommand NavigateLibraryCommand { get; }
@@ -233,25 +232,6 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
 
     public bool IsSpotifyConnected => _spotifyAuth.IsAuthenticated;
 
-    private int _incompleteAnalysisCount;
-    public int IncompleteAnalysisCount
-    {
-        get => _incompleteAnalysisCount;
-        private set
-        {
-            if (SetProperty(ref _incompleteAnalysisCount, value))
-            {
-                OnPropertyChanged(nameof(HasIncompleteAnalysisTracks));
-                OnPropertyChanged(nameof(IncompleteAnalysisSummary));
-            }
-        }
-    }
-
-    public bool HasIncompleteAnalysisTracks => IncompleteAnalysisCount > 0;
-    public string IncompleteAnalysisSummary => HasIncompleteAnalysisTracks
-        ? $"{IncompleteAnalysisCount} tracks need reanalysis"
-        : "Analysis coverage is healthy";
-    
     public ObservableCollection<MissionOperation> ActiveMissions { get; } = new();
 
     public HomeViewModel(
@@ -333,7 +313,6 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
         // Commands
         RefreshDashboardCommand = new AsyncRelayCommand(RefreshDashboardAsync);
         NavigateToSearchCommand = new RelayCommand(() => _navigationService.NavigateTo("Search"));
-        NavigateToAnalysisCommand = new RelayCommand(() => _navigationService.NavigateTo("Analysis"));
         // Accepts an optional "Gold"/"Silver"/"Bronze" CommandParameter — sets the Library's
         // quality-tier filter (and clears any selected playlist, to force the "All Tracks" view)
         // before navigating, so each badge actually lands on a correctly-filtered view instead of
@@ -519,8 +498,6 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
                 _logger.LogDebug("[Dashboard] {Loader} finished in {Ms}ms", name, t.ElapsedMilliseconds);
             }
 
-            _ = Task.Run(LoadIncompleteAnalysisCountAsync);
-
             var healthTask = Timed("LibraryHealth", LoadLibraryHealthAsync);
             var recentTask = Timed("RecentPlaylists", LoadRecentPlaylistsAsync);
             var recentDownloadsTask = Timed("RecentDownloads", LoadRecentDownloadsAsync);
@@ -667,37 +644,6 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
     }
 
     private int _incompleteCountInFlight;
-
-    /// <summary>
-    /// Kept off the dashboard's loading gate on purpose: it File.Exists-checks every downloaded
-    /// track, which on a cold boot (OS file cache not yet warm, library spread across drives)
-    /// measured ~60s — and since SQLite/File I/O here is synchronous, it used to also stall every
-    /// other dashboard loader behind it, leaving the whole page on "Loading dashboard..." for a
-    /// minute. It only feeds the "Reanalyze Incomplete Tracks" hint, so it fills in on its own.
-    /// </summary>
-    private async Task LoadIncompleteAnalysisCountAsync()
-    {
-        if (Interlocked.Exchange(ref _incompleteCountInFlight, 1) == 1) return;
-        try
-        {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            var count = await _dashboardService.GetIncompleteAnalysisTrackCountAsync();
-            _logger.LogDebug("[Dashboard] IncompleteAnalysisCount finished in {Ms}ms", sw.ElapsedMilliseconds);
-            Dispatcher.UIThread.Post(() =>
-            {
-                IncompleteAnalysisCount = count;
-                PopulateActiveMissions();
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to load incomplete analysis count");
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _incompleteCountInFlight, 0);
-        }
-    }
 
     private async Task ClearDeadLettersAsync()
     {

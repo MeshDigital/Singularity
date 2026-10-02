@@ -142,15 +142,12 @@ public sealed class UnidentifiedTrackCleanupService
                         .SetProperty(t => t.LocalFilePath, (string?)null)
                         .SetProperty(t => t.IsLocalFile, false), cancellationToken).ConfigureAwait(false);
 
-                // 6 — Remove cached analysis artifacts (waveform, cues, embeddings, etc.).
+                // 6 — Remove cached analysis artifacts (waveform, features).
                 await db.AudioAnalysis
                     .Where(a => a.TrackUniqueHash == hash)
                     .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
                 await db.AudioFeatures
                     .Where(f => f.TrackUniqueHash == hash)
-                    .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-                await db.CuePoints
-                    .Where(c => c.TrackUniqueHash == hash)
                     .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
 
                 // 7 — Tell any open view still holding this track's data to drop it.

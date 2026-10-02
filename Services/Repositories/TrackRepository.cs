@@ -208,42 +208,7 @@ public class TrackRepository : ITrackRepository
             .Take(take)
             .ToListAsync();
 
-        await AttachCuePointCountsAsync(context, results);
-
         return results;
-    }
-
-    /// <summary>
-    /// Populates <see cref="PlaylistTrackEntity.CuePointCount"/> from the real per-cue-point
-    /// <c>CuePoints</c> table (which links by <c>TrackUniqueHash</c>, not a proper FK, so it
-    /// can't be an EF <c>.Include()</c>). The legacy <c>TechnicalDetails</c>/<c>CuePointsJson</c>
-    /// blob is no longer written by the current cue-generation pipeline, so workstation-readiness
-    /// checks need this real count instead.
-    /// </summary>
-    private static async Task AttachCuePointCountsAsync(AppDbContext context, List<PlaylistTrackEntity> tracks)
-    {
-        var hashes = tracks
-            .Select(t => t.TrackUniqueHash)
-            .Where(h => !string.IsNullOrEmpty(h))
-            .Distinct()
-            .ToList();
-
-        if (hashes.Count == 0) return;
-
-        var counts = await context.CuePoints
-            .AsNoTracking()
-            .Where(cp => hashes.Contains(cp.TrackUniqueHash))
-            .GroupBy(cp => cp.TrackUniqueHash)
-            .Select(g => new { Hash = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.Hash, x => x.Count);
-
-        foreach (var track in tracks)
-        {
-            if (counts.TryGetValue(track.TrackUniqueHash, out var count))
-            {
-                track.CuePointCount = count;
-            }
-        }
     }
 
     private static IQueryable<PlaylistTrackEntity> ApplyPlaylistTrackSort(IQueryable<PlaylistTrackEntity> query, TrackSortColumn sortColumn, bool descending)
@@ -1820,36 +1785,4 @@ public class TrackRepository : ITrackRepository
             .ToListAsync();
     }
 
-    public async Task<List<TrackPhraseEntity>> GetPhrasesByHashAsync(string trackHash)
-    {
-        using var context = new AppDbContext();
-        return await context.TrackPhrases
-            .AsNoTracking()
-            .Where(p => p.TrackUniqueHash == trackHash)
-            .OrderBy(p => p.OrderIndex)
-            .ToListAsync();
-    }
-
-    public async Task SavePhrasesAsync(List<TrackPhraseEntity> phrases)
-    {
-        if (phrases == null || !phrases.Any()) return;
-
-        await _writeSemaphore.WaitAsync();
-        try
-        {
-            using var context = new AppDbContext();
-            var hash = phrases.First().TrackUniqueHash;
-
-            // Atomic Refresh: Clear existing segments before adding new detection results
-            var existing = await context.TrackPhrases.Where(p => p.TrackUniqueHash == hash).ToListAsync();
-            context.TrackPhrases.RemoveRange(existing);
-
-            await context.TrackPhrases.AddRangeAsync(phrases);
-            await context.SaveChangesAsync();
-        }
-        finally
-        {
-            _writeSemaphore.Release();
-        }
-    }
 }
