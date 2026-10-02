@@ -53,18 +53,27 @@ public static class UltraStarChartBuilder
 
             foreach (var s in syllables)
             {
-                int start = Math.Max(nextFreeBeat, (int)Math.Round((s.StartMs - gap) / msPerBeat));
-                int end = (int)Math.Round((s.EndMs - gap) / msPerBeat);
-                int length = Math.Max(1, end - start);
-
-                // Unvoiced or untracked syllables take the previous pitch so the chart has no wild jumps.
-                int tone = s.MidiTone ?? lastTone ?? fallbackTone;
-                lastTone = tone;
-
                 var text = s.StartsWord && notes.Count > 0 && notes[^1].Type != NoteType.LineBreak ? " " + s.Text : s.Text;
-                notes.Add(new UltraStarNote(s.MidiTone is null ? NoteType.Freestyle : NoteType.Regular, start, length, tone, text));
-                sources.Add(s);
-                nextFreeBeat = start + length;
+
+                // A melisma becomes one note per segment: the first carries the text, the rest are "~".
+                var parts = s.Segments is { Count: > 1 } segments
+                    ? segments.Select((g, i) => (g.StartMs, g.EndMs, (int?)g.MidiTone, Text: i == 0 ? text : "~")).ToArray()
+                    : new[] { (s.StartMs, s.EndMs, s.MidiTone, Text: text) };
+
+                foreach (var (startMs, endMs, midiTone, partText) in parts)
+                {
+                    int start = Math.Max(nextFreeBeat, (int)Math.Round((startMs - gap) / msPerBeat));
+                    int end = (int)Math.Round((endMs - gap) / msPerBeat);
+                    int length = Math.Max(1, end - start);
+
+                    // Unvoiced or untracked syllables take the previous pitch so the chart has no wild jumps.
+                    int tone = midiTone ?? lastTone ?? fallbackTone;
+                    lastTone = tone;
+
+                    notes.Add(new UltraStarNote(midiTone is null ? NoteType.Freestyle : NoteType.Regular, start, length, tone, partText));
+                    sources.Add(s);
+                    nextFreeBeat = start + length;
+                }
             }
         }
 

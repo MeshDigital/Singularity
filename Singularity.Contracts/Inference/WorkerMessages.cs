@@ -137,6 +137,10 @@ public sealed record LyricLine(IReadOnlyList<TimedSyllable> Syllables);
 /// <param name="MidiTone">Median pitch over the syllable, as a MIDI note number; null when unvoiced or untracked.</param>
 /// <param name="PitchConfidence">Mean periodicity confidence of the pitch track over the syllable, in [0, 1].</param>
 /// <param name="AlignmentConfidence">Confidence of the word this syllable belongs to, in [0, 1].</param>
+/// <param name="Segments">
+/// Set when the syllable is sung over more than one note (a melisma): the notes in order, covering
+/// StartMs..EndMs. UltraStar writes the first with the syllable's text and the rest as "~".
+/// </param>
 public sealed record TimedSyllable(
     string Text,
     int StartMs,
@@ -144,4 +148,8 @@ public sealed record TimedSyllable(
     bool StartsWord,
     int? MidiTone,
     double PitchConfidence,
-    double AlignmentConfidence);
+    double AlignmentConfidence,
+    IReadOnlyList<PitchSegment>? Segments = null);
+
+/// <summary>One note of a melisma.</summary>
+public sealed record PitchSegment(int StartMs, int EndMs, int MidiTone);

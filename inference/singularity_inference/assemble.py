@@ -76,6 +76,64 @@ def smooth_octaves(tones: list[int | None], context: int = OCTAVE_CONTEXT) -> li
     return out
 
 
+# A melisma note must last this long; shorter wobbles (vibrato, scoops) stay part of a neighbour.
+MIN_SEGMENT_MS = 120
+# Median filter width over voiced frames before quantising, against frame-to-frame jitter.
+SMOOTH_FRAMES = 5
+
+
+def pitch_segments(track: PitchTrack, start_ms: int, end_ms: int, base_tone: int) -> list[tuple[int, int, int]] | None:
+    """Splits a syllable into the notes it is sung on, as (start_ms, end_ms, midi_tone).
+
+    Voiced frames are median-smoothed, rounded to semitones and folded to the octave of `base_tone`
+    (the syllable's own, octave-smoothed tone). Runs of equal notes shorter than MIN_SEGMENT_MS merge
+    into their longer neighbour. Returns None when the syllable stays on a single note.
+    """
+    lo = bisect.bisect_left(track.times_ms, start_ms)
+    hi = bisect.bisect_left(track.times_ms, end_ms)
+    frames = [(track.times_ms[i], hz_to_midi(track.hz[i])) for i in range(lo, hi)
+              if track.hz[i] > 0 and track.confidence[i] >= VOICED_CONFIDENCE]
+    if len(frames) < 2:
+        return None
+
+    half = SMOOTH_FRAMES // 2
+    values = [m for _, m in frames]
+    runs: list[list] = []  # [start_ms, tone]
+    for k, (t, _) in enumerate(frames):
+        window = sorted(values[max(0, k - half):k + half + 1])
+        tone = int(round(window[len(window) // 2]))
+        tone += 12 * round((base_tone - tone) / 12)
+        if not runs or runs[-1][1] != tone:
+            runs.append([t, tone])
+
+    # Each run lasts until the next starts; the first starts at the syllable, the last ends with it.
+    bounds = [start_ms] + [int(r[0]) for r in runs[1:]] + [end_ms]
+    segs = [[bounds[i], bounds[i + 1], r[1]] for i, r in enumerate(runs)]
+
+    while len(segs) > 1:
+        k = min(range(len(segs)), key=lambda i: segs[i][1] - segs[i][0])
+        if segs[k][1] - segs[k][0] >= MIN_SEGMENT_MS:
+            break
+        # Merge the shortest into its longer neighbour, keeping the neighbour's note.
+        left = segs[k - 1] if k > 0 else None
+        right = segs[k + 1] if k + 1 < len(segs) else None
+        if right is None or (left is not None and left[1] - left[0] >= right[1] - right[0]):
+            left[1] = segs[k][1]
+        else:
+            right[0] = segs[k][0]
+        del segs[k]
+        # Neighbours that now share a note become one.
+        merged = [segs[0]]
+        for seg in segs[1:]:
+            if seg[2] == merged[-1][2]:
+                merged[-1][1] = seg[1]
+            else:
+                merged.append(seg)
+        segs = merged
+
+    return [(a, b, t) for a, b, t in segs] if len(segs) > 1 else None
+
+
 def build_lines(words_per_line: list[list[AlignedWord]], track: PitchTrack, language: str | None) -> list[s.LyricLine]:
     # Flatten to (line index, word, syllable index in word, text, start, end) so sustain can look at the next syllable.
     flat = []
@@ -94,6 +152,7 @@ def build_lines(words_per_line: list[list[AlignedWord]], track: PitchTrack, lang
     tones = smooth_octaves([p[6] for p in pitched])
     lines: list[list[s.TimedSyllable]] = [[] for _ in words_per_line]
     for (li, word, si, text, start, end, _, conf), tone in zip(pitched, tones):
+        segments = pitch_segments(track, start, end, tone) if tone is not None else None
         lines[li].append(s.TimedSyllable(
             text=text,
             start_ms=start,
@@ -102,5 +161,6 @@ def build_lines(words_per_line: list[list[AlignedWord]], track: PitchTrack, lang
             midi_tone=tone,
             pitch_confidence=min(1.0, max(0.0, conf)),
             alignment_confidence=min(1.0, max(0.0, word.confidence)),
+            segments=[s.PitchSegment(start_ms=a, end_ms=b, midi_tone=t) for a, b, t in segments] if segments else None,
         ))
     return [s.LyricLine(syllables=syl) for syl in lines if syl]

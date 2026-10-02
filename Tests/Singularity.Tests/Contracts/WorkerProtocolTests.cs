@@ -165,6 +165,33 @@ public class UltraStarChartBuilderTests
     }
 
     [Fact]
+    public void Melisma_BecomesTildeNotes()
+    {
+        var oh = S("oh", 0, 900, 64) with
+        {
+            Segments = new[] { new PitchSegment(0, 300, 64), new PitchSegment(300, 600, 62), new PitchSegment(600, 900, 60) },
+        };
+        var notes = UltraStarChartBuilder.Build(300, new[] { new LyricLine(new[] { oh }) }).Voice.Notes;
+
+        Assert.Equal(new[]
+        {
+            new UltraStarNote(NoteType.Regular, 0, 6, 64, "oh"),
+            new UltraStarNote(NoteType.Regular, 6, 6, 62, "~"),
+            new UltraStarNote(NoteType.Regular, 12, 6, 60, "~"),
+        }, notes);
+    }
+
+    [Fact]
+    public void FixtureMelisma_IsDecoded()
+    {
+        var done = File.ReadAllLines(ContractFixtures.PathOf("worker-session.jsonl"))
+            .Where(l => l.Length > 0 && !l.StartsWith("{\"command\""))
+            .Select(WorkerProtocol.DecodeEvent).OfType<TaskFinishedEvent>().First();
+        var fe = done.Result!.Lines[0].Syllables[5];
+        Assert.Equal(new[] { new PitchSegment(3000, 3200, 63), new PitchSegment(3200, 3400, 61) }, fe.Segments);
+    }
+
+    [Fact]
     public void Empty_IsEmptyVoice() =>
         Assert.Empty(UltraStarChartBuilder.Build(120, Array.Empty<LyricLine>()).Voice.Notes);
 }

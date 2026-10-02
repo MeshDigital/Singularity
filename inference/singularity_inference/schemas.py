@@ -141,6 +141,12 @@ class ShutdownCommand(Contract):
 WorkerCommand = Annotated[Union[ProcessTrackCommand, CancelCommand, ShutdownCommand], Field(discriminator="command")]
 
 
+class PitchSegment(Contract):
+    start_ms: int
+    end_ms: int
+    midi_tone: int
+
+
 class TimedSyllable(Contract):
     text: str
     start_ms: int
@@ -149,6 +155,7 @@ class TimedSyllable(Contract):
     midi_tone: int | None
     pitch_confidence: float = Field(ge=0, le=1)
     alignment_confidence: float = Field(ge=0, le=1)
+    segments: list[PitchSegment] | None = None  # a melisma: the notes in order, covering start..end
 
 
 class LyricLine(Contract):

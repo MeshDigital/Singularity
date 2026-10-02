@@ -188,3 +188,39 @@ def test_sustained_vowel_extends_the_note_up_to_the_next_syllable():
     a, b = build_lines(words, track, None)[0].syllables
     assert a.end_ms == 1000 - 20      # held until just before "two"
     assert b.end_ms == 1490           # held until the voice stops
+
+
+def _track(notes_ms: list[tuple[int, int, float]], step: int = 16) -> PitchTrack:
+    """A track that sings the given (start, end, midi) notes."""
+    end = max(e for _, e, _ in notes_ms)
+    times = [float(t) for t in range(0, end, step)]
+    hz = [next((440.0 * 2 ** ((m - 69) / 12) for a, b, m in notes_ms if a <= t < b), 0.0) for t in times]
+    return PitchTrack(times, hz, [0.9 if h > 0 else 0.1 for h in hz])
+
+
+def test_melisma_is_split_into_its_notes():
+    from singularity_inference.assemble import pitch_segments
+
+    track = _track([(0, 300, 64), (300, 600, 62), (600, 1000, 60)])
+    assert pitch_segments(track, 0, 1000, 62) == [(0, 304, 64), (304, 608, 62), (608, 1000, 60)]
+
+
+def test_single_note_and_short_wobbles_are_not_split():
+    from singularity_inference.assemble import pitch_segments
+
+    assert pitch_segments(_track([(0, 800, 60)]), 0, 800, 60) is None
+    # A 64 ms scoop up into the note is part of it, not a note of its own.
+    assert pitch_segments(_track([(0, 64, 58), (64, 800, 60)]), 0, 800, 60) is None
+
+
+def test_segments_follow_the_syllable_octave():
+    from singularity_inference.assemble import pitch_segments
+
+    segs = pitch_segments(_track([(0, 400, 76), (400, 800, 74)]), 0, 800, 62)  # tracked an octave high
+    assert [t for _, _, t in segs] == [64, 62]
+
+
+def test_build_lines_attaches_segments():
+    track = _track([(0, 400, 64), (400, 800, 60)])
+    syl = build_lines([[AlignedWord("oh", 0, 800, 0.9)]], track, None)[0].syllables[0]
+    assert [(x.start_ms, x.end_ms, x.midi_tone) for x in syl.segments] == [(0, 400, 64), (400, 800, 60)]
