@@ -1519,11 +1519,6 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 {
                     _logger.LogWarning(ex, "Failed to update AvailabilityState to LocalUnanalyzed in DB for {Id}", ctx.Model.Id);
                 }
-
-                _eventBus.Publish(new TrackAnalysisRequestedEvent(
-                    queuedHash,
-                    AnalysisTier.Tier1,
-                    IsHighPriority: true));
             }
 
             await _libraryService.AddTrackToLibraryIndexAsync(ctx.Model, ctx.Model.ResolvedFilePath);

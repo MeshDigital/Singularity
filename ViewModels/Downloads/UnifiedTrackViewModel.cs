@@ -1227,7 +1227,6 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
     // ── Energy Score Badge (Tier 2.2) ─────────────────────────────────────────
     // ManualEnergy (1-10 int) takes precedence over Spotify Energy (0-1 float).
     private int ComputedEnergyScore => Model.ManualEnergy ?? (int)Math.Round((Model.Energy ?? 0) * 10);
-    public bool HasEnergyBadge => IsCompleted && (Model.Energy.HasValue || Model.ManualEnergy.HasValue);
 
     // Curation Hub Properties
     public double IntegrityScore => Model.QualityConfidence ?? 0.0;

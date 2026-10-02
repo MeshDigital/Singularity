@@ -384,18 +384,6 @@ public class LibraryFolderScannerService
             using var context = new AppDbContext();
             context.LibraryEntries.AddRange(batch);
             await context.SaveChangesAsync(ct);
-
-            // Locally-scanned files never pass through DownloadManager's completion handler
-            // (that only fires for Soulseek downloads), so without this they'd sit
-            // un-analyzed forever — no BPM/key/energy, and invisible to Similar Tracks /
-            // Smart Insert, which both depend on this analysis having run.
-            foreach (var entry in batch)
-            {
-                if (!string.IsNullOrWhiteSpace(entry.UniqueHash))
-                {
-                    _eventBus.Publish(new Singularity.Models.TrackAnalysisRequestedEvent(entry.UniqueHash));
-                }
-            }
         }
         catch (Exception ex)
         {

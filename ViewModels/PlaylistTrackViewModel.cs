@@ -1350,33 +1350,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
         });
     }
 
-    internal void OnAnalysisStarted(Models.TrackAnalysisStartedEvent evt)
-    {
-        if (evt.TrackGlobalId != GlobalId) return;
-        
-        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-        {
-             _isAnalyzing = true;
-             OnPropertyChanged(nameof(MetadataStatus));
-             OnPropertyChanged(nameof(MetadataStatusColor));
-             OnPropertyChanged(nameof(MetadataStatusSymbol));
-        });
-    }
-
-    internal void OnAnalysisFailed(Models.TrackAnalysisFailedEvent evt)
-    {
-        if (evt.TrackGlobalId != GlobalId) return;
-        
-        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-        {
-             _isAnalyzing = false;
-             // Could update ErrorMessage here if desired
-             OnPropertyChanged(nameof(MetadataStatus));
-             OnPropertyChanged(nameof(MetadataStatusColor));
-             OnPropertyChanged(nameof(MetadataStatusSymbol));
-        });
-    }
-
     public PlaylistTrackState State
     {
         get => _state;

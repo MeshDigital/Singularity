@@ -34,10 +34,6 @@ public class StatusBarViewModel : ReactiveObject, IDisposable
 {
     private readonly CompositeDisposable _disposables = new();
     
-    private int _queuedCount;
-    private int _processedCount;
-    private string? _currentTrack;
-    private bool _isPaused;
     private bool _isHealthy = true; // Phase 10.5
     private readonly NativeDependencyHealthService _dependencyHealthService; // Phase 10.5
 
@@ -142,45 +138,8 @@ public class StatusBarViewModel : ReactiveObject, IDisposable
     public ICommand OpenShareSettingsCommand { get; }
 
     // ───────────────────────────────────────────────────
-    // Existing queue / health properties (unchanged)
+    // Health properties
     // ───────────────────────────────────────────────────
-
-    public int QueuedCount
-    {
-        get => _queuedCount;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _queuedCount, value);
-            this.RaisePropertyChanged(nameof(StatusText));
-            this.RaisePropertyChanged(nameof(IsProcessing));
-        }
-    }
-    
-    public int ProcessedCount
-    {
-        get => _processedCount;
-        set => this.RaiseAndSetIfChanged(ref _processedCount, value);
-    }
-    
-    public string? CurrentTrack
-    {
-        get => _currentTrack;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _currentTrack, value);
-            this.RaisePropertyChanged(nameof(IsProcessing));
-        }
-    }
-    
-    public bool IsPaused
-    {
-        get => _isPaused;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _isPaused, value);
-            this.RaisePropertyChanged(nameof(StatusText));
-        }
-    }
 
     public bool IsHealthy
     {
@@ -336,14 +295,9 @@ public class StatusBarViewModel : ReactiveObject, IDisposable
         {
             if (IsBulkOperationRunning) return $"⚙️ {BulkOperationTitle} ({BulkOperationProgress}%)";
             if (!IsHealthy) return "⚠️ Repair Required: Missing Analysis Tools";
-            if (IsPaused) return "⏸️ Analysis Paused";
-            if (QueuedCount > 0) return $"🔬 Analyzing... {QueuedCount} pending";
-            if (ProcessedCount > 0) return $"✓ All tracks analyzed ({ProcessedCount} total)";
             return "✓ Ready";
         }
     }
-    
-    public bool IsProcessing => QueuedCount > 0 || !string.IsNullOrEmpty(CurrentTrack) || IsBulkOperationRunning;
     
     public StatusBarViewModel(
         IEventBus eventBus,
@@ -362,17 +316,6 @@ public class StatusBarViewModel : ReactiveObject, IDisposable
              Dispatcher.UIThread.Post(() => IsHealthy = healthy);
         };
 
-        // Subscribe to queue status changes
-        eventBus.GetEvent<AnalysisQueueStatusChangedEvent>()
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(e =>
-            {
-                QueuedCount = e.QueuedCount;
-                ProcessedCount = e.ProcessedCount;
-                CurrentTrack = e.CurrentTrackHash;
-                IsPaused = e.IsPaused;
-            })
-            .DisposeWith(_disposables);
 
         // Phase 6: Subscribe to share health updates
         eventBus.GetEvent<ShareHealthUpdatedEvent>()
