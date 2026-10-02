@@ -60,6 +60,10 @@ Set `SINGULARITY_DB_PATH` to point the library database somewhere else (the test
 
 ## Codebase notes
 
+- Where this is going (UltraStar feature parity, AI chart creation, second-screen multiplayer) is in
+  [`DOCS/ROADMAP.md`](DOCS/ROADMAP.md).
+- `Singularity.Contracts/` holds the data contracts shared by the app and the Python worker in `inference/`;
+  both test suites parse the same fixtures in `Singularity.Contracts/Fixtures/`.
 - ORBIT's original architecture docs, deep-dives and agent notes are kept for reference in
   [`DOCS/orbit-heritage/`](DOCS/orbit-heritage/). They describe ORBIT, including features Singularity removed.
 - Databases created by earlier builds keep ORBIT's DJ tables (cue points, transitions, set lists, …); nothing

@@ -1,0 +1,25 @@
+﻿#TITLE:Example Song
+#ARTIST:Example Artist
+#MP3:Example.mp3
+#VIDEO:Example.mp4
+#VIDEOGAP:-0,34
+#BPM:300,5
+#GAP:1250
+#START:2.5
+#END:180000
+#PREVIEWSTART:45,25
+#MEDLEYSTARTBEAT:400
+#MEDLEYENDBEAT:800
+#AUTHOR:somebody
+#ENCODING:UTF8
+: 0 4 5 Hel
+: 4 4 7 lo
+* 10 6 9  world
+- 18
+F 20 4 0 hmm
+R 26 2 0 rap
+G 30 3 -2  gold~
+- 36 40
+: 40 8 -14 low
+E
+this text after E is ignored

@@ -1,0 +1,11 @@
+{"command":"process_track","taskId":"t-001","audioPath":"C:/Songs/Queen - Bohemian Rhapsody/audio.flac","outputFolder":"C:/Songs/Queen - Bohemian Rhapsody","lyrics":"Is this the real life\nIs this just fantasy","language":"en","reuseStems":true}
+{"event":"ready","protocolVersion":1,"workerVersion":"0.1.0","device":"cuda:0","models":{"separation":"htdemucs_ft","alignment":"wav2vec2-large-960h","pitch":"swiftf0"}}
+{"event":"stage_started","taskId":"t-001","stage":"separation"}
+{"event":"progress_update","taskId":"t-001","stage":"separation","progress":0.5,"message":"chunk 3/6"}
+{"taskId":"t-001","stage":"separation","durationMs":41200,"event":"stage_completed"}
+{"event":"log","level":"warning","message":"low pitch confidence on 4 syllables","taskId":"t-001"}
+{"event":"gpu_stats","vramMb":5120}
+{"event":"task_finished","taskId":"t-001","outcome":"succeeded","result":{"vocalsPath":"C:/Songs/Queen - Bohemian Rhapsody/vocals.wav","instrumentalPath":"C:/Songs/Queen - Bohemian Rhapsody/instrumental.wav","tempoBpm":71.03,"language":"en","lines":[{"syllables":[{"text":"Is","startMs":1250,"endMs":1500,"startsWord":true,"midiTone":65,"pitchConfidence":0.91,"alignmentConfidence":0.95},{"text":"this","startMs":1520,"endMs":1800,"startsWord":true,"midiTone":65,"pitchConfidence":0.88,"alignmentConfidence":0.93},{"text":"the","startMs":1820,"endMs":2000,"startsWord":true,"midiTone":null,"pitchConfidence":0.2,"alignmentConfidence":0.9},{"text":"real","startMs":2050,"endMs":2600,"startsWord":true,"midiTone":67,"pitchConfidence":0.94,"alignmentConfidence":0.97},{"text":"li","startMs":2650,"endMs":3000,"startsWord":true,"midiTone":65,"pitchConfidence":0.9,"alignmentConfidence":0.96},{"text":"fe","startMs":3000,"endMs":3400,"startsWord":false,"midiTone":63,"pitchConfidence":0.85,"alignmentConfidence":0.96}]},{"syllables":[{"text":"Is","startMs":4100,"endMs":4300,"startsWord":true,"midiTone":65,"pitchConfidence":0.9,"alignmentConfidence":0.94}]}],"models":{"separation":"htdemucs_ft","alignment":"wav2vec2-large-960h","pitch":"swiftf0"}}}
+{"event":"task_finished","taskId":"t-002","outcome":"failed","error":"CUDA out of memory"}
+{"command":"cancel","taskId":"t-002"}
+{"command":"shutdown"}

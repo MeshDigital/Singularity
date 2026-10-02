@@ -1,0 +1,104 @@
+using Singularity.Contracts.Quality;
+using Singularity.Contracts.Song;
+using Xunit;
+
+namespace Singularity.Tests.Contracts;
+
+public class QualityScoringTests
+{
+    [Fact]
+    public void PerfectMetrics_ScoreOne_APlus()
+    {
+        var q = QualityScoring.Assess(new QualityMetrics(1, 1, 1, 1, 1));
+        Assert.Equal(1.0, q.OverallScore);
+        Assert.Equal(QualityTier.APlus, q.Tier);
+    }
+
+    [Fact]
+    public void NoVideo_CapsAt085_TierA()
+    {
+        var q = QualityScoring.Assess(new QualityMetrics(1, 1, 1, 0, 1));
+        Assert.Equal(0.85, q.OverallScore);
+        Assert.Equal(QualityTier.A, q.Tier);
+    }
+
+    [Theory]
+    [InlineData(0.90, QualityTier.APlus)]
+    [InlineData(0.8999, QualityTier.A)]
+    [InlineData(0.75, QualityTier.A)]
+    [InlineData(0.60, QualityTier.B)]
+    [InlineData(0.5999, QualityTier.ReviewRequired)]
+    [InlineData(0.0, QualityTier.ReviewRequired)]
+    public void TierBoundaries(double score, QualityTier expected) =>
+        Assert.Equal(expected, QualityScoring.TierFor(score));
+
+    [Fact]
+    public void ScoreIsRoundedBeforeTiering()
+    {
+        // 0.25*1 + 0.25*0.8 + 0.2*0.75 + 0.15*1 + 0.15*(2/3) = 0.85 exactly → rounding keeps tier stable.
+        var q = QualityScoring.Assess(new QualityMetrics(1, 0.8, 0.75, 1, 2.0 / 3));
+        Assert.Equal(0.85, q.OverallScore);
+        Assert.Equal(QualityScoring.TierFor(q.OverallScore), q.Tier);
+    }
+
+    [Theory]
+    [InlineData(-0.01)]
+    [InlineData(1.01)]
+    [InlineData(double.NaN)]
+    public void OutOfRangeMetric_Throws(double bad) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => QualityScoring.Assess(new QualityMetrics(1, bad, 1, 1, 1)));
+
+    [Fact]
+    public void SubScores()
+    {
+        Assert.Equal(1.0, QualityScoring.AudioMatchScore(AudioMatchKind.FingerprintMatch));
+        Assert.Equal(0.6, QualityScoring.AudioMatchScore(AudioMatchKind.DurationOnly));
+        Assert.Equal(0.0, QualityScoring.AudioMatchScore(AudioMatchKind.Mismatch));
+
+        Assert.True(QualityScoring.IsDurationMatch(200_000, 202_000));
+        Assert.False(QualityScoring.IsDurationMatch(200_000, 202_001));
+
+        Assert.Equal(0.5, QualityScoring.PitchScore(new[] { 0.9, 0.75, 0.8, 0.1 }));
+        Assert.Equal(0.0, QualityScoring.PitchScore(Array.Empty<double>()));
+
+        Assert.Equal(2.0 / 3, QualityScoring.MetadataScore(true, false, true), 6);
+        Assert.Equal(0.7, QualityScoring.LyricScore(new[] { 0.9, 0.5, 0.7 }));
+        Assert.Equal(0.6, QualityScoring.LyricScore(new[] { 0.9, 0.5, 0.7, 0.1 }), 6);
+        Assert.Equal(0.0, QualityScoring.LyricScore(Array.Empty<double>()));
+    }
+}
+
+public class VideoGapConsensusTests
+{
+    [Fact]
+    public void AgreeingWindows_ReturnMedian() =>
+        Assert.Equal(new VideoGapResult(true, -340), VideoGapConsensus.Evaluate(new int?[] { -345, -340, -332 }));
+
+    [Fact]
+    public void AdjacentDifferenceAtTolerance_IsInvalid() =>
+        Assert.False(VideoGapConsensus.Evaluate(new int?[] { 100, 115, 115 }).IsValid);
+
+    [Fact]
+    public void JustUnderTolerance_IsValid() =>
+        Assert.True(VideoGapConsensus.Evaluate(new int?[] { 100, 114, 120 }).IsValid);
+
+    [Fact]
+    public void ExtendedIntro_StructureMismatch()
+    {
+        var r = VideoGapConsensus.Evaluate(new int?[] { 1200, 9200, 9205 });
+        Assert.False(r.IsValid);
+        Assert.Equal(0, r.VideoGapMs);
+        Assert.Equal(0.0, r.Score);
+    }
+
+    [Fact]
+    public void MissingPeakOrTooFewWindows_IsInvalid()
+    {
+        Assert.False(VideoGapConsensus.Evaluate(new int?[] { 10, null, 12 }).IsValid);
+        Assert.False(VideoGapConsensus.Evaluate(new int?[] { 10, 12 }).IsValid);
+    }
+
+    [Fact]
+    public void EvenWindowCount_AveragesMiddlePair() =>
+        Assert.Equal(15, VideoGapConsensus.Evaluate(new int?[] { 10, 14, 16, 20 }).VideoGapMs);
+}

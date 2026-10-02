@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Singularity.csproj" />
+    <ProjectReference Include="..\..\Singularity.Contracts\Singularity.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

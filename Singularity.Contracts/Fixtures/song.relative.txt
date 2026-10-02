@@ -1,0 +1,14 @@
+#TITLE:Relative Example
+#ARTIST:Old Tool
+#MP3:song.mp3
+#BPM:200
+#GAP:0
+#RELATIVE:YES
+: 0 2 0 a
+: 4 2 0 b
+- 8 10
+: 0 2 0 c
+: 3 2 0 d
+- 6
+: 1 2 0 e
+E

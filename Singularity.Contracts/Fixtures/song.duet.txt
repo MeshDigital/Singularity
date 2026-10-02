@@ -1,0 +1,18 @@
+#VERSION:1.1.0
+#TITLE:Duet Example
+#ARTIST:Two Singers
+#AUDIO:audio.mp3
+#MP3:audio.mp3
+#BPM:250
+#GAP:500
+#P1:Alice
+#P2:Bob
+P1
+: 0 4 0 One
+: 4 4 2  two
+- 10
+: 20 4 4 Five
+P2
+: 10 4 7 Three
+: 14 4 5  four
+E

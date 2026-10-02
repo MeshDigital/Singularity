@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Singularity", "Singularity.
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "External", "External", "{FEE985A4-3DE0-4501-8BAA-D51FBE7F4649}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Singularity.Contracts", "Singularity.Contracts\Singularity.Contracts.csproj", "{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,10 +31,20 @@ Global
 		{9E2DB39E-00F6-4049-B33B-3CB624644C8E}.Release|x64.Build.0 = Release|Any CPU
 		{9E2DB39E-00F6-4049-B33B-3CB624644C8E}.Release|x86.ActiveCfg = Release|Any CPU
 		{9E2DB39E-00F6-4049-B33B-3CB624644C8E}.Release|x86.Build.0 = Release|Any CPU
+		{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}.Debug|x64.Build.0 = Debug|Any CPU
+		{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}.Debug|x86.Build.0 = Debug|Any CPU
+		{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}.Release|x64.ActiveCfg = Release|Any CPU
+		{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}.Release|x64.Build.0 = Release|Any CPU
+		{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}.Release|x86.ActiveCfg = Release|Any CPU
+		{192D0A53-5C0A-46CE-BF70-E5A2B4BF0DE5}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(NestedProjects) = preSolution
 	EndGlobalSection
 EndGlobal

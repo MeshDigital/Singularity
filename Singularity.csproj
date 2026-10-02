@@ -26,6 +26,12 @@
   <ItemGroup>
     <Compile Remove="External\**" />
     <Compile Remove="Tests\**" />
+    <Compile Remove="Singularity.Contracts\**" />
+    <None Remove="Singularity.Contracts\**" />
+    <EmbeddedResource Remove="Singularity.Contracts\**" />
+    <Compile Remove="inference\**" />
+    <None Remove="inference\**" />
+    <EmbeddedResource Remove="inference\**" />
     <Compile Remove="artifacts\**" />
     <EmbeddedResource Remove="External\**" />
     <EmbeddedResource Remove="artifacts\**" />
@@ -169,6 +175,10 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
     <Content Remove="Data\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Singularity.Contracts\Singularity.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

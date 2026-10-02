@@ -102,3 +102,6 @@ Tools/Essentia/models/
 # Test fixtures are data, not local state
 !Tests/**/TestData/**/*.json
 __pycache__/
+
+# Shared contract fixtures (parsed by both the C# and Python tests)
+!Singularity.Contracts/Fixtures/*

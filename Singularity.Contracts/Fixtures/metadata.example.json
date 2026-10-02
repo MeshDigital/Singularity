@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "trackId": "spotify:track:4u7EnebtmKWzUH433cf5Qv",
+  "isrc": "GBUM71029604",
+  "fingerprint": {
+    "chromaprint": "AQADtEmUaEkSRZEGAAAAAAAA",
+    "acoustId": "9ff43b6a-4f16-427c-93c2-92307ca505e0",
+    "musicBrainzRecordingId": "b1a9c0e9-d987-4042-ae91-78d6a3267d69"
+  },
+  "title": "Bohemian Rhapsody",
+  "artist": "Queen",
+  "album": "A Night at the Opera",
+  "releaseYear": 1975,
+  "language": "en",
+  "durationMs": 354320,
+  "timing": {
+    "bpm": 284.12,
+    "gapMs": 1250,
+    "videoGapMs": -340,
+    "videoStructureValid": true
+  },
+  "quality": {
+    "overallScore": 0.942,
+    "tier": "a_plus",
+    "metrics": {
+      "audioMatch": 1.0,
+      "lyricAlignment": 0.88,
+      "pitchConfidence": 0.86,
+      "videoMatch": 1.0,
+      "metadataConfidence": 1.0
+    }
+  },
+  "provenance": {
+    "generator": "Singularity/0.1.0",
+    "inferenceEngine": "singularity-inference/0.1.0",
+    "models": {
+      "separation": "htdemucs_ft",
+      "alignment": "wav2vec2-large-960h",
+      "pitch": "swiftf0"
+    },
+    "processedAtUtc": "2026-10-02T14:30:00Z",
+    "processingDurationMs": 84213
+  }
+}
