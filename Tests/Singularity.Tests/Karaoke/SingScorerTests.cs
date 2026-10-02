@@ -121,4 +121,17 @@ public class SingScorerTests
         Assert.Equal(10_000, s.Score.Total);
         Assert.Equal(0, s.Score.LineBonus);
     }
+
+    [Fact]
+    public void EveryBeatOfAScoredNote_IsReportedOnce()
+    {
+        var judged = new List<(int Beat, bool Hit)>();
+        var scorer = new SingScorer(Voice);
+        scorer.BeatJudged += (_, beat, hit) => judged.Add((beat, hit));
+        for (double beat = 0; beat < 16; beat += 0.25) scorer.AddSample(beat, beat < 2 ? 60 : null);
+        scorer.Finish();
+
+        Assert.Equal(Enumerable.Range(0, 8).Concat(Enumerable.Range(10, 4)), judged.Select(j => j.Beat));
+        Assert.Equal(new[] { 0, 1 }, judged.Where(j => j.Hit).Select(j => j.Beat));
+    }
 }

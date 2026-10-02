@@ -101,6 +101,9 @@ public sealed class SingScorer
     /// <summary>Raised when a line has been sung; the UI shows its rating.</summary>
     public event Action<LineResult>? LineCompleted;
 
+    /// <summary>Raised for every judged beat of a scored note; the UI paints hit beats over the note bar.</summary>
+    public event Action<UltraStarNote, int, bool>? BeatJudged;
+
     /// <param name="beat">Song position in (fractional) beats, latency-compensated.</param>
     /// <param name="midi">Sung pitch as a fractional MIDI note, or null for silence.</param>
     public void AddSample(double beat, double? midi)
@@ -148,9 +151,13 @@ public sealed class SingScorer
 
     private void CloseBeat()
     {
-        if (_beatSamples > 0 && _beatHits >= _beatSamples * HitShare)
+        if (_beatSamples == 0) return;
+        bool hit = _beatHits >= _beatSamples * HitShare;
+        var judged = NoteAt(_currentBeat)!;
+        BeatJudged?.Invoke(judged.Note, _currentBeat, hit);
+        if (hit)
         {
-            var note = NoteAt(_currentBeat)!;
+            var note = judged;
             double points = note.Weight * _pointsPerWeight;
             if (note.Note.IsGolden) _goldenScore += points;
             else _notesScore += points;
