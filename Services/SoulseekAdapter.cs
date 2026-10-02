@@ -1,0 +1,2518 @@
+using System.Diagnostics;
+using System.IO;
+using System.Reactive.Subjects;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Configuration;
+using SLSKDONET.Models;
+using Soulseek;
+using System.Linq;
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using System.Collections.ObjectModel;
+using System.Net;
+using System.Net.Sockets;
+using System.Reflection;
+using Open.Nat;
+
+namespace SLSKDONET.Services;
+
+public sealed class SearchLimitExceededException : Exception
+{
+    public int HardResultCap { get; }
+    public int HardFileCap { get; }
+
+    public SearchLimitExceededException(string message, int hardResultCap, int hardFileCap)
+        : base(message)
+    {
+        HardResultCap = hardResultCap;
+        HardFileCap = hardFileCap;
+    }
+}
+
+/// <summary>
+/// Real Soulseek.NET adapter for network interactions.
+/// </summary>
+public partial class SoulseekAdapter : ISoulseekAdapter, IDisposable
+{
+    private sealed record RuntimeNetworkConfigSnapshot(int ConnectTimeout, int ListenPort);
+
+    private static readonly HashSet<string> NonMetadataPathTokens = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "desktop", "downloads", "download", "temp", "incoming", "new folder", "music", "audio"
+    };
+
+    private readonly ILogger<SoulseekAdapter> _logger;
+    private readonly AppConfig _config;
+    private readonly IEventBus _eventBus;
+    private readonly FrequentSourceService? _frequentSourceService;
+    private readonly ShareIndexService _shareIndex;
+    private readonly ChatAttachmentService _chatAttachments;
+    private const int MaxConcurrentUploads = 10;
+    private int _activeUploadCount;
+    private readonly SemaphoreSlim _connectLock = new(1, 1);
+    public bool IsConnected => _client?.State.HasFlag(SoulseekClientStates.Connected) == true && 
+                              !_client.State.HasFlag(SoulseekClientStates.Disconnecting);
+    public int SharedFileCount { get; private set; }
+    
+    public bool IsLoggedIn => _client?.State.HasFlag(SoulseekClientStates.LoggedIn) == true;
+    
+    public event EventHandler<DownloadProgressEventArgs>? DownloadProgressChanged;
+    public event EventHandler<DownloadCompletedEventArgs>? DownloadCompleted;
+    public event EventHandler<UserStatusChangedEventArgs>? UserStatusChanged;
+    public event EventHandler<PrivateMessageReceivedEventArgs>? PrivateMessageReceived;
+    public event EventHandler<RoomMessageReceivedEventArgs>? RoomMessageReceived;
+    public event EventHandler<RoomMembershipChangedEventArgs>? RoomMembershipChanged;
+
+    // Rate Limiting
+    private readonly SemaphoreSlim _rateLimitLock = new(1, 1);
+    private DateTime _searchBucketLastRefillUtc = DateTime.UtcNow;
+    private double _searchBucketTokens = 1d;
+    // Separate bucket/lock for outgoing chat (private + room) messages — independent of search so
+    // the two operation categories don't serialize against or starve each other. See
+    // AppConfig.MessageTokenBucketCapacity/RefillMs.
+    private readonly SemaphoreSlim _messageRateLimitLock = new(1, 1);
+    private DateTime _messageBucketLastRefillUtc = DateTime.UtcNow;
+    private double _messageBucketTokens = 1d;
+    private readonly SemaphoreSlim _upnpLock = new(1, 1);
+    private bool _upnpPortMapped;
+    private DateTime _lastUpnpAttemptUtc = DateTime.MinValue;
+    private static readonly TimeSpan UpnpAttemptCooldown = TimeSpan.FromMinutes(5);
+
+    private readonly Network.ProtocolHardeningService _hardeningService;
+    private readonly ConcurrentDictionary<string, byte> _excludedPhrases = new();
+    private readonly INetworkHealthService _healthService;
+    private RuntimeNetworkConfigSnapshot? _lastAppliedRuntimeNetworkConfig;
+    private string? _pendingDisconnectReason;
+    private string? _lastDiagnosticMessage;
+    private int _outboundSearchInFlight;
+    private static readonly string[] ClientEventNamesToClear =
+    {
+        "StateChanged",
+        "DiagnosticGenerated",
+        "KickedFromServer",
+        "ExcludedSearchPhrasesReceived",
+        "GlobalMessageReceived",
+        "UserStatusChanged",
+        "PrivateMessageReceived",
+        "RoomMessageReceived",
+        "RoomJoined",
+        "RoomLeft"
+    };
+
+    public SoulseekAdapter(ILogger<SoulseekAdapter> logger, AppConfig config, Network.ProtocolHardeningService hardeningService, IEventBus eventBus, INetworkHealthService healthService, ShareIndexService shareIndex, ChatAttachmentService chatAttachments, FrequentSourceService? frequentSourceService = null)
+    {
+        _logger = logger;
+        _config = config;
+        _hardeningService = hardeningService;
+        _eventBus = eventBus;
+        _healthService = healthService;
+        _shareIndex = shareIndex;
+        _shareIndex.CountsChanged += OnShareCountsChanged;
+        _chatAttachments = chatAttachments;
+        _frequentSourceService = frequentSourceService;
+    }
+
+    private SoulseekClient? _client;
+
+    private readonly ResultFingerprinter _resultFingerprinter = new();
+
+    private static int GetEffectiveConnectTimeout(int configuredTimeout)
+        => Math.Max(60_000, configuredTimeout);
+
+    private static int GetEffectiveMessageTimeout(int effectiveConnectTimeout)
+        => Math.Max(120_000, effectiveConnectTimeout);
+
+    private static int GetEffectiveListenPort(int configuredListenPort)
+        => Math.Clamp(configuredListenPort, 1_024, 65_535);
+
+    // Was hardcoded to Math.Clamp(_config.MaxConcurrentDownloads, 1, 10) — silently overriding
+    // any user setting above 10 even though the Settings/Downloads-page slider allows up to 20
+    // and DownloadManager's own app-level semaphore allows up to 50. Soulseek.NET has no inherent
+    // limit here (library default is int.MaxValue) — 10 was an ORBIT-side ceiling that just never
+    // got raised to match the UI. This value is fixed for the lifetime of the connection —
+    // SoulseekClientOptionsPatch (used for live reconfiguration) does not include
+    // MaximumConcurrentDownloads, so a change here only takes full effect after reconnecting.
+    private int GetEffectiveMaxConcurrentDownloads()
+        => Math.Clamp(_config.MaxConcurrentDownloads, 1, 50);
+
+    private void RefillSearchTokens(int capacity, int refillIntervalMs)
+    {
+        var now = DateTime.UtcNow;
+        var elapsedMs = (now - _searchBucketLastRefillUtc).TotalMilliseconds;
+        if (elapsedMs <= 0)
+            return;
+
+        var refillTokens = elapsedMs / Math.Max(1, refillIntervalMs);
+        if (refillTokens <= 0)
+            return;
+
+        _searchBucketTokens = Math.Min(capacity, _searchBucketTokens + refillTokens);
+        _searchBucketLastRefillUtc = now;
+    }
+
+    private int MillisecondsUntilNextToken(int refillIntervalMs)
+    {
+        if (_searchBucketTokens >= 1d)
+            return 0;
+
+        var missing = 1d - _searchBucketTokens;
+        return Math.Max(25, (int)Math.Ceiling(missing * Math.Max(1, refillIntervalMs)));
+    }
+
+    /// <summary>
+    /// Blocks (without holding the caller's own locks) until an outgoing-message token is
+    /// available, per <see cref="AppConfig.MessageTokenBucketCapacity"/>/<c>RefillMs</c>. Same
+    /// token-bucket shape as the search rate limiter above, kept independent so chat sends never
+    /// wait on search dispatch or vice versa.
+    /// </summary>
+    private async Task WaitForMessageTokenAsync(CancellationToken ct)
+    {
+        var capacity = Math.Max(1, _config.MessageTokenBucketCapacity);
+        var refillMs = Math.Max(100, _config.MessageTokenBucketRefillMs);
+
+        while (true)
+        {
+            int waitMs;
+            await _messageRateLimitLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                var now = DateTime.UtcNow;
+                var elapsedMs = (now - _messageBucketLastRefillUtc).TotalMilliseconds;
+                if (elapsedMs > 0)
+                {
+                    var refillTokens = elapsedMs / refillMs;
+                    if (refillTokens > 0)
+                    {
+                        _messageBucketTokens = Math.Min(capacity, _messageBucketTokens + refillTokens);
+                        _messageBucketLastRefillUtc = now;
+                    }
+                }
+
+                if (_messageBucketTokens >= 1d)
+                {
+                    _messageBucketTokens -= 1d;
+                    return;
+                }
+
+                var missing = 1d - _messageBucketTokens;
+                waitMs = Math.Max(25, (int)Math.Ceiling(missing * refillMs));
+            }
+            finally
+            {
+                _messageRateLimitLock.Release();
+            }
+
+            await Task.Delay(waitMs, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Observational wrapper for a single Soulseek protocol call (search, message, download, browse,
+    /// presence, room ops, connect). Every Soulseek operation after the initial connect reuses the
+    /// same already-open TCP connection, so raw socket-level monitoring cannot distinguish one
+    /// operation from another — this call-site wrapper is the only place each operation is
+    /// individually observable. Publishes a <see cref="NetworkActivityEvent"/> for the Settings →
+    /// Advanced → Network Activity feed; never changes control flow (exceptions propagate unchanged).
+    /// </summary>
+    private async Task<T> TrackNetworkCallAsync<T>(string kind, string detail, Func<Task<T>> action)
+    {
+        if (!_config.EnableNetworkActivityMonitor) return await action();
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var result = await action();
+            _eventBus.Publish(new NetworkActivityEvent(DateTime.UtcNow, "Soulseek", kind, detail, sw.ElapsedMilliseconds, true));
+            return result;
+        }
+        catch
+        {
+            _eventBus.Publish(new NetworkActivityEvent(DateTime.UtcNow, "Soulseek", kind, detail, sw.ElapsedMilliseconds, false));
+            throw;
+        }
+    }
+
+    /// <summary>Non-generic overload for calls that return <see cref="Task"/> rather than <see cref="Task{T}"/>.</summary>
+    private async Task TrackNetworkCallAsync(string kind, string detail, Func<Task> action)
+    {
+        if (!_config.EnableNetworkActivityMonitor) { await action(); return; }
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            await action();
+            _eventBus.Publish(new NetworkActivityEvent(DateTime.UtcNow, "Soulseek", kind, detail, sw.ElapsedMilliseconds, true));
+        }
+        catch
+        {
+            _eventBus.Publish(new NetworkActivityEvent(DateTime.UtcNow, "Soulseek", kind, detail, sw.ElapsedMilliseconds, false));
+            throw;
+        }
+    }
+
+    private async Task EnsureUpnpPortMappingAsync(CancellationToken ct)
+    {
+        if (!_config.UseUPnP || _upnpPortMapped)
+            return;
+
+        if (DateTime.UtcNow - _lastUpnpAttemptUtc < UpnpAttemptCooldown)
+            return;
+
+        await _upnpLock.WaitAsync(ct);
+        try
+        {
+            if (!_config.UseUPnP || _upnpPortMapped)
+                return;
+
+            if (DateTime.UtcNow - _lastUpnpAttemptUtc < UpnpAttemptCooldown)
+                return;
+
+            _lastUpnpAttemptUtc = DateTime.UtcNow;
+            var listenPort = GetEffectiveListenPort(_config.ListenPort);
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(8));
+
+            try
+            {
+                var discoverer = new NatDiscoverer();
+                var natDevice = await discoverer.DiscoverDeviceAsync(PortMapper.Upnp, timeoutCts);
+                var mapping = new Mapping(Open.Nat.Protocol.Tcp, listenPort, listenPort, 3600, "ORBIT Soulseek listener");
+                await natDevice.CreatePortMapAsync(mapping);
+
+                _upnpPortMapped = true;
+                _logger.LogInformation("UPnP port mapping established for Soulseek listener on TCP {Port}", listenPort);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                _logger.LogInformation("UPnP discovery timed out for Soulseek listener mapping (TCP {Port})", listenPort);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation(ex, "UPnP mapping skipped or failed non-fatally for TCP {Port}", listenPort);
+            }
+        }
+        finally
+        {
+            _upnpLock.Release();
+        }
+    }
+
+    private static int[] BuildStagedSharePublishPlan(int totalFileCount)
+    {
+        if (totalFileCount <= 0)
+            return new[] { 0 };
+
+        if (totalFileCount >= 200)
+        {
+            return new[]
+            {
+                Math.Min(50, totalFileCount),
+                Math.Min((int)Math.Ceiling(totalFileCount * 0.35), totalFileCount),
+                totalFileCount
+            };
+        }
+
+        if (totalFileCount >= 50)
+        {
+            return new[]
+            {
+                Math.Min(25, totalFileCount),
+                totalFileCount
+            };
+        }
+
+        return new[] { totalFileCount };
+    }
+
+    private async Task PublishSharedCountsStagedAsync(int sharedFolderCount, int sharedFileCount, CancellationToken ct)
+    {
+        if (_client == null)
+            return;
+
+        var plan = BuildStagedSharePublishPlan(sharedFileCount);
+        var lastPublishedCount = -1;
+
+        foreach (var count in plan)
+        {
+            if (count <= lastPublishedCount)
+                continue;
+
+            await _client.SetSharedCountsAsync(sharedFolderCount, count, ct);
+            lastPublishedCount = count;
+
+            if (count < sharedFileCount)
+            {
+                await Task.Delay(300, ct);
+            }
+        }
+    }
+
+    private RuntimeNetworkConfigSnapshot CreateRuntimeNetworkConfigSnapshot()
+        => new(
+            ConnectTimeout: GetEffectiveConnectTimeout(_config.ConnectTimeout),
+            ListenPort: GetEffectiveListenPort(_config.ListenPort));
+
+    private void MarkPendingDisconnectReason(string reason)
+    {
+        Interlocked.Exchange(ref _pendingDisconnectReason, reason);
+    }
+
+    private string PeekPendingDisconnectReasonOrDefault(string fallback)
+    {
+        var pendingReason = Interlocked.CompareExchange(ref _pendingDisconnectReason, null, null);
+        return string.IsNullOrWhiteSpace(pendingReason) ? fallback : pendingReason;
+    }
+
+    private string ConsumePendingDisconnectReasonOrDefault(string fallback)
+    {
+        var pendingReason = Interlocked.Exchange(ref _pendingDisconnectReason, null);
+        return string.IsNullOrWhiteSpace(pendingReason) ? fallback : pendingReason;
+    }
+
+    private string ClassifyDisconnectBucket(string? contextMessage, SoulseekClientStates previousState)
+    {
+        var message = contextMessage?.ToLowerInvariant() ?? string.Empty;
+
+        if (message.Contains("connection reset"))
+            return "TRANSPORT_FAULT_CONNECTION_RESET";
+        if (message.Contains("timed out") || message.Contains("timeout"))
+            return "KEEP_ALIVE_TIMEOUT";
+        if (message.Contains("unable to read") || message.Contains("ioexception") || message.Contains("stream"))
+            return "STREAM_IO_FAULT";
+        if (message.Contains("end of stream") || message.Contains("argumentoutofrange") || message.Contains("outofmemory") || message.Contains("message length") || message.Contains("buffer"))
+            return "PROTOCOL_VIOLATION";
+        if (message.Contains("disposed"))
+            return "LOCAL_CLIENT_DISPOSED";
+        if (message.Contains("login rejected") || message.Contains("invalid password") || message.Contains("invalid credentials"))
+            return "SERVER_AUTH_REJECTED";
+        if (message.Contains("refused") || message.Contains("econnrefused"))
+            return "SERVER_REFUSED_TCP";
+
+        if (previousState.HasFlag(SoulseekClientStates.LoggedIn))
+            return "UNKNOWN_UNPLANNED_DROP_LOGGED_IN";
+
+        return "UNKNOWN_UNPLANNED_DROP";
+    }
+
+    private string ClassifyConnectFailureBucket(Exception ex)
+    {
+        var message = ex.ToString().ToLowerInvariant();
+        if (message.Contains("address already in use") || message.Contains("only one usage of each socket address"))
+            return "LISTEN_PORT_BIND_IN_USE";
+        if (message.Contains("end of stream") || message.Contains("argumentoutofrange") || message.Contains("outofmemory") || message.Contains("message length") || message.Contains("buffer"))
+            return "PROTOCOL_VIOLATION";
+
+        var failure = DiagnoseConnectionFailure(ex);
+        return failure switch
+        {
+            ConnectionFailureStatus.LoginRejected => "SERVER_AUTH_REJECTED",
+            ConnectionFailureStatus.ConnectionRefused => "SERVER_REFUSED_TCP",
+            ConnectionFailureStatus.NetworkTimeout => "TRANSPORT_FAULT_NETWORK_TIMEOUT",
+            ConnectionFailureStatus.AuthenticationTimeout => "KEEP_ALIVE_TIMEOUT",
+            ConnectionFailureStatus.UnexpectedDisconnection => "TRANSPORT_FAULT_UNEXPECTED_DISCONNECT",
+            _ => "UNKNOWN_CONNECT_FAILURE"
+        };
+    }
+
+    private void QueueLibraryCallback(string callbackName, Action work)
+    {
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                work();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Unhandled exception in Soulseek callback {CallbackName}", callbackName);
+            }
+        });
+    }
+
+    // Configures OS-level TCP keepalives on the Soulseek server socket.
+    // Without this, a silently-dropped NAT mapping or router reboot leaves the TCP socket
+    // half-open indefinitely — the app thinks it's connected but no data ever arrives.
+    // With keepalives: after 30 s of idle the OS sends probes every 5 s; after 3 failures
+    // (~45 s total) the socket is closed and Soulseek.NET fires the disconnect event.
+    private static void ConfigureServerSocket(Socket socket)
+    {
+        socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+
+        if (OperatingSystem.IsWindows())
+        {
+            // tcp_keepalive struct: [onoff(4)] [keepalivetime(4)] [keepaliveinterval(4)] — all little-endian uint32
+            byte[] ka = new byte[12];
+            BitConverter.GetBytes((uint)1).CopyTo(ka, 0);        // enable
+            BitConverter.GetBytes((uint)30_000).CopyTo(ka, 4);   // idle before first probe: 30 s
+            BitConverter.GetBytes((uint)5_000).CopyTo(ka, 8);    // interval between probes: 5 s
+            socket.IOControl(IOControlCode.KeepAliveValues, ka, null);
+        }
+    }
+
+    private SoulseekClientOptions CreateClientOptions()
+    {
+        var runtime = CreateRuntimeNetworkConfigSnapshot();
+        var serverConnectionOptions = new ConnectionOptions(
+            connectTimeout: runtime.ConnectTimeout,
+            configureSocket: ConfigureServerSocket);
+        var messageTimeout = GetEffectiveMessageTimeout(runtime.ConnectTimeout);
+
+        return new SoulseekClientOptions(
+            enableListener: true,
+            listenIPAddress: IPAddress.Any,
+            listenPort: runtime.ListenPort,
+            serverConnectionOptions: serverConnectionOptions,
+            messageTimeout: messageTimeout,
+            // NOTE: Keep Soulseek search concurrency at 1 for correctness.
+            // Under concurrent searches, callback payloads can be interleaved across active queries,
+            // causing false "no results" decisions in discovery despite valid candidates existing.
+            maximumConcurrentSearches: 1,
+            maximumConcurrentDownloads: GetEffectiveMaxConcurrentDownloads(),
+            maximumConcurrentUploads: MaxConcurrentUploads,
+            searchResponseResolver: ResolveSearchResponseAsync,
+            browseResponseResolver: ResolveBrowseResponseAsync,
+            directoryContentsResolver: ResolveDirectoryContentsAsync,
+            userInfoResolver: ResolveUserInfoAsync,
+            enqueueDownload: HandleEnqueueDownloadAsync,
+            placeInQueueResolver: ResolvePlaceInQueueAsync);
+    }
+
+    // ── Serving: answer incoming browse/search/download requests from peers ──────────────
+    // Everything here answers from ShareIndexService only — never from a peer-supplied path
+    // directly — so an incoming request can only ever resolve to a file we chose to share.
+
+    private Task<SearchResponse> ResolveSearchResponseAsync(string username, int token, Soulseek.SearchQuery query)
+    {
+        var matches = _shareIndex.Search(query);
+        if (matches.Count == 0)
+            return Task.FromResult<SearchResponse>(null!);
+
+        var hasFreeSlot = Volatile.Read(ref _activeUploadCount) < MaxConcurrentUploads;
+        var files = matches.Select(m => ShareIndexService.BuildFile(m.VirtualPath, m.Entry, basenameOnly: false));
+        var response = new SearchResponse(
+            _client?.Username ?? username,
+            token,
+            hasFreeSlot,
+            uploadSpeed: 0,
+            queueLength: 0,
+            files,
+            Enumerable.Empty<Soulseek.File>());
+
+        return Task.FromResult(response);
+    }
+
+    private Task<BrowseResponse> ResolveBrowseResponseAsync(string username, IPEndPoint endpoint)
+    {
+        var directories = _shareIndex.GetAllDirectories();
+        return Task.FromResult(new BrowseResponse(directories, Enumerable.Empty<Soulseek.Directory>()));
+    }
+
+    private Task<IEnumerable<Soulseek.Directory>> ResolveDirectoryContentsAsync(string username, IPEndPoint endpoint, int token, string directoryName)
+    {
+        var directory = _shareIndex.GetDirectory(directoryName);
+        IEnumerable<Soulseek.Directory> result = directory is not null ? new[] { directory } : null!;
+        return Task.FromResult(result);
+    }
+
+    private Task<UserInfo> ResolveUserInfoAsync(string username, IPEndPoint endpoint)
+    {
+        var hasFreeSlot = Volatile.Read(ref _activeUploadCount) < MaxConcurrentUploads;
+        return Task.FromResult(new UserInfo("Singularity", MaxConcurrentUploads, 0, hasFreeSlot, Array.Empty<byte>()));
+    }
+
+    private Task<int?> ResolvePlaceInQueueAsync(string username, IPEndPoint endpoint, string filename)
+        => Task.FromResult<int?>(0);
+
+    private Task HandleEnqueueDownloadAsync(string username, IPEndPoint endpoint, string filename)
+    {
+        if (_shareIndex.TryGetEntry(filename, out var shareEntry) && shareEntry is not null)
+        {
+            _ = UploadSharedFileAsync(username, filename, shareEntry);
+            return Task.CompletedTask;
+        }
+
+        if (_chatAttachments.TryAuthorize(filename, username, out var attachmentEntry) && attachmentEntry is not null)
+        {
+            _ = UploadSharedFileAsync(username, filename, attachmentEntry);
+            return Task.CompletedTask;
+        }
+
+        throw new DownloadEnqueueException("File not shared.");
+    }
+
+    private async Task UploadSharedFileAsync(string username, string virtualFilename, ShareIndexEntry entry)
+    {
+        if (_client == null)
+            return;
+
+        Interlocked.Increment(ref _activeUploadCount);
+        try
+        {
+            await _client.UploadAsync(username, virtualFilename, entry.LocalPath, cancellationToken: CancellationToken.None);
+            _logger.LogInformation("Uploaded {File} to {Username}", virtualFilename, username);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Upload of {File} to {Username} failed", virtualFilename, username);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _activeUploadCount);
+        }
+    }
+
+    private SoulseekClientOptionsPatch CreateRuntimeNetworkOptionsPatch(RuntimeNetworkConfigSnapshot runtime)
+    {
+        var serverConnectionOptions = new ConnectionOptions(
+            connectTimeout: runtime.ConnectTimeout,
+            configureSocket: ConfigureServerSocket);
+
+        return new SoulseekClientOptionsPatch(
+            enableListener: true,
+            listenIPAddress: IPAddress.Any,
+            listenPort: runtime.ListenPort,
+            serverConnectionOptions: serverConnectionOptions);
+    }
+
+    private void SafeDisposeClient(SoulseekClient client, string reason)
+    {
+        ClearClientEventHandlers(client, reason);
+
+        try
+        {
+            if (!client.State.HasFlag(SoulseekClientStates.Disconnected) &&
+                !client.State.HasFlag(SoulseekClientStates.Disconnecting))
+            {
+                client.Disconnect();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Soulseek disconnect during {Reason} failed non-fatally", reason);
+        }
+
+        try
+        {
+            client.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Soulseek dispose during {Reason} failed non-fatally", reason);
+        }
+    }
+
+    private void ClearClientEventHandlers(SoulseekClient client, string reason)
+    {
+        foreach (var eventName in ClientEventNamesToClear)
+        {
+            try
+            {
+                var field = typeof(SoulseekClient).GetField(eventName, BindingFlags.Instance | BindingFlags.NonPublic);
+                if (field?.FieldType != null && typeof(MulticastDelegate).IsAssignableFrom(field.FieldType))
+                {
+                    field.SetValue(client, null);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Unable to clear Soulseek client event handler '{EventName}' during {Reason}", eventName, reason);
+            }
+        }
+    }
+
+    private static void PublishTracksInBatches(Action<IEnumerable<Track>> onTracksFound, List<Track> tracks, int batchSize)
+    {
+        if (tracks.Count <= 0)
+            return;
+
+        if (tracks.Count <= batchSize)
+        {
+            onTracksFound(tracks);
+            return;
+        }
+
+        for (var offset = 0; offset < tracks.Count; offset += batchSize)
+        {
+            var take = Math.Min(batchSize, tracks.Count - offset);
+            onTracksFound(tracks.GetRange(offset, take));
+        }
+    }
+
+    public async Task ConnectAsync(string? password = null, CancellationToken ct = default)
+    {
+        await _connectLock.WaitAsync(ct);
+        try
+        {
+            Interlocked.Exchange(ref _pendingDisconnectReason, null);
+
+            if (IsConnected && IsLoggedIn) 
+            {
+                _logger.LogInformation("Already connected and logged in as {Username}.", _config.Username);
+                return;
+            }
+
+            var existingClient = _client;
+            if (existingClient != null)
+            {
+                var existingState = existingClient.State;
+                var isActiveConnectAttempt =
+                    existingState.HasFlag(SoulseekClientStates.Connecting) ||
+                    (existingState.HasFlag(SoulseekClientStates.Connected) &&
+                     !existingState.HasFlag(SoulseekClientStates.Disconnecting) &&
+                     !existingState.HasFlag(SoulseekClientStates.Disconnected) &&
+                     !existingState.HasFlag(SoulseekClientStates.LoggedIn));
+
+                if (isActiveConnectAttempt)
+                {
+                    _logger.LogInformation(
+                        "Connect requested while Soulseek login is already in progress (State: {State}). Waiting for existing attempt.",
+                        existingState);
+
+                    var readyClient = await WaitForReadyClientAsync(ct);
+                    if (readyClient != null)
+                    {
+                        _logger.LogInformation("Soulseek became ready via existing login attempt; skipping client recycle.");
+                        return;
+                    }
+
+                    _logger.LogWarning("Existing Soulseek login attempt did not reach ready state. Recycling client for a fresh connect attempt.");
+                }
+            }
+
+            var oldClient = _client;
+            if (oldClient != null)
+            {
+                _client = null;
+                SafeDisposeClient(oldClient, "connect swap");
+            }
+
+            var runtime = CreateRuntimeNetworkConfigSnapshot();
+            var clientOptions = CreateClientOptions();
+            var effectiveMessageTimeout = GetEffectiveMessageTimeout(runtime.ConnectTimeout);
+            var client = new SoulseekClient(minorVersion: _config.SoulseekMinorVersion, options: clientOptions);
+            _client = client;
+            _lastAppliedRuntimeNetworkConfig = runtime;
+
+            _logger.LogInformation(
+                "Soulseek client configured: minorVersion={MinorVersion}, messageTimeout={MessageTimeout}ms, listenPort={ListenPort}, maxSearches={MaxSearches}, maxDownloads={MaxDownloads}",
+                _config.SoulseekMinorVersion,
+                effectiveMessageTimeout,
+                runtime.ListenPort,
+                1,
+                GetEffectiveMaxConcurrentDownloads());
+            
+            // Subscribe to state changes BEFORE connecting to catch early login states
+            client.StateChanged += (sender, args) =>
+            {
+                if (!ReferenceEquals(sender, _client))
+                {
+                    _logger.LogDebug(
+                        "Ignoring Soulseek state change from stale client instance: {State} (was {PreviousState})",
+                        args.State,
+                        args.PreviousState);
+                    return;
+                }
+
+                var state = args.State;
+                var previousState = args.PreviousState;
+                QueueLibraryCallback("StateChanged", () =>
+                {
+                    _logger.LogInformation("Soulseek state change: {State} (was {PreviousState})",
+                        state, previousState);
+
+                    var disconnectBucket = ClassifyDisconnectBucket(
+                        Interlocked.CompareExchange(ref _lastDiagnosticMessage, null, null),
+                        previousState);
+
+                    var disconnectingFallback = $"DROP:[{disconnectBucket}] unplanned disconnecting while previous={previousState}";
+                    var disconnectedFallback = $"DROP:[{disconnectBucket}] unplanned disconnected while previous={previousState}";
+
+                    if (state.HasFlag(SoulseekClientStates.Disconnecting))
+                    {
+                        var reason = PeekPendingDisconnectReasonOrDefault(disconnectingFallback);
+                        _eventBus.Publish(new SoulseekConnectionStatusEvent("disconnecting", _config.Username ?? "Unknown", reason));
+                    }
+
+                    if (state.HasFlag(SoulseekClientStates.Disconnected))
+                    {
+                        var reason = ConsumePendingDisconnectReasonOrDefault(disconnectedFallback);
+                        _eventBus.Publish(new SoulseekConnectionStatusEvent("disconnected", _config.Username ?? "Unknown", reason));
+                    }
+
+                    _healthService.RecordConnectionStateChange(state.ToString());
+
+                    _eventBus.Publish(new SoulseekStateChangedEvent(
+                        State: state.ToString(),
+                        IsConnected: state.HasFlag(SoulseekClientStates.Connected) && !state.HasFlag(SoulseekClientStates.Disconnecting),
+                        IsConnecting: state.HasFlag(SoulseekClientStates.Connecting),
+                        IsLoggingIn: state.HasFlag(SoulseekClientStates.Connected)
+                                     && !state.HasFlag(SoulseekClientStates.LoggedIn)
+                                     && !state.HasFlag(SoulseekClientStates.Disconnecting)
+                                     && !state.HasFlag(SoulseekClientStates.Disconnected),
+                        IsLoggedIn: state.HasFlag(SoulseekClientStates.LoggedIn),
+                        IsDisconnecting: state.HasFlag(SoulseekClientStates.Disconnecting),
+                        IsDisconnected: state.HasFlag(SoulseekClientStates.Disconnected)));
+                });
+            };
+
+            client.DiagnosticGenerated += (sender, args) =>
+            {
+                if (!ReferenceEquals(sender, _client))
+                {
+                    return;
+                }
+
+                Interlocked.Exchange(ref _lastDiagnosticMessage, args.Message);
+                _logger.LogDebug("[SoulseekLib] {Level}: {Message}", args.Level, args.Message);
+            };
+
+            client.KickedFromServer += (sender, args) =>
+            {
+                if (!ReferenceEquals(sender, _client))
+                {
+                    return;
+                }
+
+                QueueLibraryCallback("KickedFromServer", () =>
+                {
+                    _logger.LogWarning("Soulseek server kicked this session. Enforcing reconnect cooldown.");
+                    MarkPendingDisconnectReason("kicked from server");
+                    _healthService.RecordConnectionKick("KickedFromServer event");
+                    _eventBus.Publish(new SoulseekConnectionStatusEvent("kicked", _config.Username ?? "Unknown", "kicked from server"));
+                });
+            };
+
+            // Ban detection: server sends "You have been banned" as a GlobalMessage.
+            // When detected, publish SearchBanDetectedEvent so search queues can pause for 30 minutes.
+            client.GlobalMessageReceived += (sender, message) =>
+            {
+                if (!ReferenceEquals(sender, _client)) return;
+                if (string.IsNullOrWhiteSpace(message)) return;
+
+                var lower = message.ToLowerInvariant();
+                if (lower.Contains("banned") || lower.Contains("ban"))
+                {
+                    var lockoutUntil = DateTime.UtcNow.AddMinutes(30);
+                    _logger.LogWarning(
+                        "🚨 [BAN DETECTED] Soulseek server issued ban. Pausing all searches until {Until:HH:mm:ss} UTC. Message: {Message}",
+                        lockoutUntil, message);
+                    _healthService.RecordConnectionKick("server-ban:" + message);
+                    _eventBus.Publish(new SearchBanDetectedEvent(message, lockoutUntil));
+                }
+                else
+                {
+                    _logger.LogInformation("[Soulseek GlobalMessage] {Message}", message);
+                }
+            };
+
+            // Phase 5/10: Adhere to new global exclusions from Soulseek Server
+            client.ExcludedSearchPhrasesReceived += (sender, phrases) =>
+            {
+                if (!ReferenceEquals(sender, _client))
+                {
+                    return;
+                }
+
+                var phraseSnapshot = phrases?.ToArray() ?? Array.Empty<string>();
+                QueueLibraryCallback("ExcludedSearchPhrasesReceived", () =>
+                {
+                    var phraseList = phraseSnapshot
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .Select(p => p.Trim())
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    int added = 0;
+                    foreach (var phrase in phraseList)
+                    {
+                        if (_excludedPhrases.TryAdd(phrase.ToLowerInvariant(), 0))
+                            added++;
+                    }
+
+                    if (phraseList.Count > 0)
+                    {
+                        _hardeningService.UpdateExcludedPhrases(phraseList);
+                        _eventBus.Publish(new ExcludedSearchPhrasesUpdatedEvent(phraseList, added, _excludedPhrases.Count));
+
+                        if (added > 0)
+                        {
+                            _logger.LogInformation("Added {Added} new excluded search phrases. Total known exclusions: {Total}", added, _excludedPhrases.Count);
+                        }
+                    }
+                });
+            };
+
+            // Social: presence, 1:1 chat, room events — mirror the guard/dispatch pattern above.
+            client.UserStatusChanged += (sender, args) =>
+            {
+                if (!ReferenceEquals(sender, _client)) return;
+
+                QueueLibraryCallback("UserStatusChanged", () =>
+                {
+                    UserStatusChanged?.Invoke(this, new UserStatusChangedEventArgs(
+                        args.Username, MapPresence(args.Presence), args.IsPrivileged));
+                });
+            };
+
+            client.PrivateMessageReceived += (sender, args) =>
+            {
+                if (!ReferenceEquals(sender, _client)) return;
+
+                QueueLibraryCallback("PrivateMessageReceived", () =>
+                {
+                    PrivateMessageReceived?.Invoke(this, new PrivateMessageReceivedEventArgs(
+                        args.Id, args.Username, args.Message, args.Timestamp, args.Replayed));
+                });
+            };
+
+            client.RoomMessageReceived += (sender, args) =>
+            {
+                if (!ReferenceEquals(sender, _client)) return;
+
+                QueueLibraryCallback("RoomMessageReceived", () =>
+                {
+                    RoomMessageReceived?.Invoke(this, new RoomMessageReceivedEventArgs(
+                        args.RoomName, args.Username, args.Message, DateTime.UtcNow));
+                });
+            };
+
+            client.RoomJoined += (sender, args) =>
+            {
+                if (!ReferenceEquals(sender, _client)) return;
+
+                QueueLibraryCallback("RoomJoined", () =>
+                {
+                    RoomMembershipChanged?.Invoke(this, new RoomMembershipChangedEventArgs(
+                        args.RoomName, args.Username, joined: true));
+                });
+            };
+
+            client.RoomLeft += (sender, args) =>
+            {
+                if (!ReferenceEquals(sender, _client)) return;
+
+                QueueLibraryCallback("RoomLeft", () =>
+                {
+                    RoomMembershipChanged?.Invoke(this, new RoomMembershipChangedEventArgs(
+                        args.RoomName, args.Username, joined: false));
+                });
+            };
+
+            _logger.LogInformation("Connecting to Soulseek as {Username} on {Server}:{Port}...",
+                _config.Username, _config.SoulseekServer, _config.SoulseekPort);
+            
+            await TrackNetworkCallAsync("Connect", $"{_config.SoulseekServer}:{_config.SoulseekPort}", () => client.ConnectAsync(
+                _config.SoulseekServer ?? "server.slsknet.org",
+                _config.SoulseekPort == 0 ? 2242 : _config.SoulseekPort,
+                _config.Username,
+                password,
+                ct));
+
+            await EnsureUpnpPortMappingAsync(ct);
+            
+            _logger.LogInformation("Successfully connected to Soulseek as {Username}", _config.Username);
+            _eventBus.Publish(new SoulseekConnectionStatusEvent("connected", _config.Username ?? "Unknown"));
+
+            // Phase 5: Protocol Mastery - Reciprocal Sharing
+            if (_config.EnableLibrarySharing)
+            {
+                try
+                {
+                    await RefreshShareStateAsync(ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to set shared folders: {Message}", ex.Message);
+                }
+            }
+            else
+            {
+                // Phase 6: Sharing explicitly disabled — set Bad tier so user knows
+                SharedFileCount = 0;
+                _eventBus.Publish(new ShareHealthUpdatedEvent(
+                    SharedFolderCount: 0,
+                    SharedFileCount: 0,
+                    IsSharing: false,
+                    Note: "Sharing is disabled. Enable in Settings to contribute to the network."));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Soulseek connect attempt was cancelled.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var bucket = ClassifyConnectFailureBucket(ex);
+            _logger.LogError(ex, "Failed to connect to Soulseek: {Message}. Bucket=[{Bucket}]", ex.Message, bucket);
+            
+            // Diagnose connection failure type
+            var failureStatus = DiagnoseConnectionFailure(ex);
+            _healthService.RecordConnectionFailure(failureStatus, $"DROP:[{bucket}] {ex.Message}");
+            
+            throw;
+        }
+        finally
+        {
+            _connectLock.Release();
+        }
+    }
+
+    public async Task<bool> ApplyRuntimeNetworkConfigurationAsync(CancellationToken ct = default)
+    {
+        var client = _client;
+        if (client == null)
+        {
+            _logger.LogDebug("Runtime network reconfigure skipped because Soulseek client has not been created yet.");
+            return false;
+        }
+
+        var runtime = CreateRuntimeNetworkConfigSnapshot();
+        if (_lastAppliedRuntimeNetworkConfig == runtime)
+        {
+            _logger.LogDebug(
+                "Runtime network reconfigure skipped because connectTimeout={ConnectTimeout}ms and listenPort={ListenPort} are unchanged.",
+                runtime.ConnectTimeout,
+                runtime.ListenPort);
+            return false;
+        }
+
+        var isOperational = client.State.HasFlag(SoulseekClientStates.Connected) &&
+                            !client.State.HasFlag(SoulseekClientStates.Disconnecting) &&
+                            !client.State.HasFlag(SoulseekClientStates.Disconnected);
+
+        if (!isOperational)
+        {
+            _lastAppliedRuntimeNetworkConfig = runtime;
+            _logger.LogInformation(
+                "Deferred runtime network reconfigure until next Soulseek connect (connectTimeout={ConnectTimeout}ms, listenPort={ListenPort}, state={State}).",
+                runtime.ConnectTimeout,
+                runtime.ListenPort,
+                client.State);
+            return false;
+        }
+
+        var patch = CreateRuntimeNetworkOptionsPatch(runtime);
+        var changed = await client.ReconfigureOptionsAsync(patch, ct);
+        _lastAppliedRuntimeNetworkConfig = runtime;
+
+        _logger.LogInformation(
+            "Applied Soulseek runtime network reconfigure: changed={Changed}, connectTimeout={ConnectTimeout}ms, listenPort={ListenPort}",
+            changed,
+            runtime.ConnectTimeout,
+            runtime.ListenPort);
+
+        return changed;
+    }
+
+    public async Task RefreshShareStateAsync(CancellationToken ct = default)
+    {
+        if (_client == null || !_config.EnableLibrarySharing)
+        {
+            SharedFileCount = 0;
+            return;
+        }
+
+        var state = _client.State;
+        var canPublishShares = state.HasFlag(SoulseekClientStates.Connected) && state.HasFlag(SoulseekClientStates.LoggedIn);
+        if (!canPublishShares)
+        {
+            _logger.LogInformation("Skipping reciprocal share refresh because Soulseek is not fully connected/logged in (State: {State})", state);
+            _eventBus.Publish(new ShareHealthUpdatedEvent(
+                SharedFolderCount: 0,
+                SharedFileCount: SharedFileCount,
+                IsSharing: false,
+                Note: $"Waiting for Soulseek login before publishing shared counts (state: {state})."));
+            return;
+        }
+
+        var shareFolders = ResolveShareFolders();
+        if (shareFolders.Length <= 0)
+        {
+            SharedFileCount = 0;
+            _eventBus.Publish(new ShareHealthUpdatedEvent(
+                SharedFolderCount: 0,
+                SharedFileCount: 0,
+                IsSharing: false,
+                Note: "Sharing enabled in config but no valid folder resolved."));
+            return;
+        }
+
+        // Announce what a peer actually gets when browsing: the index's music files and the folders
+        // they sit in. This used to send the number of shared ROOTS as the folder count (5) and every
+        // file of any type as the file count — leech-detection scripts read these server-side stats,
+        // and "5 folders" reads as a tiny share.
+        _shareIndex.EnsureFresh();
+        var sharedFileCount = _shareIndex.FileCount;
+        var sharedDirectoryCount = _shareIndex.DirectoryCount;
+        SharedFileCount = sharedFileCount;
+        _logger.LogInformation("Publishing shares: {Files} music file(s) in {Dirs} folder(s) from {Roots} root(s): {Folders}",
+            sharedFileCount, sharedDirectoryCount, shareFolders.Length, string.Join(", ", shareFolders));
+
+        try
+        {
+            await PublishSharedCountsStagedAsync(sharedDirectoryCount, sharedFileCount, ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Share refresh skipped because Soulseek disconnected during publish step (State: {State})", _client.State);
+            _eventBus.Publish(new ShareHealthUpdatedEvent(
+                SharedFolderCount: shareFolders.Length,
+                SharedFileCount: sharedFileCount,
+                IsSharing: false,
+                Note: "Share publish skipped because connection dropped during update."));
+            return;
+        }
+
+        _eventBus.Publish(new SharedFilesStatusEvent(shareFolders.Length, string.Join(";", shareFolders)));
+        _eventBus.Publish(new ShareHealthUpdatedEvent(
+            SharedFolderCount: sharedDirectoryCount,
+            SharedFileCount: sharedFileCount,
+            IsSharing: true));
+    }
+
+    /// <summary>
+    /// The share index changed (downloads finished, a Library Source was added…): tell the server
+    /// the new counts right away instead of only at the next login, which is all that happened before.
+    /// </summary>
+    private void OnShareCountsChanged(object? sender, (int Files, int Directories) counts)
+    {
+        var client = _client;
+        if (client == null || !_config.EnableLibrarySharing) return;
+        if (!client.State.HasFlag(SoulseekClientStates.Connected) || !client.State.HasFlag(SoulseekClientStates.LoggedIn)) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await client.SetSharedCountsAsync(counts.Directories, counts.Files);
+                SharedFileCount = counts.Files;
+                _logger.LogInformation("Share counts updated on the server: {Files} file(s) in {Dirs} folder(s)", counts.Files, counts.Directories);
+                _eventBus.Publish(new ShareHealthUpdatedEvent(
+                    SharedFolderCount: counts.Directories,
+                    SharedFileCount: counts.Files,
+                    IsSharing: true));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not update share counts on the server");
+            }
+        });
+    }
+
+    public async Task DisconnectAsync()
+    {
+        TryDisconnectClient("manual async disconnect");
+        await Task.CompletedTask;
+    }
+
+    public void Disconnect()
+    {
+        TryDisconnectClient("manual disconnect");
+    }
+
+    private bool TryDisconnectClient(string reason)
+    {
+        if (_client == null)
+            return false;
+
+        var state = _client.State;
+        if (state.HasFlag(SoulseekClientStates.Disconnecting) || state.HasFlag(SoulseekClientStates.Disconnected))
+        {
+            _logger.LogDebug("Skipped Soulseek disconnect for {Reason} because client state is already {State}", reason, state);
+            return false;
+        }
+
+        try
+        {
+            _logger.LogInformation("[DISCONNECT] Executing Soulseek disconnect for reason '{Reason}' (State: {State})", reason, state);
+            MarkPendingDisconnectReason(reason);
+            _client.Disconnect();
+            _logger.LogInformation("Disconnected from Soulseek ({Reason})", reason);
+            return true;
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Sequence contains no elements", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(ex, "Soulseek disconnect hit library race during {Reason}; treating as already disconnected.", reason);
+            return false;
+        }
+    }
+
+    private async Task<int> SearchCoreAsync(
+        string query,
+        IEnumerable<string>? formatFilter,
+        (int? Min, int? Max) bitrateFilter,
+        DownloadMode mode,
+        Action<IEnumerable<Track>> onTracksFound,
+        SearchExecutionProfile? executionProfile,
+        Action<SearchLimitExceededException>? onLimitExceeded,
+        CancellationToken ct,
+        Soulseek.SearchScope? scope = null)
+    {
+        using var searchLifetimeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var effectiveCt = searchLifetimeCts.Token;
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _logger.LogDebug("Search skipped because query was empty.");
+            return 0;
+        }
+
+        // Correctness-first: serialize outbound searches until per-query callback isolation exists.
+        var maxOutboundSearches = 1;
+        while (true)
+        {
+            effectiveCt.ThrowIfCancellationRequested();
+            var currentInFlight = Volatile.Read(ref _outboundSearchInFlight);
+            if (currentInFlight < maxOutboundSearches
+                && Interlocked.CompareExchange(ref _outboundSearchInFlight, currentInFlight + 1, currentInFlight) == currentInFlight)
+            {
+                break;
+            }
+
+            await Task.Delay(25, effectiveCt);
+        }
+
+        var client = await WaitForReadyClientAsync(effectiveCt);
+        if (client == null)
+        {
+            _logger.LogInformation("Search skipped for query {SearchQuery} because Soulseek client is not ready.", query);
+            return 0;
+        }
+
+        var directories = new ConcurrentDictionary<string, List<Soulseek.File>>();
+        var resultCount = 0;
+        var totalFilesReceived = 0;
+        var filteredByFormat = 0;
+        var filteredByBitrate = 0;
+        var filteredBySampleRate = 0;
+        var filteredByQueue = 0;
+        var filteredByDedup = 0;
+        var pendingCallbacks = 0;
+        var searchDispatchCompleted = 0;
+        // Protocol-level telemetry: raw peer response count (before any per-file filtering) and
+        // the terminal search state, both sourced from the library's own SearchOptions callbacks
+        // rather than inferred from our own counters — tells us whether "0 results" means "0 peers
+        // replied" vs "peers replied but every file got filtered" vs "the search was cancelled/errored".
+        var peersResponded = 0;
+        var finalSearchState = Soulseek.SearchStates.None;
+        var callbackDrainTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var hardCapTriggered = 0;
+        var formatSet = formatFilter?.Select(f => f.ToLowerInvariant()).ToHashSet() ?? new HashSet<string>();
+        var hardResultCap = Math.Max(1000, _config.SearchHardResultCap);
+        var hardFileCap = Math.Max(0, _config.SearchHardFileCap);
+        var excludedPhraseSet = new ReadOnlyCollection<string>(_excludedPhrases.Keys.ToList());
+        // Beta 2026: Result fingerprinting — deduplicate by (FileName + FileSize + Duration) within one search.
+        // Reduces noise by up to 70% on popular tracks shared by many peers.
+        var seenThisSearch = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var minBitrateStr = bitrateFilter.Min?.ToString() ?? "0";
+            var maxBitrateStr = (bitrateFilter.Max == null || bitrateFilter.Max == 0) ? "∞" : bitrateFilter.Max.ToString()!;
+
+            // Golden Rule: Rate Limiting (configurable global delay, default 200ms)
+            while (true)
+            {
+                var extraDelay = Math.Max(0, executionProfile?.AdditionalThrottleDelayMs ?? 0);
+                var tokenCapacity = Math.Max(1, executionProfile?.TokenBucketCapacity ?? _config.SearchTokenBucketCapacity);
+                var tokenRefillMs = Math.Max(500, executionProfile?.TokenRefillIntervalMs ?? _config.SearchTokenBucketRefillMs);
+                var waitMs = 0;
+
+                await _rateLimitLock.WaitAsync(effectiveCt);
+                try
+                {
+                    RefillSearchTokens(tokenCapacity, tokenRefillMs);
+                    if (_searchBucketTokens >= 1d)
+                    {
+                        _searchBucketTokens -= 1d;
+                        break;
+                    }
+
+                    waitMs = MillisecondsUntilNextToken(tokenRefillMs) + extraDelay;
+                    _logger.LogDebug(
+                        "Search token bucket empty. Waiting {WaitMs}ms before dispatch (capacity={Capacity}, refill={RefillMs}ms).",
+                        waitMs,
+                        tokenCapacity,
+                        tokenRefillMs);
+                }
+
+                finally
+                {
+                    _rateLimitLock.Release();
+                }
+
+                await Task.Delay(waitMs, effectiveCt);
+            }
+
+            _logger.LogInformation("Search started for query {SearchQuery} with mode {SearchMode}, format filter {FormatFilter}, bitrate range {MinBitrate}-{MaxBitrate}",
+                query, mode, formatFilter == null ? "NONE" : string.Join(", ", formatFilter), minBitrateStr, maxBitrateStr);
+
+            // NEW Phase 12.2: Proactive Network Safety - Prevent sending banned phrases
+            var lowerQuery = query.ToLowerInvariant();
+            if (_excludedPhrases.Count > 0)
+            {
+                 foreach (var phrase in _excludedPhrases.Keys)
+                 {
+                     if (lowerQuery.Contains(phrase))
+                     {
+                         _logger.LogWarning("🚨 [NETWORK SAFETY] Aborting search to prevent soft-ban: Query '{Query}' contains banned phrase '{Phrase}'", query, phrase);
+                         _healthService.RecordExcludedPhraseQueryBlock();
+                         return 0;
+                     }
+                 }
+            }
+            
+            var searchQuery = Soulseek.SearchQuery.FromText(query);
+            var responseLimit = executionProfile?.EffectiveResponseLimit ?? Math.Max(20, _config.SearchResponseLimit);
+            var fileLimit = executionProfile?.EffectiveFileLimit ?? Math.Max(20, _config.SearchFileLimit);
+            if (executionProfile != null)
+            {
+                _eventBus.Publish(new SearchPressureStatusEvent(
+                    executionProfile.PressureLevel.ToString(),
+                    Math.Max(20, responseLimit),
+                    Math.Max(20, fileLimit),
+                    Math.Max(1, executionProfile.EffectiveVariationCap),
+                    Math.Max(0, executionProfile.AdditionalThrottleDelayMs)));
+            }
+            var maxPeerQueueLength = Math.Max(0, _config.MaxPeerQueueLength);
+            var options = new SearchOptions(
+                searchTimeout: Math.Max(5000, _config.SearchTimeout),
+                responseLimit: Math.Max(20, responseLimit),
+                filterResponses: true,
+                minimumResponseFileCount: 1,
+                maximumPeerQueueLength: maxPeerQueueLength,
+                fileLimit: Math.Max(20, fileLimit),
+                removeSingleCharacterSearchTerms: true,
+                // Reject a whole response up front when its queue is already past our ceiling —
+                // every file in it would fail the same per-file queue check in fileFilter below,
+                // so this just avoids iterating them one by one.
+                responseFilter: response =>
+                    maxPeerQueueLength <= 0 || response.QueueLength <= maxPeerQueueLength,
+                fileFilter: file =>
+                {
+                    var decision = SearchFilterPolicy.EvaluateFile(
+                        file,
+                        formatSet,
+                        bitrateFilter,
+                        _config.PreferredMaxSampleRate,
+                        excludedPhraseSet);
+                    return decision.IsAccepted;
+                },
+                responseReceived: _ => Interlocked.Increment(ref peersResponded),
+                stateChanged: args => finalSearchState = args.Search.State
+            );
+
+            // The SearchAsync method in the library (or wrapper) seems to handle the waiting internally 
+            // based on the stack trace showing SearchToCallbackAsync waiting.
+            // So we just await the search initialization/execution.
+            void TrySignalCallbackDrain()
+            {
+                if (Volatile.Read(ref searchDispatchCompleted) == 1 && Volatile.Read(ref pendingCallbacks) == 0)
+                {
+                    callbackDrainTcs.TrySetResult();
+                }
+            }
+
+            await TrackNetworkCallAsync("Search", query, () => client.SearchAsync(
+                searchQuery,
+                (response) =>
+                {
+                    Interlocked.Increment(ref pendingCallbacks);
+
+                    _logger.LogDebug("Received response from {User} with {Count} files", response.Username, response.Files.Count());
+
+                    try
+                    {
+                        var foundTracksInResponse = new List<Track>();
+
+                        // Process each search response
+                        foreach (var file in response.Files)
+                        {
+                            if (mode == DownloadMode.Album)
+                            {
+                                var directoryName = Path.GetDirectoryName(file.Filename);
+                                if (!string.IsNullOrEmpty(directoryName))
+                                {
+                                    var key = $"{response.Username}@{directoryName}";
+                                    directories.AddOrUpdate(key, 
+                                        _ => new List<Soulseek.File> { file }, 
+                                        (_, list) => { list.Add(file); return list; });
+                                }
+                            }
+                            else // Normal mode
+                            {
+                                var currentFileCount = Interlocked.Increment(ref totalFilesReceived);
+                                if (hardFileCap > 0 && currentFileCount > hardFileCap)
+                                {
+                                    if (Interlocked.CompareExchange(ref hardCapTriggered, 1, 0) == 0)
+                                    {
+                                        var reason = $"Hard file cap reached ({hardFileCap}) for query '{query}'";
+                                        _logger.LogWarning("{Reason}", reason);
+                                        _eventBus.Publish(new SearchHardCapTriggeredEvent(query, hardResultCap, hardFileCap, reason));
+                                        onLimitExceeded?.Invoke(new SearchLimitExceededException(reason, hardResultCap, hardFileCap));
+                                        searchLifetimeCts.Cancel();
+                                    }
+
+                                    return;
+                                }
+
+                                var extension = Path.GetExtension(file.Filename)?.TrimStart('.').ToLowerInvariant();
+                                var fileDecision = SearchFilterPolicy.EvaluateFile(
+                                    file,
+                                    formatSet,
+                                    bitrateFilter,
+                                    _config.PreferredMaxSampleRate,
+                                    excludedPhraseSet,
+                                    Math.Max(0, _config.MaxPeerQueueLength),
+                                    response.QueueLength);
+
+                                if (!fileDecision.IsAccepted)
+                                {
+                                    switch (fileDecision.Reason)
+                                    {
+                                        case SearchRejectionReason.Format:
+                                            var formatRejects = Interlocked.Increment(ref filteredByFormat);
+                                            if (formatRejects <= 3)
+                                            {
+                                                _logger.LogInformation("[FILTER] Rejected by format: {File} (extension: {Ext}, allowed: {Formats})", file.Filename, extension, string.Join(", ", formatSet));
+                                            }
+                                            break;
+                                        case SearchRejectionReason.Bitrate:
+                                            Interlocked.Increment(ref filteredByBitrate);
+                                            break;
+                                        case SearchRejectionReason.SampleRate:
+                                            Interlocked.Increment(ref filteredBySampleRate);
+                                            break;
+                                        case SearchRejectionReason.Queue:
+                                            Interlocked.Increment(ref filteredByQueue);
+                                            break;
+                                    }
+                                    continue;
+                                }
+
+                                var lengthAttr = file.Attributes?.FirstOrDefault(a => a.Type == Soulseek.FileAttributeType.Length);
+                                var rawDurationSeconds = lengthAttr?.Value ?? 0;
+
+                                // Beta 2026: Fingerprint dedup with peer-awareness.
+                                // Keep duplicates only when they come from a better queue peer.
+                                var fpKey = _resultFingerprinter.Create(file.Filename, file.Size, rawDurationSeconds);
+                                var isDedupReplacement = false;
+                                if (seenThisSearch.TryGetValue(fpKey, out var existingQueue))
+                                {
+                                    if (response.QueueLength < existingQueue)
+                                    {
+                                        seenThisSearch[fpKey] = response.QueueLength;
+                                        isDedupReplacement = true;
+                                    }
+                                    else
+                                    {
+                                        Interlocked.Increment(ref filteredByDedup);
+                                        continue;
+                                    }
+                                }
+                                else
+                                {
+                                    seenThisSearch.TryAdd(fpKey, response.QueueLength);
+                                }
+
+                                // Memory Optimization: Only allocate Track object for files that survive the filters
+                                // Use the helper method to parse metadata correctly
+                                var track = ParseTrackFromFile(file, response);
+                                track.Metadata ??= new Dictionary<string, object>();
+                                track.Metadata["IsDedup"] = isDedupReplacement;
+
+                                var acceptedCount = Interlocked.Increment(ref resultCount);
+                                if (acceptedCount > hardResultCap)
+                                {
+                                    if (Interlocked.CompareExchange(ref hardCapTriggered, 1, 0) == 0)
+                                    {
+                                        var reason = $"Hard result cap reached ({hardResultCap}) for query '{query}'";
+                                        _logger.LogWarning("{Reason}", reason);
+                                        _eventBus.Publish(new SearchHardCapTriggeredEvent(query, hardResultCap, hardFileCap, reason));
+                                        onLimitExceeded?.Invoke(new SearchLimitExceededException(reason, hardResultCap, hardFileCap));
+                                        searchLifetimeCts.Cancel();
+                                    }
+
+                                    return;
+                                }
+
+                                if (acceptedCount <= 3) // Log first 3 matches
+                                {
+                                    _logger.LogInformation("[ACCEPT] Track passed filters: {Artist} - {Title} ({Bitrate} kbps, {Ext})", track.Artist, track.Title, track.Bitrate, extension);
+                                }
+
+                                foundTracksInResponse.Add(track);
+                            }
+                        }
+                        
+                        if (foundTracksInResponse.Any())
+                        {
+                            PublishTracksInBatches(onTracksFound, foundTracksInResponse, 50);
+                        }
+                    }
+                    finally
+                    {
+                        if (Interlocked.Decrement(ref pendingCallbacks) == 0)
+                        {
+                            TrySignalCallbackDrain();
+                        }
+                    }
+                },
+                scope: scope ?? Soulseek.SearchScope.Network,
+                options: options,
+                cancellationToken: effectiveCt
+            ));
+
+            Volatile.Write(ref searchDispatchCompleted, 1);
+            TrySignalCallbackDrain();
+
+            if (Volatile.Read(ref pendingCallbacks) > 0)
+            {
+                using var callbackDrainTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(effectiveCt);
+                callbackDrainTimeoutCts.CancelAfter(TimeSpan.FromSeconds(2));
+                try
+                {
+                    await callbackDrainTcs.Task.WaitAsync(callbackDrainTimeoutCts.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    _logger.LogWarning(
+                        "Search callback drain timed out for query {SearchQuery}; returning with {Pending} callback(s) still pending.",
+                        query,
+                        Volatile.Read(ref pendingCallbacks));
+                }
+            }
+
+            var finalResultCount = Volatile.Read(ref resultCount);
+            var finalTotalFilesReceived = Volatile.Read(ref totalFilesReceived);
+            var finalFilteredByFormat = Volatile.Read(ref filteredByFormat);
+            var finalFilteredByBitrate = Volatile.Read(ref filteredByBitrate);
+            var finalFilteredBySampleRate = Volatile.Read(ref filteredBySampleRate);
+            var finalFilteredByQueue = Volatile.Read(ref filteredByQueue);
+            var finalFilteredByDedup = Volatile.Read(ref filteredByDedup);
+
+            if (mode == DownloadMode.Album)
+            {
+                _logger.LogInformation("Found {Count} potential album directories.", directories.Count);
+                // TODO: In a future step, we would rank these directories and create album download jobs.
+                // For now, we will just log them.
+                finalResultCount = directories.Count;
+            }
+            else
+            {
+                finalResultCount = Math.Min(finalResultCount, hardResultCap);
+                if (hardFileCap > 0)
+                {
+                    finalTotalFilesReceived = Math.Min(finalTotalFilesReceived, hardFileCap);
+                }
+            }
+
+            _logger.LogInformation(
+                "Search completed ({State}): {ResultCount} results from {TotalFiles} files, {PeersResponded} peers responded " +
+                "(filtered: {FormatFiltered} format, {BitrateFiltered} bitrate, {SampleRateFiltered} sample-rate, " +
+                "{QueueFiltered} queue, {DedupFiltered} dedup)",
+                finalSearchState, finalResultCount, finalTotalFilesReceived, Volatile.Read(ref peersResponded),
+                finalFilteredByFormat, finalFilteredByBitrate,
+                finalFilteredBySampleRate, finalFilteredByQueue, finalFilteredByDedup);
+
+            _healthService.RecordSearchFiltering(
+                finalFilteredByFormat,
+                finalFilteredByBitrate,
+                finalFilteredBySampleRate,
+                finalFilteredByQueue,
+                finalFilteredByDedup,
+                0);
+
+            // Record search results for health diagnostics
+            _healthService.RecordSearch(query, finalTotalFilesReceived, finalResultCount, true);
+            
+            return finalResultCount;
+        }
+        catch (OperationCanceledException)
+        {
+             _logger.LogInformation("Search cancelled for query {SearchQuery}", query);
+             return Volatile.Read(ref resultCount); // Return whatever we found before cancellation
+        }
+        catch (Exception ex)
+        {
+             // Check if we are shutting down or disconnected
+             var state = _client?.State;
+             if (ct.IsCancellationRequested ||
+                 state.HasValue &&
+                 (state.Value.HasFlag(SoulseekClientStates.Disconnected) || state.Value.HasFlag(SoulseekClientStates.Disconnecting)))
+             {
+                 _logger.LogWarning("Search aborted for query {SearchQuery} due to connection shutdown: {Message}", query, ex.Message);
+                 _healthService.RecordSearchFiltering(
+                     filteredByFormat,
+                     filteredByBitrate,
+                     filteredBySampleRate,
+                     filteredByQueue,
+                     filteredByDedup,
+                     0);
+                 _healthService.RecordSearch(query, totalFilesReceived, resultCount, false, "Connection shutdown");
+                 return resultCount; 
+             }
+             
+             _logger.LogError(ex, "Search failed for query {SearchQuery} with mode {SearchMode}", query, mode);
+             _healthService.RecordSearchFiltering(
+                 filteredByFormat,
+                 filteredByBitrate,
+                 filteredBySampleRate,
+                 filteredByQueue,
+                 filteredByDedup,
+                 0);
+             _healthService.RecordSearch(query, totalFilesReceived, resultCount, false, ex.Message);
+             // Re-throw if it's not a shutdown scenario? 
+             // Actually, returning 0 or partial results is safer than crashing the flow if the search fails.
+             // But let's stick to previous logic: throw if it's a real error.
+             throw; 
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _outboundSearchInFlight);
+        }
+    }
+
+    private async Task<SoulseekClient?> WaitForReadyClientAsync(CancellationToken ct)
+    {
+        int initWait = 0;
+        const int maxInitWait = 10;
+        while (_client == null && initWait < maxInitWait)
+        {
+            _logger.LogDebug("Waiting for Soulseek client initialization (attempt {Attempt}/{Max})", initWait + 1, maxInitWait);
+            await Task.Delay(200, ct);
+            initWait++;
+        }
+
+        var client = _client;
+        if (client == null)
+            return null;
+
+        if (client.State.HasFlag(SoulseekClientStates.Disconnecting) || client.State.HasFlag(SoulseekClientStates.Disconnected))
+            return null;
+
+        int waitRetries = 0;
+        const int retryDelayMs = 500;
+        var maxWaitRetries = Math.Max(20, GetEffectiveConnectTimeout(_config.ConnectTimeout) / retryDelayMs);
+        var waitStartUtc = DateTime.UtcNow;
+        var nextProgressLogAtSeconds = 2 + Random.Shared.Next(0, 2);
+
+        while (!client.State.HasFlag(SoulseekClientStates.LoggedIn) && waitRetries < maxWaitRetries)
+        {
+            await Task.Delay(retryDelayMs, ct);
+            waitRetries++;
+
+            var elapsedSeconds = (int)(DateTime.UtcNow - waitStartUtc).TotalSeconds;
+            if (elapsedSeconds >= nextProgressLogAtSeconds)
+            {
+                _logger.LogDebug(
+                    "Waiting for Soulseek login... (State: {State}, Elapsed: {Elapsed}s, Attempt {Attempt}/{Max})",
+                    client.State,
+                    elapsedSeconds,
+                    waitRetries,
+                    maxWaitRetries);
+                nextProgressLogAtSeconds += 2 + Random.Shared.Next(0, 2);
+            }
+
+            client = _client;
+            if (client == null)
+                return null;
+            if (client.State.HasFlag(SoulseekClientStates.Disconnecting) || client.State.HasFlag(SoulseekClientStates.Disconnected))
+                return null;
+        }
+
+        if (!client.State.HasFlag(SoulseekClientStates.LoggedIn))
+        {
+            _logger.LogInformation("Soulseek not logged in yet after readiness wait (State: {State})", client.State);
+            return null;
+        }
+
+        return client;
+    }
+
+    public async IAsyncEnumerable<Track> StreamResultsAsync(
+        string query,
+        IEnumerable<string>? formatFilter,
+        (int? Min, int? Max) bitrateFilter,
+        DownloadMode mode,
+        SearchExecutionProfile? executionProfile = null,
+        [EnumeratorCancellation] CancellationToken ct = default,
+        SearchScopeKind scopeKind = SearchScopeKind.Network)
+    {
+        var channel = System.Threading.Channels.Channel.CreateUnbounded<Track>();
+        var searchCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Exception? streamFailure = null;
+        SearchLimitExceededException? capException = null;
+
+        // Run the existing search logic in a background task
+        // We use the existing SearchAsync but redirect its "onTracksFound" callback to write to the channel
+        var searchTask = Task.Run(async () =>
+        {
+            try
+            {
+                await SearchCoreAsync(query, formatFilter, bitrateFilter, mode, (tracks) =>
+                {
+                    foreach (var track in tracks)
+                    {
+                        channel.Writer.TryWrite(track);
+                    }
+                }, executionProfile,
+                onLimitExceeded: ex =>
+                {
+                    capException = ex;
+                    searchCts.Cancel();
+                },
+                searchCts.Token,
+                scope: scopeKind == SearchScopeKind.Wishlist ? Soulseek.SearchScope.Wishlist : null);
+            }
+            catch (OperationCanceledException) when (capException != null)
+            {
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal cancellation, ignore
+            }
+            catch (Exception ex)
+            {
+                streamFailure = ex;
+                if (ct.IsCancellationRequested || !(_client?.State.HasFlag(SoulseekClientStates.LoggedIn) ?? false))
+                {
+                    _logger.LogWarning("Background stream search stopped: {Message}", ex.Message);
+                }
+                else
+                {
+                    _logger.LogWarning(ex, "Error in background streaming search for {Query}", query);
+                }
+            }
+            finally
+            {
+                channel.Writer.Complete(streamFailure ?? capException);
+            }
+        }, ct); // Use outer CT for Task scheduling.
+
+        // Yield results from the channel
+        while (await channel.Reader.WaitToReadAsync(ct))
+        {
+            while (channel.Reader.TryRead(out var track))
+            {
+                yield return track;
+            }
+        }
+
+        await searchTask;
+
+        if (streamFailure != null)
+            throw streamFailure;
+
+        if (capException != null)
+            throw capException;
+    }
+
+    public async Task<List<Track>> SearchUserForTrackAsync(
+        string username,
+        string query,
+        IEnumerable<string>? formatFilter,
+        (int? Min, int? Max) bitrateFilter,
+        int timeoutMs,
+        CancellationToken ct = default)
+    {
+        var results = new List<Track>();
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(query))
+        {
+            return results;
+        }
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromMilliseconds(Math.Max(500, timeoutMs)));
+
+        try
+        {
+            await SearchCoreAsync(
+                query,
+                formatFilter,
+                bitrateFilter,
+                DownloadMode.Normal,
+                onTracksFound: tracks => results.AddRange(tracks),
+                executionProfile: null,
+                onLimitExceeded: null,
+                timeoutCts.Token,
+                scope: Soulseek.SearchScope.User(new[] { username }));
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Targeted timeout — normal when the known-good peer no longer has the file or is slow.
+        }
+
+        return results;
+    }
+
+    private Track ParseTrackFromFile(Soulseek.File file, Soulseek.SearchResponse response)
+    {
+        // Extract bitrate and length from file attributes
+        var bitrateAttr = file.Attributes?.FirstOrDefault(a => a.Type == FileAttributeType.BitRate);
+        var bitrate = bitrateAttr?.Value ?? 0;
+        var lengthAttr = file.Attributes?.FirstOrDefault(a => a.Type == FileAttributeType.Length);
+        var length = lengthAttr?.Value ?? 0;
+
+        // If bitrate is not reported by peer, infer it from File Size and Length
+        if (bitrate <= 0 && length > 0 && file.Size > 0)
+        {
+            // Inferred bitrate: (Size in bytes * 8 bits/byte) / (Length in seconds * 1000)
+            bitrate = (int)((file.Size * 8) / (length * 1000));
+        }
+        
+        var sampleRateAttr = file.Attributes?.FirstOrDefault(a => a.Type == FileAttributeType.SampleRate);
+        var sampleRate = sampleRateAttr?.Value;
+        
+        var bitDepthAttr = file.Attributes?.FirstOrDefault(a => a.Type == FileAttributeType.BitDepth);
+        var bitDepth = bitDepthAttr?.Value;
+
+        var pathSegments = file.Filename
+            .Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(segment => segment.Trim())
+            .Where(segment => !string.IsNullOrWhiteSpace(segment))
+            .ToList();
+
+        var rawFilename = Path.GetFileNameWithoutExtension(file.Filename);
+        var cleanFilename = CleanTrackToken(rawFilename);
+
+        string artist = "Unknown Artist";
+        string title = cleanFilename;
+        string album = string.Empty;
+
+        // Path-first intelligence: treat directory chain as primary metadata source.
+        if (pathSegments.Count >= 2)
+        {
+            var parentAlbum = CleanTrackToken(pathSegments[^2]);
+            if (IsLikelyMetadataSegment(parentAlbum))
+            {
+                album = parentAlbum;
+            }
+        }
+
+        if (pathSegments.Count >= 3)
+        {
+            var parentArtist = CleanTrackToken(pathSegments[^3]);
+            if (IsLikelyMetadataSegment(parentArtist))
+            {
+                artist = parentArtist;
+            }
+        }
+
+        // Safe filename fallback: only split when explicit artist-title delimiter exists.
+        var filenameParts = Regex.Split(cleanFilename, @"\s[-–—]\s", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+        if (filenameParts.Length >= 2)
+        {
+            var filenameArtist = CleanTrackToken(filenameParts[0]);
+            var filenameTitle = CleanTrackToken(string.Join(" - ", filenameParts.Skip(1)));
+
+            if (!string.IsNullOrWhiteSpace(filenameTitle))
+            {
+                // If path artist is unavailable or generic, trust filename artist.
+                if (artist == "Unknown Artist" || !IsLikelyMetadataSegment(artist))
+                {
+                    artist = string.IsNullOrWhiteSpace(filenameArtist) ? artist : filenameArtist;
+                }
+
+                title = filenameTitle;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            title = rawFilename;
+        }
+
+        if (string.IsNullOrWhiteSpace(album) && pathSegments.Count >= 2)
+        {
+            album = CleanTrackToken(pathSegments[^2]);
+        }
+
+        var track = new Track
+        {
+            Artist = artist,
+            Title = title,
+            Album = album,
+            PathSegments = pathSegments, // Phase 1.1: Context for the Brain
+            Filename = file.Filename,
+            Directory = Path.GetDirectoryName(file.Filename),
+            Username = response.Username,
+            Format = Path.GetExtension(file.Filename)?.TrimStart('.').ToLowerInvariant(),
+            Bitrate = bitrate,
+            SampleRate = sampleRate,
+            BitDepth = bitDepth,
+            Size = file.Size,
+            Length = length,
+            SoulseekFile = file,
+            
+            HasFreeUploadSlot = response.HasFreeUploadSlot,
+            QueueLength = response.QueueLength,
+            UploadSpeed = response.UploadSpeed
+        };
+
+        return track;
+    }
+
+    private static string CleanTrackToken(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var cleaned = Regex.Replace(value, @"^\d{1,3}[\s\-_.]+", string.Empty, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+        cleaned = Regex.Replace(cleaned, @"\[[^\]]*\]|\([^\)]*\)", " ", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+        cleaned = Regex.Replace(cleaned, @"\s{2,}", " ", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+        return cleaned.Trim();
+    }
+
+    private static bool IsLikelyMetadataSegment(string segment)
+    {
+        if (string.IsNullOrWhiteSpace(segment))
+            return false;
+
+        var normalized = segment.Trim();
+        if (NonMetadataPathTokens.Contains(normalized))
+            return false;
+
+        return normalized.Length >= 2;
+    }
+
+    // Delegates to ShareIndexService — the single source of truth for share-folder resolution
+    // (Library Sources + the legacy SharedFolderPath/DownloadDirectory extras), so the count
+    // announced to the server always matches what the serving pipeline actually indexes.
+    private string[] ResolveShareFolders() => _shareIndex.ResolveShareFolders();
+
+    public async Task<bool> DownloadAsync(
+        string username,
+        string filename,
+        string outputPath,
+        long? size = null,
+        IProgress<double>? progress = null,
+        Action<TransferLifecycleUpdate>? lifecycleUpdate = null,
+        CancellationToken ct = default,
+        long startOffset = 0,  // Phase 2.5: Add resume support
+        bool suppressCompletionEventOnFailure = false)
+    {
+        if (this._client == null)
+        {
+            throw new InvalidOperationException("Not connected to Soulseek");
+        }
+
+        try
+        {
+            this._logger.LogInformation("Downloading {Filename} from {Username} to {OutputPath} (offset: {Offset})", 
+                filename, username, outputPath, startOffset);
+            
+            // Check if already cancelled
+            ct.ThrowIfCancellationRequested();
+
+            var directory = Path.GetDirectoryName(outputPath);
+            if (directory != null)
+                System.IO.Directory.CreateDirectory(directory);
+
+            // Track state for timeout logic
+            DateTime lastActivity = DateTime.UtcNow;
+            long lastBytes = startOffset;  // Start from existing bytes
+            bool isQueued = false;
+            bool transferStartedOrQueued = false;
+            TransferLifecyclePhase? lastPhase = null;
+            DateTime queueStartTime = DateTime.UtcNow; // Phase 3D: Detect zombie peers stuck in queue
+            var connectFailFastSeconds = Math.Clamp(_config.PeerConnectFailFastSeconds, 5, 30);
+            var stallTimeoutSeconds = Math.Clamp(_config.TransferStallTimeoutSeconds, 15, 180);
+
+            // Queue Velocity: zombie detection based on position *stagnation*, not elapsed time.
+            // A popular peer with 500 people in queue is healthy; a dead peer whose position
+            // never moves is a zombie. We give the peer an initial grace period to report any
+            // position at all, then track whether the position actually improves over time.
+            int lastKnownQueuePosition = -1;                    // -1 = never reported
+            DateTime queuePositionLastChanged = DateTime.UtcNow; // Reset whenever position improves
+            // Initial grace: peer gets up to MaxQueueWaitMinutes * 60 seconds total, but must show
+            // *some* queue progress within QUEUE_STAGNATION_WINDOW_SECONDS.
+            // e.g. 15 min stagnation = zombie. A 500-deep queue should move every few minutes.
+            var maxQueueWaitSeconds = Math.Max(300, _config.MaxQueueWaitTimeMinutes * 60);
+            const int QUEUE_INITIAL_GRACE_SECONDS = 120;  // Allow 2 min before any position is required
+            const int QUEUE_STAGNATION_WINDOW_SECONDS = 300; // was 900 — 5 min stagnation = zombie; re-discover faster instead of waiting 15 min on dead peers
+
+            var downloadOptions = new TransferOptions(
+                stateChanged: (args) =>
+                {
+                    // Update queued status
+                    if (args.Transfer.State.HasFlag(TransferStates.Queued))
+                    {
+                        if (!isQueued)
+                        {
+                            queueStartTime = DateTime.UtcNow; // Phase 3D: Record when queue started
+                            queuePositionLastChanged = DateTime.UtcNow; // Velocity clock starts now
+                        }
+                        isQueued = true;
+                        transferStartedOrQueued = true;
+                        if (lastPhase != TransferLifecyclePhase.RemoteQueued)
+                        {
+                            lastPhase = TransferLifecyclePhase.RemoteQueued;
+                            lifecycleUpdate?.Invoke(new TransferLifecycleUpdate(
+                                TransferLifecyclePhase.RemoteQueued,
+                                "Queued remotely by peer"));
+                        }
+                    }
+                    else if (args.Transfer.State.HasFlag(TransferStates.InProgress))
+                    {
+                        isQueued = false;
+                        transferStartedOrQueued = true;
+                        if (lastPhase != TransferLifecyclePhase.Transferring)
+                        {
+                            lastPhase = TransferLifecyclePhase.Transferring;
+                            lifecycleUpdate?.Invoke(new TransferLifecycleUpdate(
+                                TransferLifecyclePhase.Transferring,
+                                startOffset > 0 ? "Transfer resumed" : "Transfer started"));
+                        }
+                        
+                        // Check for progress activity
+                        if (args.Transfer.BytesTransferred > lastBytes)
+                        {
+                            lastBytes = args.Transfer.BytesTransferred;
+                            lastActivity = DateTime.UtcNow;
+                        }
+
+                        if (size.HasValue && size.Value > 0)
+                        {
+                            double percentage = (double)args.Transfer.BytesTransferred / size.Value;
+                            progress?.Report(percentage);
+                            
+                            DownloadProgressChanged?.Invoke(this, new DownloadProgressEventArgs(
+                                filename, username, percentage, args.Transfer.BytesTransferred, size.Value));
+                        }
+                    }
+                });
+
+            // Phase 2.5: Use Append mode if resuming, Create if starting fresh
+            var fileMode = startOffset > 0 ? FileMode.Append : FileMode.Create;
+            FileStream? fileStream = null;
+            using var downloadCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            Task? downloadTask = null;
+            var transferCompleted = false;
+            
+            try
+            {
+                fileStream = new FileStream(outputPath, fileMode, FileAccess.Write, FileShare.None, 8192, useAsync: true);
+                
+                // We wrap the Soulseek DownloadAsync in our own task to enforce our custom timeout logic
+                // The underlying client has some timeout logic, but we want granular control over "Stalled vs Queued"
+                downloadTask = this._client.DownloadAsync(
+                    username,
+                    filename,
+                    () => Task.FromResult((Stream)fileStream),
+                    size,
+                    startOffset: startOffset,  // Pass the offset to Soulseek client
+                    options: downloadOptions,
+                    cancellationToken: downloadCts.Token);
+
+                // Download completion/failure already has dedicated events (TransferFinishedEvent/
+                // TransferFailedEvent below); this just marks dispatch for the network activity feed —
+                // the stall-detection loop below can cancel/retry independently of the underlying
+                // call, so there's no single "call finished" point to wrap with TrackNetworkCallAsync.
+                if (_config.EnableNetworkActivityMonitor)
+                {
+                    _eventBus.Publish(new NetworkActivityEvent(DateTime.UtcNow, "Soulseek", "Download", $"{username}: {filename}", null, true));
+                }
+
+                // Monitoring Loop
+                while (!downloadTask.IsCompleted)
+                {
+                    var idleSeconds = (DateTime.UtcNow - lastActivity).TotalSeconds;
+                    if (!transferStartedOrQueued && idleSeconds > connectFailFastSeconds)
+                    {
+                        downloadCts.Cancel();
+                        throw new TimeoutException($"Peer did not respond within {connectFailFastSeconds} seconds.");
+                    }
+
+                    // Check if we should time out
+                    // Modified: Only timeout if NOT queued and no activity for configured stall window
+                    if (!isQueued && idleSeconds > stallTimeoutSeconds)
+                    {
+                        // STALLED: Not queued, but no bytes moved for configured timeout
+                        downloadCts.Cancel();
+                        throw new TimeoutException($"Transfer stalled for {stallTimeoutSeconds} seconds (0 bytes received).");
+                    }
+                    
+                    // Phase 3D: ZOMBIE DETECTION via Queue Velocity.
+                    // We do NOT use a static elapsed-time timeout because healthy popular peers
+                    // can legitimately have 500+ queued users (45min+ waits are normal on Soulseek).
+                    // Instead, we check whether the peer-reported queue POSITION has improved
+                    // within a reasonable stagnation window. No movement = dead peer.
+                    if (isQueued)
+                    {
+                        var totalQueueSeconds = (DateTime.UtcNow - queueStartTime).TotalSeconds;
+                        var stagnationSeconds = (DateTime.UtcNow - queuePositionLastChanged).TotalSeconds;
+                        
+                        // Absolute cap: never wait beyond MaxQueueWaitTimeMinutes config
+                        if (totalQueueSeconds > maxQueueWaitSeconds)
+                        {
+                            downloadCts.Cancel();
+                            throw new TimeoutException(
+                                $"Queue exceeded maximum configured wait of {_config.MaxQueueWaitTimeMinutes} minutes. Dropping peer.");
+                        }
+                        
+                        // After the initial grace period, require that position has moved at least once.
+                        // If position is still -1 (never reported), the peer is likely dead.
+                        if (totalQueueSeconds > QUEUE_INITIAL_GRACE_SECONDS && lastKnownQueuePosition == -1)
+                        {
+                            downloadCts.Cancel();
+                            throw new TimeoutException(
+                                $"Peer never reported a queue position after {QUEUE_INITIAL_GRACE_SECONDS}s grace. Dropping zombie peer.");
+                        }
+                        
+                        // Position stagnation check: if we have a known position and it hasn't
+                        // improved in QUEUE_STAGNATION_WINDOW_SECONDS, the peer is a zombie.
+                        if (lastKnownQueuePosition > 0 && stagnationSeconds > QUEUE_STAGNATION_WINDOW_SECONDS)
+                        {
+                            downloadCts.Cancel();
+                            throw new TimeoutException(
+                                $"Queue position stagnant at #{lastKnownQueuePosition} for {stagnationSeconds:0}s (zombie peer). Dropping peer.");
+                        }
+                    }
+                    
+                    // If we are queued but not stuck, we wait for user cancellation
+                    // Queue timeout above prevents indefinite hanging
+
+                    await Task.WhenAny(downloadTask, Task.Delay(1000, ct));
+                }
+
+                await downloadTask; // Propagate exceptions/completion
+                transferCompleted = true;
+                
+                this._logger.LogInformation("Download completed: {Filename}", filename);
+                progress?.Report(1.0);
+                _eventBus.Publish(new TransferFinishedEvent(filename, username));
+
+                try
+                {
+                    await TryRecordFrequentSourceDownloadAsync(
+                        _frequentSourceService,
+                        username,
+                        filename,
+                        size,
+                        lastBytes,
+                        DateTime.UtcNow,
+                        ct).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Frequent Sources hook failed for {Username}/{Filename}", username, filename);
+                }
+                
+                DownloadCompleted?.Invoke(this, new DownloadCompletedEventArgs(filename, username, true));
+                
+                return true;
+            }
+            finally
+            {
+                if (!transferCompleted && downloadTask != null)
+                {
+                    try
+                    {
+                        if (!downloadCts.IsCancellationRequested)
+                        {
+                            downloadCts.Cancel();
+                        }
+
+                        await downloadTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (downloadCts.IsCancellationRequested)
+                    {
+                    }
+                    catch (TimeoutException)
+                    {
+                        this._logger.LogWarning("Timed out while awaiting terminal transfer task cleanup for {Filename}", filename);
+                    }
+                    catch (Exception ex) when (
+                        downloadCts.IsCancellationRequested ||
+                        ex.Message.Contains("Transfer complete", StringComparison.OrdinalIgnoreCase))
+                    {
+                        this._logger.LogDebug(ex, "Ignoring terminal download task exception during cleanup for {Filename}", filename);
+                    }
+                }
+
+                // CRITICAL: Ensure FileStream is always closed properly, even on exception
+                // This prevents "file in use" errors on retry attempts
+                if (fileStream != null)
+                {
+                    try
+                    {
+                        await fileStream.DisposeAsync().ConfigureAwait(false);
+                        this._logger.LogDebug("FileStream closed for {Filename}", filename);
+                    }
+                    catch (Exception disposeEx)
+                    {
+                        this._logger.LogWarning(disposeEx, "Error disposing stream for {Filename}", filename);
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            this._logger.LogWarning("Download cancelled: {Filename}", filename);
+            _eventBus.Publish(new TransferCancelledEvent(filename, username));
+
+            // Not gated by suppressCompletionEventOnFailure: this rethrows, so it always ends the
+            // same-peer retry loop immediately (no later attempt to consolidate with) — it's the
+            // one and only signal for this episode regardless of which attempt it landed on.
+            DownloadCompleted?.Invoke(this, new DownloadCompletedEventArgs(filename, username, false, "Cancelled"));
+
+            throw;
+        }
+        catch (TimeoutException ex)
+        {
+            this._logger.LogWarning("Download timeout: {Filename} from {Username} - {Message}", filename, username, ex.Message);
+            _eventBus.Publish(new TransferFailedEvent(filename, username, "Connection timeout"));
+
+            // Same-peer retry loop (DownloadManager) suppresses this on all but the final attempt
+            // of a "give this peer a couple more shots" episode, so one flaky transfer doesn't
+            // dock the peer's reliability score once per attempt.
+            if (!suppressCompletionEventOnFailure)
+                DownloadCompleted?.Invoke(this, new DownloadCompletedEventArgs(filename, username, false, "Timeout"));
+
+            return false;
+        }
+        catch (IOException ex)
+        {
+            this._logger.LogError(ex, "I/O error during download: {Filename} from {Username}", filename, username);
+            _eventBus.Publish(new TransferFailedEvent(filename, username, "I/O error: " + ex.Message));
+
+            if (!suppressCompletionEventOnFailure)
+                DownloadCompleted?.Invoke(this, new DownloadCompletedEventArgs(filename, username, false, "I/O Error: " + ex.Message));
+
+            return false;
+        }
+        catch (Exception ex) when (ex.Message.Contains("refused") || ex.Message.Contains("aborted") || ex.Message.Contains("Unable to read"))
+        {
+            this._logger.LogWarning("Network error during download: {Filename} from {Username} - {Message}", filename, username, ex.Message);
+            _eventBus.Publish(new TransferFailedEvent(filename, username, "Connection failed"));
+
+            if (!suppressCompletionEventOnFailure)
+                DownloadCompleted?.Invoke(this, new DownloadCompletedEventArgs(filename, username, false, "Connection Failed"));
+
+            return false;
+        }
+        catch (Soulseek.TransferRejectedException ex)
+        {
+             // RETHROW: "Too many files" or "Banned"
+             // This allows DownloadManager to catch it and trigger Exponential Backoff / Retry.
+             // Not gated by suppressCompletionEventOnFailure — same reasoning as the Cancelled
+             // catch above: rethrows immediately, so it's always the episode's one true signal,
+             // and an explicit rejection deserves to be reported, not treated as a transient blip.
+             DownloadCompleted?.Invoke(this, new DownloadCompletedEventArgs(filename, username, false, "Rejected: " + ex.Message));
+             throw;
+        }
+        catch (Exception ex)
+        {
+            this._logger.LogError(ex, "Download failed: {Message}", ex.Message);
+            _eventBus.Publish(new TransferFailedEvent(filename, username, ex.Message));
+
+            if (!suppressCompletionEventOnFailure)
+                DownloadCompleted?.Invoke(this, new DownloadCompletedEventArgs(filename, username, false, ex.Message));
+
+            return false;
+        }
+    }
+
+    public async Task<IEnumerable<Track>> GetUserSharesAsync(string username, CancellationToken ct = default)
+    {
+        if (_client == null || !_client.State.HasFlag(SoulseekClientStates.Connected))
+            throw new InvalidOperationException("Not connected to Soulseek");
+
+        try
+        {
+            _logger.LogInformation("Browsing shares for user: {Username}", username);
+            
+            var response = await TrackNetworkCallAsync("Browse", username, () => _client.BrowseAsync(username, cancellationToken: ct));
+            
+            var tracks = new List<Track>();
+            var allFiles = response.Directories
+                .Concat(response.LockedDirectories)
+                .SelectMany(directory => directory.Files.Select(file => new SearchResponse(
+                    username,
+                    0,
+                    false,
+                    0,
+                    0,
+                    new[]
+                    {
+                        new Soulseek.File(
+                            file.Code,
+                            $"{directory.Name.TrimEnd('\\')}\\{file.Filename}",
+                            file.Size,
+                            file.Extension,
+                            file.Attributes)
+                    })));
+
+            foreach (var responseItem in allFiles)
+            {
+                var file = responseItem.Files.First();
+                var track = ParseTrackFromFile(file, responseItem);
+                if (track != null) tracks.Add(track);
+            }
+            
+            _logger.LogInformation("Found {Count} files in {Username}'s shares", tracks.Count, username);
+            return tracks;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to browse user shares for {Username}: {Message}", username, ex.Message);
+            return Enumerable.Empty<Track>();
+        }
+    }
+
+    // ── Social: presence ─────────────────────────────────────────────────
+
+    public async Task<UserWatchSnapshot> WatchUserAsync(string username, CancellationToken ct = default)
+    {
+        if (_client == null || !_client.State.HasFlag(SoulseekClientStates.Connected))
+            throw new InvalidOperationException("Not connected to Soulseek");
+
+        try
+        {
+            var data = await TrackNetworkCallAsync("WatchUser", username, () => _client.WatchUserAsync(username, cancellationToken: ct));
+            return new UserWatchSnapshot(
+                data.Username,
+                MapPresence(data.Status),
+                data.AverageSpeed,
+                data.DirectoryCount,
+                data.FileCount,
+                data.SlotsFree,
+                data.UploadCount,
+                data.CountryCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to watch user {Username}: {Message}", username, ex.Message);
+            return new UserWatchSnapshot(username, UserPresenceState.Unknown, 0, 0, 0, null, 0, null);
+        }
+    }
+
+    public async Task SetStatusAsync(UserPresenceState status, CancellationToken ct = default)
+    {
+        if (_client == null || !_client.State.HasFlag(SoulseekClientStates.Connected))
+            throw new InvalidOperationException("Not connected to Soulseek");
+
+        try
+        {
+            await TrackNetworkCallAsync("SetStatus", status.ToString(), () => _client.SetStatusAsync(MapPresenceToLibrary(status), cancellationToken: ct));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to set own status to {Status}: {Message}", status, ex.Message);
+        }
+    }
+
+    public async Task UnwatchUserAsync(string username, CancellationToken ct = default)
+    {
+        if (_client == null || !_client.State.HasFlag(SoulseekClientStates.Connected))
+            return;
+
+        try
+        {
+            await TrackNetworkCallAsync("UnwatchUser", username, () => _client.UnwatchUserAsync(username, cancellationToken: ct));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to unwatch user {Username}: {Message}", username, ex.Message);
+        }
+    }
+
+    public async Task<UserStatusSnapshot> GetUserStatusAsync(string username, CancellationToken ct = default)
+    {
+        if (_client == null || !_client.State.HasFlag(SoulseekClientStates.Connected))
+            throw new InvalidOperationException("Not connected to Soulseek");
+
+        try
+        {
+            var status = await TrackNetworkCallAsync("GetUserStatus", username, () => _client.GetUserStatusAsync(username, cancellationToken: ct));
+            return new UserStatusSnapshot(status.Username, MapPresence(status.Presence), status.IsPrivileged);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get status for {Username}: {Message}", username, ex.Message);
+            return new UserStatusSnapshot(username, UserPresenceState.Unknown, false);
+        }
+    }
+
+    public async Task<UserProfileSnapshot> GetUserInfoAsync(string username, CancellationToken ct = default)
+    {
+        if (_client == null || !_client.State.HasFlag(SoulseekClientStates.Connected))
+            throw new InvalidOperationException("Not connected to Soulseek");
+
+        try
+        {
+            var info = await TrackNetworkCallAsync("GetUserInfo", username, () => _client.GetUserInfoAsync(username, cancellationToken: ct));
+            return new UserProfileSnapshot(
+                username,
+                info.Description,
+                info.HasPicture,
+                info.Picture,
+                info.HasFreeUploadSlot,
+                info.UploadSlots,
+                info.QueueLength);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get user info for {Username}: {Message}", username, ex.Message);
+            return new UserProfileSnapshot(username, null, false, null, false, 0, 0);
+        }
+    }
+
+    private static UserPresenceState MapPresence(UserPresence presence) => presence switch
+    {
+        UserPresence.Online => UserPresenceState.Online,
+        UserPresence.Away => UserPresenceState.Away,
+        UserPresence.Offline => UserPresenceState.Offline,
+        _ => UserPresenceState.Unknown
+    };
+
+    private static UserPresence MapPresenceToLibrary(UserPresenceState state) => state switch
+    {
+        UserPresenceState.Online => UserPresence.Online,
+        UserPresenceState.Away => UserPresence.Away,
+        UserPresenceState.Offline => UserPresence.Offline,
+        _ => UserPresence.Online
+    };
+
+    // ── Social: 1:1 chat ─────────────────────────────────────────────────
+
+    public async Task SendPrivateMessageAsync(string username, string message, CancellationToken ct = default)
+    {
+        if (_client == null || !_client.State.HasFlag(SoulseekClientStates.Connected))
+            throw new InvalidOperationException("Not connected to Soulseek");
+
+        await WaitForMessageTokenAsync(ct).ConfigureAwait(false);
+        await TrackNetworkCallAsync("SendMessage", username, () => _client.SendPrivateMessageAsync(username, message, cancellationToken: ct));
+    }
+
+    // ── Social: rooms ────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<RoomSummary>> GetRoomListAsync(CancellationToken ct = default)
+    {
+        if (_client == null || !_client.State.HasFlag(SoulseekClientStates.Connected))
+            throw new InvalidOperationException("Not connected to Soulseek");
+
+        try
+        {
+            var roomList = await TrackNetworkCallAsync("GetRoomList", "server", () => _client.GetRoomListAsync(cancellationToken: ct));
+            return roomList.Public.Select(r => new RoomSummary(r.Name, r.UserCount, IsPrivate: false))
+                .Concat(roomList.Private.Select(r => new RoomSummary(r.Name, r.UserCount, IsPrivate: true)))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get room list: {Message}", ex.Message);
+            return Array.Empty<RoomSummary>();
+        }
+    }
+
+    public async Task<RoomSnapshot> JoinRoomAsync(string roomName, bool isPrivate = false, CancellationToken ct = default)
+    {
+        if (_client == null || !_client.State.HasFlag(SoulseekClientStates.Connected))
+            throw new InvalidOperationException("Not connected to Soulseek");
+
+        try
+        {
+            var room = await TrackNetworkCallAsync("JoinRoom", roomName, () => _client.JoinRoomAsync(roomName, isPrivate, cancellationToken: ct));
+            var members = (room.Users ?? Enumerable.Empty<UserData>())
+                .Select(u => new RoomMemberSnapshot(u.Username, MapPresence(u.Status), u.AverageSpeed, u.FileCount, u.DirectoryCount, u.SlotsFree))
+                .ToList();
+            return new RoomSnapshot(room.Name, room.IsPrivate, room.Owner, members);
+        }
+        catch (RoomJoinForbiddenException ex)
+        {
+            _logger.LogWarning(ex, "Server rejected join request for room {RoomName}", roomName);
+            throw new InvalidOperationException($"The server rejected joining \"{roomName}\" — some rooms require sharing files or meeting other conditions.", ex);
+        }
+        catch (Exception ex) when (ex is TimeoutException or NoResponseException)
+        {
+            _logger.LogWarning(ex, "Join room {RoomName} timed out / no response", roomName);
+            throw new InvalidOperationException($"Joining \"{roomName}\" timed out — the room may be very large or the server may be slow to respond.", ex);
+        }
+    }
+
+    public async Task LeaveRoomAsync(string roomName, CancellationToken ct = default)
+    {
+        if (_client == null || !_client.State.HasFlag(SoulseekClientStates.Connected))
+            return;
+
+        try
+        {
+            await TrackNetworkCallAsync("LeaveRoom", roomName, () => _client.LeaveRoomAsync(roomName, cancellationToken: ct));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to leave room {RoomName}: {Message}", roomName, ex.Message);
+        }
+    }
+
+    public async Task SendRoomMessageAsync(string roomName, string message, CancellationToken ct = default)
+    {
+        if (_client == null || !_client.State.HasFlag(SoulseekClientStates.Connected))
+            throw new InvalidOperationException("Not connected to Soulseek");
+
+        await WaitForMessageTokenAsync(ct).ConfigureAwait(false);
+        await TrackNetworkCallAsync("SendRoomMessage", roomName, () => _client.SendRoomMessageAsync(roomName, message, cancellationToken: ct));
+    }
+
+    /// <summary>
+    /// Diagnose the type of connection failure from an exception
+    /// </summary>
+    private ConnectionFailureStatus DiagnoseConnectionFailure(Exception ex)
+    {
+        var message = ex.Message.ToLowerInvariant();
+        
+        if (ex.InnerException != null)
+            message += " " + ex.InnerException.Message.ToLowerInvariant();
+
+        if (ex is LoginRejectedException ||
+            message.Contains("login rejected") ||
+            message.Contains("incorrect password") ||
+            message.Contains("invalid password") ||
+            message.Contains("invalid credentials"))
+        {
+            return ConnectionFailureStatus.LoginRejected;
+        }
+        
+        // Timeout patterns
+        if (message.Contains("timeout") || message.Contains("timed out"))
+            return ConnectionFailureStatus.AuthenticationTimeout;
+        
+        // Connection refused patterns
+        if (message.Contains("refused") || message.Contains("no connection could be made") || 
+            message.Contains("econnrefused"))
+            return ConnectionFailureStatus.ConnectionRefused;
+        
+        // Network timeout patterns
+        if (message.Contains("network unreachable") || message.Contains("no route to host") ||
+            message.Contains("ehostunreach"))
+            return ConnectionFailureStatus.NetworkTimeout;
+        
+        // Unexpected disconnection
+        if (message.Contains("disconnected") || message.Contains("connection closed"))
+            return ConnectionFailureStatus.UnexpectedDisconnection;
+        
+        // Default to other
+        return ConnectionFailureStatus.Other;
+    }
+
+    public void Dispose()
+    {
+        var client = _client;
+        _client = null;
+
+        if (client != null)
+        {
+            SafeDisposeClient(client, "adapter dispose");
+        }
+
+        _connectLock.Dispose();
+        _rateLimitLock.Dispose();
+    }
+
+}

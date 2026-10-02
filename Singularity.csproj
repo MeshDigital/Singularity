@@ -1,0 +1,177 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Avalonia cross-platform target -->
+    <TargetFramework>net9.0</TargetFramework>
+
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Singularity</AssemblyName>
+    <RootNamespace>SLSKDONET</RootNamespace>
+    <Version>0.1.0-alpha</Version>
+    <Authors>SLSK_CSV Contributors</Authors>
+    <Description>Soulseek batch downloader using Soulseek.NET - Cross-platform with Avalonia UI</Description>
+    <!-- Embeds the icon into the compiled exe itself (Explorer, Alt-Tab, and the taskbar's
+         fallback before Avalonia's own runtime Window.Icon takes over) — previously unset, so
+         the exe showed .NET's generic default icon everywhere. -->
+    <ApplicationIcon>app_icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>SLSKDONET.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="External\**" />
+    <Compile Remove="Tests\**" />
+    <Compile Remove="artifacts\**" />
+    <EmbeddedResource Remove="External\**" />
+    <EmbeddedResource Remove="artifacts\**" />
+    <None Remove="External\**" />
+    <None Remove="artifacts\**" />
+    <AdditionalFiles Remove="External\**" />
+    <AdditionalFiles Remove="artifacts\**" />
+    <AvaloniaResource Remove="External\**" />
+    <AvaloniaResource Remove="artifacts\**" />
+    <AvaloniaXaml Remove="External\**" />
+    <AvaloniaXaml Remove="artifacts\**" />
+    <Compile Remove="Views\Avalonia\Legacy\**" />
+    <AvaloniaXaml Remove="Views\Avalonia\Legacy\**" />
+    <AvaloniaResource Remove="Views\Avalonia\Legacy\**" />
+  </ItemGroup>
+
+  <!-- Debug builds show console window for diagnostics -->
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'">
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <!-- Release builds hide console window -->
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <OutputType>WinExe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Soulseek.NET library -->
+    <PackageReference Include="Avalonia.Controls.ItemsRepeater" Version="11.1.5" />
+    <PackageReference Include="Avalonia.Controls.Skia" Version="11.2.0" />
+    <PackageReference Include="DynamicData" Version="9.4.1" />
+    <PackageReference Include="LiteDB" Version="5.0.21" />
+    <PackageReference Include="HnswLite" Version="1.0.6" />
+    <PackageReference Include="HnswLite.RamStorage" Version="1.0.6" />
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
+    <PackageReference Include="Open.NAT.Core" Version="2.1.0.5" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.23.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="NWaves" Version="0.9.6" />
+    <PackageReference Include="QuestPDF" Version="2024.12.3" />
+    <PackageReference Include="SciSharp.TensorFlow.Redist" Version="2.16.0" />
+    <PackageReference Include="SkiaSharp" Version="2.88.9" />
+
+    <!-- Logging -->
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
+
+    <!-- Serilog -->
+    <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
+    <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+    <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+
+    <!-- Configuration -->
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Ini" Version="9.0.0" />
+
+    <!-- Dependency Injection -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+    <PackageReference Include="SpotifyAPI.Web.Auth" Version="7.2.1" />
+    <PackageReference Include="Soulseek" Version="9.1.0" />
+
+    <!-- Async/Concurrency -->
+    <PackageReference Include="System.Reactive" Version="6.1.0" />
+    <PackageReference Include="Microsoft.Win32.SystemEvents" Version="9.0.0" />
+
+    <!-- Data/CSV handling -->
+    <PackageReference Include="CsvHelper" Version="33.1.0" />
+
+    <!-- Tagging (for metadata) -->
+    <PackageReference Include="TagLibSharp" Version="2.3.0" />
+
+    <!-- JSON serialization for index files -->
+    <PackageReference Include="System.Text.Json" Version="9.0.0" />
+
+    <!-- Spotify API client -->
+    <PackageReference Include="SpotifyAPI.Web" Version="7.2.1" />
+
+    <!-- Windows DPAPI for secure token storage -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.0" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="9.0.0" />
+
+    <!-- HTML parsing for Spotify scraping -->
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.60" />
+
+    <!-- Avalonia UI Framework (Cross-platform) -->
+    <PackageReference Include="Avalonia" Version="11.2.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.2" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.2" />
+    <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.2" />
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.2.2" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.2" />
+    <PackageReference Include="Avalonia.Controls.TreeDataGrid" Version="11.1.1" />
+    <PackageReference Include="Avalonia.Xaml.Behaviors" Version="11.2.0.7" />
+    <PackageReference Include="Simple-Avalonia-DragnDrop-Service" Version="2.4.3" />
+    <PackageReference Include="Microsoft.ML" Version="3.0.1" />
+    <PackageReference Include="Microsoft.ML.LightGbm" Version="3.0.1" />
+    <PackageReference Include="TensorFlow.NET" Version="0.150.0" />
+    <PackageReference Include="Xabe.FFmpeg" Version="5.2.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="tray_icon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="app_icon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <!-- Compiled into the assembly so Window.Icon / TrayIcon.Icon can reference them via
+         avares://ORBIT/... in XAML — the root-level PNGs are not picked up by any default
+         AvaloniaResource glob, confirmed by a startup FileNotFoundException without these. -->
+    <AvaloniaResource Include="app_icon.png" />
+    <AvaloniaResource Include="tray_icon.png" />
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="appsettings.Development.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory Condition="'$(Configuration)'=='Release'">Never</CopyToPublishDirectory>
+    </Content>
+    <Content Include="Tools\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="Data\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Remove="Tools\**\*.cs" />
+    <Content Remove="Tools\cue-detr\**" /><!-- dev scripts that produced models\cue-detr.onnx -->
+    <Content Remove="Data\**\*.cs" />
+  </ItemGroup>
+
+</Project>

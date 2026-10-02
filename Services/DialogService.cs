@@ -1,0 +1,322 @@
+using System;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using SLSKDONET.Views.Avalonia.Controls;
+using Avalonia.Threading;
+using SLSKDONET.ViewModels.Library;
+using SLSKDONET.Models;
+using SLSKDONET.ViewModels;
+using SLSKDONET.ViewModels.Downloads;
+
+namespace SLSKDONET.Services;
+
+public class DialogService : IDialogService
+{
+    private Window? GetOwnerWindow()
+    {
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            return desktop.MainWindow;
+        }
+        return null;
+    }
+
+    public async Task<bool> ConfirmAsync(string title, string message, string confirmLabel = "Yes", string cancelLabel = "No")
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var dialog = new ConfirmationDialog(title, message, confirmLabel, cancelLabel);
+            var owner = GetOwnerWindow();
+
+            if (owner != null)
+            {
+                await dialog.ShowDialog(owner);
+            }
+            else
+            {
+                // Fallback: If no owner (should unlikely happen in this flow), try to show standalone
+               dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+               dialog.Show();
+               // We can't await completion easily with Show(). 
+               // Assuming MainWindow always exists for user interactions.
+            }
+
+            return dialog.IsConfirmed;
+        });
+    }
+
+    public async Task<RemoveTrackChoice> ShowRemoveTrackChoiceAsync(string trackLabel, bool canRemoveFromPlaylist, string? playlistName)
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var dialog = new RemoveTrackDialog(trackLabel, canRemoveFromPlaylist, playlistName);
+            var owner = GetOwnerWindow();
+
+            if (owner != null)
+            {
+                await dialog.ShowDialog(owner);
+            }
+            else
+            {
+                dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                dialog.Show();
+            }
+
+            return dialog.Result;
+        });
+    }
+
+    public async Task ShowAlertAsync(string title, string message)
+    {
+        await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+             var dialog = new ConfirmationDialog(title, message, "OK", "");
+             // Hide No button for alert
+             var noBtn = dialog.FindControl<Button>("NoButton");
+             if (noBtn != null) noBtn.IsVisible = false;
+
+             var owner = GetOwnerWindow();
+             if (owner != null)
+             {
+                 await dialog.ShowDialog(owner);
+             }
+        });
+    }
+
+    public async Task<string?> SaveFileAsync(string title, string defaultFileName, string extension = "xml")
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var owner = GetOwnerWindow();
+            if (owner?.StorageProvider == null) return null;
+            
+            var file = await owner.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+            {
+                Title = title,
+                SuggestedFileName = defaultFileName,
+                DefaultExtension = extension,
+                FileTypeChoices = new[]
+                {
+                    new Avalonia.Platform.Storage.FilePickerFileType($"{extension.ToUpper()} File")
+                    {
+                        Patterns = new[] { $"*.{extension}" }
+                    }
+                }
+            });
+
+            return file?.Path.LocalPath;
+        });
+    }
+
+
+    public async Task<Data.Entities.SmartCrateDefinitionEntity?> ShowSmartCrateEditorAsync(ViewModels.Library.SmartCrateEditorViewModel vm)
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var dialog = new Views.Avalonia.Dialogs.SmartCrateEditorDialog
+            {
+                DataContext = vm
+            };
+            
+            var owner = GetOwnerWindow();
+            if (owner != null)
+            {
+                var result = await dialog.ShowDialog<Data.Entities.SmartCrateDefinitionEntity?>(owner);
+                return result;
+            }
+            
+            return null;
+        });
+    }
+
+    public async Task<(string Name, SLSKDONET.Models.SmartPlaylistCriteria Criteria)?> ShowCreateSmartPlaylistAsync()
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var vm = new ViewModels.Library.CreateSmartPlaylistViewModel();
+            var dialog = new Views.Avalonia.Dialogs.CreateSmartPlaylistDialog
+            {
+                DataContext = vm
+            };
+
+            var owner = GetOwnerWindow();
+            if (owner != null)
+            {
+                return await dialog.ShowDialog<(string, SLSKDONET.Models.SmartPlaylistCriteria)?>(owner);
+            }
+
+            return null;
+        });
+    }
+
+    public async Task<string?> ShowPromptAsync(string title, string message, string initialValue = "")
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var dialog = new PromptDialog(title, message, initialValue);
+            var owner = GetOwnerWindow();
+            if (owner != null)
+            {
+                return await dialog.ShowDialog<string?>(owner);
+            }
+            return null;
+        });
+    }
+
+    public async Task<PlaylistJob?> ShowProjectPickerAsync(IEnumerable<PlaylistJob> projects)
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var dialog = new ProjectPickerDialog(projects);
+            var owner = GetOwnerWindow();
+            if (owner != null)
+            {
+                return await dialog.ShowDialog<PlaylistJob?>(owner);
+            }
+            return null;
+        });
+    }
+
+    public async Task<PlaylistPickerResult?> ShowPlaylistPickerDialogAsync(IEnumerable<PlaylistJob> playlists)
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var vm = new PlaylistPickerViewModel(playlists);
+            var dialog = new Views.Avalonia.Dialogs.PlaylistPickerDialog(vm);
+            var owner = GetOwnerWindow();
+            if (owner != null)
+            {
+                return await dialog.ShowDialog<PlaylistPickerResult?>(owner);
+            }
+            return null;
+        });
+    }
+
+    public async Task<CombinePlaylistsResult?> ShowCombinePlaylistsDialogAsync(
+        IEnumerable<PlaylistJob> playlists,
+        IReadOnlyList<PlaylistJob>? preSelected = null)
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var vm = new CombinePlaylistsViewModel(playlists, preSelected);
+            var dialog = new Views.Avalonia.Dialogs.CombinePlaylistsDialog(vm);
+            var owner = GetOwnerWindow();
+            if (owner != null)
+            {
+                return await dialog.ShowDialog<CombinePlaylistsResult?>(owner);
+            }
+            return null;
+        });
+    }
+
+    public async Task<BatchTagEditResult?> ShowBatchTagEditDialogAsync(string? initialFileName = null, BatchTagEditSeed? seed = null)
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var vm = new BatchTagEditViewModel(initialFileName, seed);
+            var dialog = new Views.Avalonia.Dialogs.BatchTagEditDialog(vm);
+            var owner = GetOwnerWindow();
+            if (owner != null)
+            {
+                return await dialog.ShowDialog<BatchTagEditResult?>(owner);
+            }
+            return null;
+        });
+    }
+
+    public async Task<BulkRenameResult?> ShowBulkRenameDialogAsync(
+        int trackCount, System.Collections.Generic.IReadOnlyList<BulkRenamePreviewTrack> previewTracks)
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var vm = new BulkRenameViewModel(trackCount, previewTracks);
+            var dialog = new Views.Avalonia.Dialogs.BulkRenameDialog(vm);
+            var owner = GetOwnerWindow();
+            if (owner != null)
+            {
+                return await dialog.ShowDialog<BulkRenameResult?>(owner);
+            }
+            return null;
+        });
+    }
+
+    public async Task<BulkMoveOrCopyResult?> ShowBulkMoveOrCopyDialogAsync(int trackCount)
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var vm = new BulkMoveOrCopyViewModel(trackCount);
+            var dialog = new Views.Avalonia.Dialogs.BulkMoveOrCopyDialog(vm);
+            var owner = GetOwnerWindow();
+            if (owner != null)
+            {
+                return await dialog.ShowDialog<BulkMoveOrCopyResult?>(owner);
+            }
+            return null;
+        });
+    }
+
+    public async Task<Views.Avalonia.Dialogs.ExportPlaylistChoice?> ShowExportPlaylistChoiceAsync(string playlistTitle)
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var dialog = new Views.Avalonia.Dialogs.ExportPlaylistChoiceDialog(playlistTitle);
+            var owner = GetOwnerWindow();
+            if (owner != null)
+            {
+                return await dialog.ShowDialog<Views.Avalonia.Dialogs.ExportPlaylistChoice?>(owner);
+            }
+            return null;
+        });
+    }
+
+    public async Task<string?> OpenFolderDialogAsync(string title)
+    {
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var owner = GetOwnerWindow();
+            if (owner?.StorageProvider == null) return null;
+
+            var folder = await owner.StorageProvider.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions
+            {
+                Title = title,
+                AllowMultiple = false
+            });
+
+            return folder?.FirstOrDefault()?.Path.LocalPath;
+        });
+    }
+
+    public async Task ShowSuggestedFlowImpactAsync(SuggestedFlowImpactViewModel vm)
+    {
+        await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var dialog = new Views.Avalonia.Dialogs.SuggestedFlowImpactDialog
+            {
+                DataContext = vm
+            };
+
+            var owner = GetOwnerWindow();
+            if (owner != null)
+            {
+                await dialog.ShowDialog(owner);
+            }
+        });
+    }
+
+    public async Task ShowSpectralForensicsAsync(UnifiedTrackViewModel vm)
+    {
+        await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var dialog = new Views.Avalonia.Dialogs.SpectralForensicsDialog
+            {
+                DataContext = vm
+            };
+
+            var owner = GetOwnerWindow();
+            if (owner != null)
+                await dialog.ShowDialog(owner);
+        });
+    }
+}

@@ -1,0 +1,1855 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Data;
+using SLSKDONET.Data.Entities;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
+using SLSKDONET.Models;
+using SLSKDONET.Services.Models;
+
+namespace SLSKDONET.Services.Repositories;
+
+public class TrackRepository : ITrackRepository
+{
+    private readonly ILogger<TrackRepository> _logger;
+    private static readonly SemaphoreSlim _writeSemaphore = new SemaphoreSlim(1, 1);
+    private const int PlaylistTrackUpsertBatchSize = 500;
+
+    public TrackRepository(ILogger<TrackRepository> logger)
+    {
+        _logger = logger;
+    }
+
+    public async Task<List<TrackEntity>> LoadTracksAsync()
+    {
+        using var context = new AppDbContext();
+        return await context.Tracks.ToListAsync();
+    }
+
+    public async Task<TrackEntity?> FindTrackAsync(string globalId)
+    {
+        using var context = new AppDbContext();
+        return await context.Tracks.FirstOrDefaultAsync(t => t.GlobalId == globalId);
+    }
+
+    public async Task SaveTrackAsync(TrackEntity track)
+    {
+        const int maxRetries = 5;
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            for (int attempt = 0; attempt < maxRetries; attempt++)
+            {
+                try
+                {
+                    var existingTrack = await context.Tracks
+                        .FirstOrDefaultAsync(t => t.GlobalId == track.GlobalId);
+
+                    if (existingTrack == null)
+                    {
+                        context.Tracks.Add(track);
+                    }
+                    else
+                    {
+                        // Update properties
+                        context.Entry(existingTrack).CurrentValues.SetValues(track);
+                    }
+
+                    await context.SaveChangesAsync();
+                    return;
+                }
+                catch (DbUpdateException ex) when (ex.InnerException is SqliteException sqliteEx && sqliteEx.SqliteErrorCode == 5)
+                {
+                    if (attempt < maxRetries - 1)
+                    {
+                        _logger.LogWarning("SQLite database locked saving track {GlobalId}, attempt {Attempt}/{Max}. Retrying...", track.GlobalId, attempt + 1, maxRetries);
+                        await Task.Delay(100 * (attempt + 1));
+                        continue;
+                    }
+                    throw;
+                }
+            }
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task UpdateTrackFilePathAsync(string globalId, string newPath)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var track = await context.Tracks.FirstOrDefaultAsync(t => t.GlobalId == globalId);
+            if (track != null)
+            {
+                track.Filename = newPath;
+                await context.SaveChangesAsync();
+            }
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task RemoveTrackAsync(string globalId)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var track = await context.Tracks.FirstOrDefaultAsync(t => t.GlobalId == globalId);
+            if (track != null)
+            {
+                context.Tracks.Remove(track);
+                await context.SaveChangesAsync();
+            }
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task<List<PlaylistTrackEntity>> LoadPlaylistTracksAsync(Guid playlistId)
+    {
+        using var context = new AppDbContext();
+        // AsNoTracking: this context is disposed on return, so change-tracking snapshots for
+        // every row would be built only to be discarded immediately — pure overhead on large
+        // playlists. Any caller that mutates and saves does so through its own context/repository
+        // call, not by reusing entities returned from here.
+        return await context.PlaylistTracks
+            .AsNoTracking()
+            .Include(t => t.TechnicalDetails)
+            .Include(t => t.AudioFeatures) // Phase 21: Eager load Brain data
+            .Where(t => t.PlaylistId == playlistId)
+            .OrderBy(t => t.SortOrder)
+            .ToListAsync();
+    }
+
+    public async Task<PlaylistTrackEntity?> GetPlaylistTrackByHashAsync(Guid playlistId, string hash)
+    {
+        using var context = new AppDbContext();
+        return await context.PlaylistTracks
+            .Include(t => t.AudioFeatures)
+            .FirstOrDefaultAsync(t => t.PlaylistId == playlistId && t.TrackUniqueHash == hash);
+    }
+
+    public async Task SavePlaylistTrackAsync(PlaylistTrackEntity track)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var existing = await context.PlaylistTracks.FirstOrDefaultAsync(t => t.Id == track.Id);
+            if (existing == null)
+            {
+                context.PlaylistTracks.Add(track);
+            }
+            else
+            {
+                context.Entry(existing).CurrentValues.SetValues(track);
+            }
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task<List<PlaylistTrackEntity>> GetAllPlaylistTracksAsync()
+    {
+        using var context = new AppDbContext();
+        return await context.PlaylistTracks.ToListAsync();
+    }
+
+    public async Task<int> GetPlaylistTrackCountAsync(Guid playlistId, string? filter = null, bool? downloadedOnly = null, IEnumerable<string>? hashFilter = null, string? camelotKeyFilter = null, string? qualityTier = null)
+    {
+        using var context = new AppDbContext();
+        var query = context.PlaylistTracks.AsQueryable();
+        if (playlistId != Guid.Empty)
+        {
+            query = query.Where(t => t.PlaylistId == playlistId);
+        }
+        var textFilterHashes = await ResolveTextFilterHashesAsync(context, playlistId, filter);
+        query = ApplyFilters(query, textFilterHashes, downloadedOnly, hashFilter, camelotKeyFilter, qualityTier);
+        return await query.CountAsync();
+    }
+
+    public async Task<List<PlaylistTrackEntity>> GetPagedPlaylistTracksAsync(Guid playlistId, int skip, int take, string? filter = null, bool? downloadedOnly = null, IEnumerable<string>? hashFilter = null, string? camelotKeyFilter = null, TrackSortColumn sortColumn = TrackSortColumn.Default, bool sortDescending = false, string? qualityTier = null)
+    {
+        using var context = new AppDbContext();
+        var query = context.PlaylistTracks
+            .Include(t => t.TechnicalDetails)
+            .Include(t => t.AudioFeatures)
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (playlistId != Guid.Empty)
+        {
+            query = query.Where(t => t.PlaylistId == playlistId);
+        }
+
+        var textFilterHashes = await ResolveTextFilterHashesAsync(context, playlistId, filter);
+        query = ApplyFilters(query, textFilterHashes, downloadedOnly, hashFilter, camelotKeyFilter, qualityTier);
+        query = ApplyPlaylistTrackSort(query, sortColumn, sortDescending);
+
+        var results = await query
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync();
+
+        await AttachCuePointCountsAsync(context, results);
+
+        return results;
+    }
+
+    /// <summary>
+    /// Populates <see cref="PlaylistTrackEntity.CuePointCount"/> from the real per-cue-point
+    /// <c>CuePoints</c> table (which links by <c>TrackUniqueHash</c>, not a proper FK, so it
+    /// can't be an EF <c>.Include()</c>). The legacy <c>TechnicalDetails</c>/<c>CuePointsJson</c>
+    /// blob is no longer written by the current cue-generation pipeline, so workstation-readiness
+    /// checks need this real count instead.
+    /// </summary>
+    private static async Task AttachCuePointCountsAsync(AppDbContext context, List<PlaylistTrackEntity> tracks)
+    {
+        var hashes = tracks
+            .Select(t => t.TrackUniqueHash)
+            .Where(h => !string.IsNullOrEmpty(h))
+            .Distinct()
+            .ToList();
+
+        if (hashes.Count == 0) return;
+
+        var counts = await context.CuePoints
+            .AsNoTracking()
+            .Where(cp => hashes.Contains(cp.TrackUniqueHash))
+            .GroupBy(cp => cp.TrackUniqueHash)
+            .Select(g => new { Hash = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Hash, x => x.Count);
+
+        foreach (var track in tracks)
+        {
+            if (counts.TryGetValue(track.TrackUniqueHash, out var count))
+            {
+                track.CuePointCount = count;
+            }
+        }
+    }
+
+    private static IQueryable<PlaylistTrackEntity> ApplyPlaylistTrackSort(IQueryable<PlaylistTrackEntity> query, TrackSortColumn sortColumn, bool descending)
+    {
+        return sortColumn switch
+        {
+            TrackSortColumn.Artist => descending
+                ? query.OrderByDescending(t => t.Artist).ThenBy(t => t.Title)
+                : query.OrderBy(t => t.Artist).ThenBy(t => t.Title),
+            TrackSortColumn.Title => descending ? query.OrderByDescending(t => t.Title) : query.OrderBy(t => t.Title),
+            TrackSortColumn.Bpm => descending ? query.OrderByDescending(t => t.BPM) : query.OrderBy(t => t.BPM),
+            TrackSortColumn.Duration => descending ? query.OrderByDescending(t => t.CanonicalDuration) : query.OrderBy(t => t.CanonicalDuration),
+            _ => query.OrderBy(t => t.SortOrder)
+        };
+    }
+
+    private static IQueryable<LibraryEntryEntity> ApplyLibraryEntrySort(IQueryable<LibraryEntryEntity> query, TrackSortColumn sortColumn, bool descending)
+    {
+        return sortColumn switch
+        {
+            TrackSortColumn.Artist => descending
+                ? query.OrderByDescending(t => t.Artist).ThenBy(t => t.Title)
+                : query.OrderBy(t => t.Artist).ThenBy(t => t.Title),
+            TrackSortColumn.Title => descending ? query.OrderByDescending(t => t.Title) : query.OrderBy(t => t.Title),
+            TrackSortColumn.Bpm => descending ? query.OrderByDescending(t => t.BPM) : query.OrderBy(t => t.BPM),
+            TrackSortColumn.Duration => descending ? query.OrderByDescending(t => t.CanonicalDuration) : query.OrderBy(t => t.CanonicalDuration),
+            _ => query.OrderByDescending(t => t.AddedAt)
+        };
+    }
+
+    /// <summary>
+    /// Resolves the playlist-scoped search box (Artist/Title/Album/MusicalKey) to a set of
+    /// matching TrackUniqueHash values ahead of the main query, instead of the previous
+    /// <c>.ToLower().Contains()</c> chain applied directly in SQL. EF Core's Sqlite provider
+    /// translates <c>string.Contains</c> to <c>instr()</c> (case-sensitive by design, which is
+    /// why both sides were wrapped in <c>ToLower()</c> to fake case-insensitivity) — and even a
+    /// case-correct substring match can't use a B-tree index for an arbitrary "contains"
+    /// position, so every keystroke was a full scan of the playlist's rows.
+    ///
+    /// TracksFts (an FTS5 virtual table over the master Tracks record — Artist/Title/Key,
+    /// trigger-maintained on every Tracks insert/update, built for the "All Tracks" search path
+    /// but never actually queried by anything) gives Artist/Title/Key an index-accelerated
+    /// search for free. It doesn't include Album, so that one column is still matched with a
+    /// direct substring scan — scoped to just this one playlist's rows (not the whole library),
+    /// which keeps it cheap.
+    /// </summary>
+    private static async Task<HashSet<string>?> ResolveTextFilterHashesAsync(AppDbContext context, Guid playlistId, string? filter)
+    {
+        if (string.IsNullOrWhiteSpace(filter))
+            return null;
+
+        var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var matchExpr = BuildFtsMatchExpression(filter);
+        if (matchExpr != null)
+        {
+            var ftsMatches = await context.Database
+                .SqlQueryRaw<string>("SELECT GlobalId AS Value FROM TracksFts WHERE TracksFts MATCH {0}", matchExpr)
+                .ToListAsync();
+            hashes.UnionWith(ftsMatches);
+        }
+
+        var lowerFilter = filter.Trim().ToLower();
+        var albumQuery = context.PlaylistTracks.AsQueryable();
+        if (playlistId != Guid.Empty)
+        {
+            albumQuery = albumQuery.Where(t => t.PlaylistId == playlistId);
+        }
+        var albumOrKeyMatches = await albumQuery
+            .Where(t => t.Album.ToLower().Contains(lowerFilter) || (t.MusicalKey != null && t.MusicalKey.ToLower().Contains(lowerFilter)))
+            .Select(t => t.TrackUniqueHash)
+            .Distinct()
+            .ToListAsync();
+        hashes.UnionWith(albumOrKeyMatches);
+
+        return hashes;
+    }
+
+    private IQueryable<PlaylistTrackEntity> ApplyFilters(IQueryable<PlaylistTrackEntity> query, ISet<string>? textFilterHashes, bool? downloadedOnly, IEnumerable<string>? hashFilter = null, string? camelotKeyFilter = null, string? qualityTier = null)
+    {
+        if (hashFilter != null)
+        {
+            query = query.Where(t => hashFilter.Contains(t.TrackUniqueHash));
+        }
+        if (textFilterHashes != null)
+        {
+            // Resolved ahead of time by ResolveTextFilterHashesAsync — an empty (non-null) set
+            // here correctly means "the text filter matched nothing", same as the old inline
+            // Contains() chain would have produced.
+            query = query.Where(t => textFilterHashes.Contains(t.TrackUniqueHash));
+        }
+        if (!string.IsNullOrEmpty(camelotKeyFilter))
+        {
+            var keyUpper = camelotKeyFilter.ToUpper();
+            query = query.Where(t => t.MusicalKey != null && t.MusicalKey.ToUpper() == keyUpper);
+        }
+        query = ApplyQualityTierFilter(query, qualityTier);
+        if (downloadedOnly.HasValue)
+        {
+            if (downloadedOnly.Value)
+                query = query.Where(t => t.Status == TrackStatus.Downloaded);
+            else
+                query = query.Where(t => t.Status != TrackStatus.Downloaded);
+        }
+        return query;
+    }
+
+    /// <summary>
+    /// Same Gold/Silver/Bronze thresholds DashboardService already uses for the dashboard's
+    /// quality-tier counts (Services\DashboardService.cs) — kept in sync deliberately so the
+    /// counts a user sees and the tracks they get when they click through match exactly.
+    /// </summary>
+    internal static IQueryable<PlaylistTrackEntity> ApplyQualityTierFilter(IQueryable<PlaylistTrackEntity> query, string? qualityTier)
+    {
+        return qualityTier switch
+        {
+            "Gold" => query.Where(t => t.Format != null && (t.Format.ToLower() == "flac" || t.Format.ToLower() == "wav")),
+            "Silver" => query.Where(t => t.Bitrate >= 320 && (t.Format == null || (t.Format.ToLower() != "flac" && t.Format.ToLower() != "wav"))),
+            "Bronze" => query.Where(t => t.Bitrate < 320 && t.Bitrate > 0),
+            _ => query
+        };
+    }
+
+    internal static IQueryable<LibraryEntryEntity> ApplyQualityTierFilter(IQueryable<LibraryEntryEntity> query, string? qualityTier)
+    {
+        return qualityTier switch
+        {
+            "Gold" => query.Where(t => t.Format != null && (t.Format.ToLower() == "flac" || t.Format.ToLower() == "wav")),
+            "Silver" => query.Where(t => t.Bitrate >= 320 && (t.Format == null || (t.Format.ToLower() != "flac" && t.Format.ToLower() != "wav"))),
+            "Bronze" => query.Where(t => t.Bitrate < 320 && t.Bitrate > 0),
+            _ => query
+        };
+    }
+
+    public async Task<List<LibraryEntryEntity>> GetLibraryEntriesNeedingEnrichmentAsync(int limit)
+    {
+        using var context = new AppDbContext();
+        var cooldownDate = DateTime.UtcNow.AddHours(-4).ToString("O");
+        
+        return await context.LibraryEntries
+            .Where(e => !e.IsEnriched 
+                       && (e.SpotifyTrackId == null || e.SpotifyTrackId == "")
+                       && e.SpotifyTrackId != "FAILED"
+                       && (e.LastEnrichmentAttempt == null || e.LastEnrichmentAttempt.CompareTo(cooldownDate) < 0))
+            .OrderByDescending(e => e.AddedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task UpdateLibraryEntryEnrichmentAsync(string uniqueHash, TrackEnrichmentResult result)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var existing = await context.LibraryEntries.FindAsync(uniqueHash);
+            if (existing != null)
+            {
+                // Phase 21: Smart Retry - Track attempts and timestamp
+                existing.EnrichmentAttempts = existing.EnrichmentAttempts + 1;
+                existing.LastEnrichmentAttempt = DateTime.UtcNow.ToString("O");
+                
+                if (result.Success)
+                {
+                    existing.SpotifyTrackId = result.SpotifyId;
+                    existing.SpotifyAlbumId = result.SpotifyAlbumId;
+                    existing.SpotifyArtistId = result.SpotifyArtistId;
+                    if (!string.IsNullOrEmpty(result.ISRC)) existing.ISRC = result.ISRC;
+                    if (!string.IsNullOrEmpty(result.AlbumArtUrl)) existing.AlbumArtUrl = result.AlbumArtUrl;
+                    
+                    if (result.Bpm > 0 || !string.IsNullOrEmpty(result.MusicalKey))
+                    {
+                        existing.BPM = result.Bpm;
+                        existing.Energy = result.Energy;
+                        existing.Valence = result.Valence;
+                        existing.Danceability = result.Danceability;
+                        if (!string.IsNullOrEmpty(result.MusicalKey)) existing.MusicalKey = result.MusicalKey;
+                        
+                        // Phase 12.7: Style Classification
+                        if (!string.IsNullOrEmpty(result.DetectedSubGenre)) existing.DetectedSubGenre = result.DetectedSubGenre;
+                        if (result.SubGenreConfidence > 0) existing.SubGenreConfidence = result.SubGenreConfidence;
+                    }
+                    
+                    // Reset retry tracking on success
+                    existing.EnrichmentAttempts = 0;
+                    existing.LastEnrichmentAttempt = null;
+                }
+                else
+                {
+                    // Phase 21: Only mark as permanently FAILED after max attempts (5)
+                    const int MaxAttempts = 5;
+                    if (existing.EnrichmentAttempts >= MaxAttempts)
+                    {
+                        existing.SpotifyTrackId = "FAILED";
+                        existing.IsEnriched = true; // Stop retrying
+                        _logger.LogWarning("Marking LibraryEntry {Hash} as permanently FAILED after {Attempts} attempts", uniqueHash, existing.EnrichmentAttempts);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("LibraryEntry {Hash} enrichment failed (attempt {Attempt}/{Max}), will retry after cooldown", 
+                            uniqueHash, existing.EnrichmentAttempts, MaxAttempts);
+                    }
+                }
+                
+                // Stage 2 (Features) is removed, so identification success is enough to mark as Enriched
+                existing.IsEnriched = result.Success || (existing.SpotifyTrackId == "FAILED");
+                
+                // Sync with master Track record
+                var tr = await context.Tracks.FindAsync(uniqueHash);
+                if (tr != null)
+                {
+                    ApplyMetadata(tr, result);
+                }
+
+                existing.LastUsedAt = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+            }
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task<List<PlaylistTrackEntity>> GetPlaylistTracksNeedingEnrichmentAsync(int limit)
+    {
+        using var context = new AppDbContext();
+        var cooldownDate = DateTime.UtcNow.AddHours(-4).ToString("O");
+
+        return await context.PlaylistTracks
+            .Where(e => !e.IsEnriched
+                       && (e.SpotifyTrackId == null || e.SpotifyTrackId == "")
+                       && e.SpotifyTrackId != "FAILED"
+                       && (e.LastEnrichmentAttempt == null || e.LastEnrichmentAttempt.CompareTo(cooldownDate) < 0))
+            .OrderByDescending(e => e.AddedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task UpdatePlaylistTrackEnrichmentAsync(Guid id, TrackEnrichmentResult result)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var track = await context.PlaylistTracks.FindAsync(id);
+            if (track != null)
+            {
+                // Phase 21: Smart Retry - Track attempts and timestamp
+                track.EnrichmentAttempts = track.EnrichmentAttempts + 1;
+                track.LastEnrichmentAttempt = DateTime.UtcNow.ToString("O");
+                
+                if (result.Success)
+                {
+                    track.SpotifyTrackId = result.SpotifyId;
+                    track.SpotifyAlbumId = result.SpotifyAlbumId;
+                    track.SpotifyArtistId = result.SpotifyArtistId;
+                    if (!string.IsNullOrEmpty(result.ISRC)) track.ISRC = result.ISRC;
+                    if (!string.IsNullOrEmpty(result.AlbumArtUrl)) track.AlbumArtUrl = result.AlbumArtUrl;
+                    if (result.Bpm > 0 || !string.IsNullOrEmpty(result.MusicalKey))
+                    {
+                        track.BPM = result.Bpm;
+                        track.Energy = result.Energy;
+                        track.Valence = result.Valence;
+                        track.Danceability = result.Danceability;
+                        if (!string.IsNullOrEmpty(result.MusicalKey)) track.MusicalKey = result.MusicalKey;
+
+                        // Phase 12.7: Style Classification
+                        if (!string.IsNullOrEmpty(result.DetectedSubGenre)) track.DetectedSubGenre = result.DetectedSubGenre;
+                        if (result.SubGenreConfidence > 0) track.SubGenreConfidence = result.SubGenreConfidence;
+                    }
+                    
+                    // Reset retry tracking on success
+                    track.EnrichmentAttempts = 0;
+                    track.LastEnrichmentAttempt = null;
+                }
+                else
+                {
+                    // Phase 21: Only mark as permanently FAILED after max attempts (5)
+                    const int MaxAttempts = 5;
+                    if (track.EnrichmentAttempts >= MaxAttempts)
+                    {
+                        track.SpotifyTrackId = "FAILED";
+                        track.IsEnriched = true; // Stop retrying
+                        _logger.LogWarning("Marking PlaylistTrack {Id} as permanently FAILED after {Attempts} attempts", id, track.EnrichmentAttempts);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("PlaylistTrack {Id} enrichment failed (attempt {Attempt}/{Max}), will retry after cooldown", 
+                            id, track.EnrichmentAttempts, MaxAttempts);
+                    }
+                }
+
+                // If identification failed, mark as enriched to stop the cycle.
+                // If it succeeded but we don't have features yet, Stage 2 will pick it up (IsEnriched is still false).
+                // If Success=true, Stage 2 (Features) will pick it up because SpotifyTrackId is not null but IsEnriched is false.
+                // We DON'T set IsEnriched=true here unless we truly have features or reached MaxAttempts.
+                track.IsEnriched = (result.Success && result.Bpm > 0) || (track.SpotifyTrackId == "FAILED");
+                
+                // Sync with master Track record
+                var tr = await context.Tracks.FindAsync(track.TrackUniqueHash);
+                if (tr != null)
+                {
+                    ApplyMetadata(tr, result);
+                }
+
+                await context.SaveChangesAsync();
+            }
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task<List<Guid>> UpdatePlaylistTrackStatusAndRecalculateJobsAsync(
+        string trackUniqueHash, 
+        TrackStatus newStatus, 
+        string? resolvedPath, 
+        int searchRetryCount = 0, 
+        int notFoundRestartCount = 0,
+        string? state = null,
+        string? error = null,
+        DateTime? completedAt = null,
+        string? stalledReason = null)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            // 1. Find all PlaylistTrack entries for this global track hash
+            var playlistTracks = await context.PlaylistTracks
+                .Where(pt => pt.TrackUniqueHash == trackUniqueHash)
+                .ToListAsync();
+
+            if (playlistTracks.Count == 0 && string.IsNullOrEmpty(state)) return new List<Guid>();
+
+            var distinctJobIds = playlistTracks.Select(pt => pt.PlaylistId).Distinct().Cast<Guid>().ToList();
+
+            // Job SuccessfulCount/FailedCount only depend on Downloaded/Failed/Skipped membership —
+            // recalculating them (steps 4-5 below) requires pulling every track in every affected
+            // playlist, which is the expensive part of this call. Every non-terminal transition
+            // (Pending -> Searching -> Downloading -> Queued -> ...) leaves those counts completely
+            // unchanged, so doing the full recalc on each one anyway — serialized through
+            // _writeSemaphore for the whole app — was the actual bottleneck behind "524 tracks
+            // waiting, only 1 searching": every track's Pending->Searching transition queued up
+            // behind the same expensive, pointless recalculation before the next one could even
+            // start. Only recalculate when a track is entering or leaving one of the counted
+            // statuses.
+            static bool IsCountedStatus(TrackStatus s) => s is TrackStatus.Downloaded or TrackStatus.Failed or TrackStatus.Skipped;
+            var needsJobRecalculation = playlistTracks.Any(pt => IsCountedStatus(pt.Status) || IsCountedStatus(newStatus));
+
+            // 2. Update their status
+            foreach (var pt in playlistTracks)
+            {
+                pt.Status = newStatus;
+                pt.SearchRetryCount = searchRetryCount;
+                pt.NotFoundRestartCount = notFoundRestartCount;
+                
+                if (!string.IsNullOrEmpty(resolvedPath))
+                {
+                    pt.ResolvedFilePath = resolvedPath;
+                }
+
+                if (stalledReason != null) pt.StalledReason = stalledReason;
+            }
+            
+            // 3. Sync with master Track record if it exists
+            // Phase 3D: Consolidation - Master record and Playlist items share the same transaction
+            var masterTrack = await context.Tracks.FindAsync(trackUniqueHash);
+            if (masterTrack != null)
+            {
+                masterTrack.SearchRetryCount = searchRetryCount;
+                masterTrack.NotFoundRestartCount = notFoundRestartCount;
+                
+                if (!string.IsNullOrEmpty(state)) masterTrack.State = state;
+                if (error != null) masterTrack.ErrorMessage = error;
+                if (completedAt != null) masterTrack.CompletedAt = completedAt;
+                if (stalledReason != null) masterTrack.StalledReason = stalledReason;
+                if (!string.IsNullOrEmpty(resolvedPath)) masterTrack.Filename = resolvedPath;
+            }
+            
+            // 4. Fetch all affected jobs and all their related tracks
+            if (distinctJobIds.Any() && needsJobRecalculation)
+            {
+                var jobsToUpdate = await context.Projects
+                    .Where(j => distinctJobIds.Contains(j.Id))
+                    .ToListAsync();
+
+                var allRelatedTracks = await context.PlaylistTracks
+                    .Where(t => distinctJobIds.Contains(t.PlaylistId))
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                // 5. Recalculate counts for each job
+                foreach (var job in jobsToUpdate)
+                {
+                    var currentJobTracks = allRelatedTracks
+                        .Where(t => t.PlaylistId == job.Id && t.TrackUniqueHash != trackUniqueHash)
+                        .ToList();
+                    currentJobTracks.AddRange(playlistTracks.Where(pt => pt.PlaylistId == job.Id));
+
+                    job.SuccessfulCount = currentJobTracks.Count(t => t.Status == TrackStatus.Downloaded);
+                    job.FailedCount = currentJobTracks.Count(t => t.Status == TrackStatus.Failed || t.Status == TrackStatus.Skipped);
+                }
+            }
+
+            // 6. Update Library Health stats
+            await UpdateLibraryHealthAsync(context);
+
+            await context.SaveChangesAsync();
+
+            // Only report jobs whose aggregate counts actually changed. Callers use this return
+            // value purely to decide which playlists need a "something changed" UI refresh
+            // (ProjectUpdatedEvent) — every non-terminal transition (Pending -> Searching ->
+            // Downloading -> Queued -> retry...) used to report the same jobs here even though
+            // nothing countable moved, which meant that event fired on essentially every state
+            // transition of every track in the playlist. Under a large active download queue that
+            // publishes continuously, driving listeners (e.g. TrackListViewModel's full
+            // VirtualizedTrackCollection rebuild) to re-run several times a second and reset the
+            // user's row selection out from under them. Per-row status is already kept live via
+            // TrackStateChangedEvent, so this only needs to fire when the job-level counts moved.
+            return needsJobRecalculation ? distinctJobIds : new List<Guid>();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// Batched analog of <see cref="UpdatePlaylistTrackStatusAndRecalculateJobsAsync"/> for group
+    /// actions (VIP Start / bulk Resume / bulk Retry) that need to flip the same status on many
+    /// tracks at once. The single-track method does one <see cref="_writeSemaphore"/> acquisition
+    /// + one <see cref="AppDbContext"/> + 2-3 queries + one commit PER CALL — fine for one track,
+    /// but calling it once per track in a loop (as group actions previously did, indirectly, by
+    /// invoking each track's own command) serializes hundreds of round-trips through the same
+    /// app-wide static semaphore, which also blocks the background download engine's own routine
+    /// per-track state writes for the whole duration. This does the equivalent work — status
+    /// update, master-track sync, job recalculation (once per distinct affected job, not once per
+    /// track), library-health touch — inside a single semaphore hold, context, and commit.
+    /// Deliberately narrower than the single-track method: no per-track resolvedPath/retry-count/
+    /// error/stalledReason variation, since group actions apply the same new status uniformly.
+    /// </summary>
+    public async Task<List<Guid>> BulkUpdatePlaylistTrackStatusAsync(
+        IReadOnlyList<string> trackUniqueHashes, TrackStatus? newStatus, string? state = null,
+        bool? isUserPaused = null, bool clearRetryState = false, bool? isClearedFromDownloadCenter = null,
+        int? priority = null)
+    {
+        if (trackUniqueHashes == null || trackUniqueHashes.Count == 0) return new List<Guid>();
+
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+
+            var playlistTracks = await context.PlaylistTracks
+                .Where(pt => trackUniqueHashes.Contains(pt.TrackUniqueHash))
+                .ToListAsync();
+
+            if (playlistTracks.Count == 0) return new List<Guid>();
+
+            var distinctJobIds = playlistTracks.Select(pt => pt.PlaylistId).Distinct().Cast<Guid>().ToList();
+
+            // newStatus is nullable: a group action like VIP Start/Force Start doesn't actually
+            // change each track's coarse TrackStatus (only its in-memory PlaylistTrackState/State
+            // string) — forcing every track in the batch to one shared status would be wrong for
+            // a batch containing tracks with different pre-existing statuses. Passing null skips
+            // the status write (and the recalculation it would otherwise trigger) entirely, while
+            // still doing the master-track `state` string sync below.
+            static bool IsCountedStatus(TrackStatus s) => s is TrackStatus.Downloaded or TrackStatus.Failed or TrackStatus.Skipped;
+            var needsJobRecalculation = newStatus.HasValue &&
+                (playlistTracks.Any(pt => IsCountedStatus(pt.Status)) || IsCountedStatus(newStatus.Value));
+
+            if (newStatus.HasValue)
+            {
+                foreach (var pt in playlistTracks)
+                {
+                    pt.Status = newStatus.Value;
+                }
+            }
+
+            // The remaining fields are all "reset to one fixed value for the whole batch" cases
+            // (a group Cancel/Retry/Pause applies the same new value to every track it touches),
+            // unlike resolvedPath/error/stalledReason on the single-track method above, which
+            // legitimately differ per track and so aren't supported here.
+            if (isUserPaused.HasValue)
+            {
+                foreach (var pt in playlistTracks) pt.IsUserPaused = isUserPaused.Value;
+            }
+            if (isClearedFromDownloadCenter.HasValue)
+            {
+                foreach (var pt in playlistTracks) pt.IsClearedFromDownloadCenter = isClearedFromDownloadCenter.Value;
+            }
+            if (priority.HasValue)
+            {
+                foreach (var pt in playlistTracks) pt.Priority = priority.Value;
+            }
+            if (clearRetryState)
+            {
+                // Note: PlaylistTrackEntity has no ErrorMessage column of its own — only the
+                // master Tracks record does (cleared below alongside State), matching how the
+                // single-track method above only ever applies `error` there too.
+                foreach (var pt in playlistTracks)
+                {
+                    pt.SearchRetryCount = 0;
+                    pt.NotFoundRestartCount = 0;
+                    pt.CompletedAt = null;
+                    pt.StalledReason = null;
+                }
+            }
+
+            // Sync master Track records for every distinct hash in this batch, in one query
+            // instead of one FindAsync per track. Every track in a single batch call shares the
+            // same target `state` string (they're all transitioning to the same PlaylistTrackState
+            // together, e.g. all "Pending" from a VIP Start) — unlike the single-track method,
+            // which supports per-track resolvedPath/retryCount/error variation this batch path
+            // deliberately doesn't need.
+            var distinctHashes = playlistTracks.Select(pt => pt.TrackUniqueHash).Distinct().ToList();
+            if (!string.IsNullOrEmpty(state) || clearRetryState)
+            {
+                var masterTracks = await context.Tracks
+                    .Where(t => distinctHashes.Contains(t.GlobalId))
+                    .ToListAsync();
+                foreach (var masterTrack in masterTracks)
+                {
+                    if (!string.IsNullOrEmpty(state)) masterTrack.State = state;
+                    if (clearRetryState)
+                    {
+                        masterTrack.SearchRetryCount = 0;
+                        masterTrack.NotFoundRestartCount = 0;
+                        masterTrack.ErrorMessage = null;
+                        masterTrack.CompletedAt = null;
+                        masterTrack.StalledReason = null;
+                    }
+                }
+            }
+
+            if (distinctJobIds.Count > 0 && needsJobRecalculation)
+            {
+                var jobsToUpdate = await context.Projects
+                    .Where(j => distinctJobIds.Contains(j.Id))
+                    .ToListAsync();
+
+                var allRelatedTracks = await context.PlaylistTracks
+                    .Where(t => distinctJobIds.Contains(t.PlaylistId))
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                foreach (var job in jobsToUpdate)
+                {
+                    var currentJobTracks = allRelatedTracks
+                        .Where(t => t.PlaylistId == job.Id && !distinctHashes.Contains(t.TrackUniqueHash))
+                        .ToList();
+                    currentJobTracks.AddRange(playlistTracks.Where(pt => pt.PlaylistId == job.Id));
+
+                    job.SuccessfulCount = currentJobTracks.Count(t => t.Status == TrackStatus.Downloaded);
+                    job.FailedCount = currentJobTracks.Count(t => t.Status == TrackStatus.Failed || t.Status == TrackStatus.Skipped);
+                }
+            }
+
+            await UpdateLibraryHealthAsync(context);
+
+            await context.SaveChangesAsync();
+            return distinctJobIds;
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task SavePlaylistTracksAsync(IEnumerable<PlaylistTrackEntity> tracks)
+    {
+        if (tracks == null)
+        {
+            return;
+        }
+
+        var trackList = tracks as IList<PlaylistTrackEntity> ?? tracks.ToList();
+        if (trackList.Count == 0)
+        {
+            return;
+        }
+
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var originalAutoDetectChanges = context.ChangeTracker.AutoDetectChangesEnabled;
+            context.ChangeTracker.AutoDetectChangesEnabled = false;
+
+            try
+            {
+                for (var offset = 0; offset < trackList.Count; offset += PlaylistTrackUpsertBatchSize)
+                {
+                    var batch = trackList
+                        .Skip(offset)
+                        .Take(PlaylistTrackUpsertBatchSize)
+                        .ToList();
+
+                    var batchIds = batch.Select(t => t.Id).ToList();
+                    var existingById = await context.PlaylistTracks
+                        .Where(t => batchIds.Contains(t.Id))
+                        .ToDictionaryAsync(t => t.Id);
+
+                    foreach (var track in batch)
+                    {
+                        if (existingById.TryGetValue(track.Id, out var existing))
+                        {
+                            context.Entry(existing).CurrentValues.SetValues(track);
+                        }
+                        else
+                        {
+                            context.PlaylistTracks.Add(track);
+                        }
+                    }
+
+                    await context.SaveChangesAsync();
+                    context.ChangeTracker.Clear();
+                }
+            }
+            finally
+            {
+                context.ChangeTracker.AutoDetectChangesEnabled = originalAutoDetectChanges;
+            }
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task DeletePlaylistTracksAsync(Guid playlistId)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var tracks = await context.PlaylistTracks.Where(t => t.PlaylistId == playlistId).ToListAsync();
+            context.PlaylistTracks.RemoveRange(tracks);
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task UpdatePlaylistTracksPriorityAsync(Guid playlistId, int newPriority)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var tracks = await context.PlaylistTracks
+                .Where(t => t.PlaylistId == playlistId && t.Status == TrackStatus.Missing)
+                .ToListAsync();
+            
+            foreach (var track in tracks)
+            {
+                track.Priority = newPriority;
+            }
+            
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task UpdatePlaylistTrackPriorityAsync(Guid trackId, int newPriority)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var track = await context.PlaylistTracks.FindAsync(trackId);
+            if (track != null)
+            {
+                track.Priority = newPriority;
+                await context.SaveChangesAsync();
+            }
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task DeleteSinglePlaylistTrackAsync(Guid trackId)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var track = await context.PlaylistTracks.FindAsync(trackId);
+            if (track != null)
+            {
+                context.PlaylistTracks.Remove(track);
+                await context.SaveChangesAsync();
+            }
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task<TrackTechnicalEntity?> GetTrackTechnicalDetailsAsync(Guid playlistTrackId)
+    {
+        using var context = new AppDbContext();
+        return await context.TechnicalDetails.FirstOrDefaultAsync(t => t.PlaylistTrackId == playlistTrackId);
+    }
+
+    public async Task<TrackTechnicalEntity> GetOrCreateTechnicalDetailsAsync(Guid playlistTrackId)
+    {
+        using var context = new AppDbContext();
+        var existing = await context.TechnicalDetails.FirstOrDefaultAsync(t => t.PlaylistTrackId == playlistTrackId);
+        
+        if (existing != null)
+            return existing;
+
+        return new TrackTechnicalEntity
+        {
+            Id = Guid.NewGuid(),
+            PlaylistTrackId = playlistTrackId,
+            LastUpdated = DateTime.UtcNow
+        };
+    }
+
+    public async Task SaveTechnicalDetailsAsync(TrackTechnicalEntity details)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var existing = await context.TechnicalDetails.FindAsync(details.Id);
+            if (existing == null) context.TechnicalDetails.Add(details);
+            else context.Entry(existing).CurrentValues.SetValues(details);
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task<List<LibraryEntryEntity>> GetAllLibraryEntriesAsync()
+    {
+        using var context = new AppDbContext();
+        return await context.LibraryEntries.AsNoTracking().ToListAsync();
+    }
+
+    public async Task<List<LibraryEntryEntity>> GetLibraryEntriesNeedingGenresAsync(int limit)
+    {
+        using var context = new AppDbContext();
+        return await context.LibraryEntries
+            .AsNoTracking()
+            .Where(e => !string.IsNullOrEmpty(e.SpotifyArtistId) && e.Genres == null)
+            .OrderByDescending(e => e.AddedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task<List<PlaylistTrackEntity>> GetPlaylistTracksNeedingGenresAsync(int limit)
+    {
+        using var context = new AppDbContext();
+        return await context.PlaylistTracks
+            .AsNoTracking()
+            .Where(t => !string.IsNullOrEmpty(t.SpotifyArtistId) && t.Genres == null)
+            .OrderByDescending(t => t.AddedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task UpdateLibraryEntriesGenresAsync(Dictionary<string, List<string>> artistGenreMap)
+    {
+        if (!artistGenreMap.Any()) return;
+
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var artistIds = artistGenreMap.Keys.ToList();
+            
+            var entries = await context.LibraryEntries
+                .Where(e => !string.IsNullOrEmpty(e.SpotifyArtistId) && artistIds.Contains(e.SpotifyArtistId))
+                .ToListAsync();
+
+            foreach (var entry in entries)
+            {
+                if (artistGenreMap.TryGetValue(entry.SpotifyArtistId!, out var genres))
+                {
+                    entry.Genres = string.Join(", ", genres);
+                }
+            }
+
+            var tracks = await context.PlaylistTracks
+                .Where(t => !string.IsNullOrEmpty(t.SpotifyArtistId) && artistIds.Contains(t.SpotifyArtistId))
+                .ToListAsync();
+
+            foreach (var track in tracks)
+            {
+                if (artistGenreMap.TryGetValue(track.SpotifyArtistId!, out var genres))
+                {
+                    track.Genres = string.Join(", ", genres);
+                }
+            }
+
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task MarkTrackAsVerifiedAsync(string trackHash)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var tracks = await context.PlaylistTracks
+                .Include(pt => pt.TechnicalDetails)
+                .Where(pt => pt.TrackUniqueHash == trackHash)
+                .ToListAsync();
+                
+            foreach (var track in tracks)
+            {
+                if (track.TechnicalDetails != null)
+                {
+                    track.TechnicalDetails.IsReviewNeeded = false;
+                }
+            }
+
+            var features = await context.AudioFeatures
+                .FirstOrDefaultAsync(f => f.TrackUniqueHash == trackHash);
+                
+            if (features != null)
+            {
+                features.CurationConfidence = CurationConfidence.High;
+                features.Source = DataSource.Manual;
+                
+                var provenance = new 
+                {
+                     Action = "Verified",
+                     By = "User",
+                     Timestamp = DateTime.UtcNow
+                };
+                features.ProvenanceJson = System.Text.Json.JsonSerializer.Serialize(provenance);
+            }
+
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    private async Task UpdateLibraryHealthAsync(AppDbContext context)
+    {
+        try
+        {
+            // Track-level updates happen frequently. Only mark drift here and let DashboardService
+            // own canonical aggregate recomputation to avoid partial-field divergence.
+            var health = await context.LibraryHealth.FindAsync(1);
+            if (health == null)
+            {
+                health = new LibraryHealthEntity
+                {
+                    Id = 1,
+                    PendingUpdates = 1,
+                    LastScanDate = DateTime.MinValue,
+                };
+                context.LibraryHealth.Add(health);
+                return;
+            }
+
+            health.PendingUpdates = Math.Min(int.MaxValue, health.PendingUpdates + 1);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update library health cache during track update");
+        }
+    }
+
+    public async Task<int> GetTotalLibraryTrackCountAsync(string? filter = null, bool? downloadedOnly = null, IEnumerable<string>? hashFilter = null, string? camelotKeyFilter = null, string? qualityTier = null)
+    {
+        using var context = new AppDbContext();
+        var hashSet = hashFilter?.Where(h => !string.IsNullOrWhiteSpace(h)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        IQueryable<LibraryEntryEntity> baseQuery;
+        var formattedSearch = BuildFtsMatchExpression(filter);
+        if (formattedSearch != null)
+        {
+            baseQuery = context.LibraryEntries.FromSqlRaw(
+                "SELECT * FROM LibraryEntries WHERE rowid IN (SELECT rowid FROM LibraryEntriesFts WHERE LibraryEntriesFts MATCH {0})", formattedSearch);
+        }
+        else
+        {
+            baseQuery = context.LibraryEntries.AsQueryable();
+        }
+
+        if (downloadedOnly.HasValue)
+        {
+            if (downloadedOnly.Value)
+                baseQuery = baseQuery.Where(t => t.FilePath != null && t.FilePath != "");
+            else
+                baseQuery = baseQuery.Where(t => string.IsNullOrEmpty(t.FilePath));
+        }
+
+        if (hashSet is { Count: > 0 })
+            baseQuery = baseQuery.Where(t => hashSet.Contains(t.UniqueHash));
+
+        if (!string.IsNullOrEmpty(camelotKeyFilter))
+        {
+            var keyUpper = camelotKeyFilter.ToUpper();
+            baseQuery = baseQuery.Where(t => t.MusicalKey != null && t.MusicalKey.ToUpper() == keyUpper);
+        }
+
+        baseQuery = ApplyQualityTierFilter(baseQuery, qualityTier);
+
+        return await baseQuery.CountAsync();
+    }
+
+    public async Task<List<PlaylistTrackEntity>> GetPagedAllTracksAsync(int skip, int take, string? filter = null, bool? downloadedOnly = null, IEnumerable<string>? hashFilter = null, string? camelotKeyFilter = null, TrackSortColumn sortColumn = TrackSortColumn.Default, bool sortDescending = false, string? qualityTier = null)
+    {
+        using var context = new AppDbContext();
+        var hashSet = hashFilter?.Where(h => !string.IsNullOrWhiteSpace(h)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        
+        IQueryable<LibraryEntryEntity> query;
+
+        // 2. Apply Filters (Use FTS5 if filter is present)
+        var formattedSearch = BuildFtsMatchExpression(filter);
+        if (formattedSearch != null)
+        {
+            query = context.LibraryEntries
+                .FromSqlRaw("SELECT * FROM LibraryEntries WHERE rowid IN (SELECT rowid FROM LibraryEntriesFts WHERE LibraryEntriesFts MATCH {0})", formattedSearch);
+        }
+        else
+        {
+            query = context.LibraryEntries.AsQueryable();
+        }
+
+        query = query.Include(le => le.AudioFeatures).AsNoTracking();
+
+        // 3. Apply DownloadedOnly
+        if (downloadedOnly.HasValue)
+        {
+            if (downloadedOnly.Value)
+                query = query.Where(t => t.FilePath != null && t.FilePath != "");
+            else
+                query = query.Where(t => string.IsNullOrEmpty(t.FilePath));
+        }
+
+        if (hashSet is { Count: > 0 })
+        {
+            query = query.Where(t => hashSet.Contains(t.UniqueHash));
+        }
+
+        if (!string.IsNullOrEmpty(camelotKeyFilter))
+        {
+            var keyUpper = camelotKeyFilter.ToUpper();
+            query = query.Where(t => t.MusicalKey != null && t.MusicalKey.ToUpper() == keyUpper);
+        }
+
+        query = ApplyQualityTierFilter(query, qualityTier);
+
+        // 4. Order & Page (Optimized: Select only what's needed for the list view, avoiding heavy blobs)
+        query = ApplyLibraryEntrySort(query, sortColumn, sortDescending);
+
+        var entries = await query
+            .Skip(skip)
+            .Take(take)
+            .Select(e => new 
+            {
+                e.Id,
+                e.UniqueHash,
+                e.Artist,
+                e.Title,
+                e.Album,
+                e.FilePath,
+                e.AvailabilityState,
+                e.Bitrate,
+                e.DurationSeconds,
+                e.Format,
+                e.AddedAt,
+                e.LastUsedAt,
+                e.SpotifyTrackId,
+                e.ISRC,
+                e.SpotifyAlbumId,
+                e.SpotifyArtistId,
+                e.AlbumArtUrl,
+                e.Genres,
+                e.Popularity,
+                e.CanonicalDuration,
+                e.ReleaseDate,
+                e.Label,
+                e.Comments,
+                e.MusicalKey,
+                e.BPM,
+                e.Energy,
+                e.Valence,
+                e.Danceability,
+                e.Integrity,
+                e.Loudness,
+                e.TruePeak,
+                e.DynamicRange,
+                e.IsEnriched,
+                e.IsPrepared,
+                e.PrimaryGenre,
+                e.DetectedSubGenre,
+                e.SubGenreConfidence,
+                e.InstrumentalProbability,
+                e.DropTimestamp,
+                e.ManualEnergy,
+                e.SourceProvenance,
+                e.Rating,
+                e.IsLiked,
+                e.PlayCount,
+                e.LastPlayedAt,
+                e.AudioFeatures
+            })
+            .ToListAsync();
+
+        // 5. PROJECT to PlaylistTrackEntity (The Adapter Pattern)
+        // Re-mapping from the anonymous type to the entity
+        return entries.Select(e => new PlaylistTrackEntity
+        {
+            Id = e.Id,
+            PlaylistId = Guid.Empty,
+            Artist = e.Artist,
+            Title = e.Title,
+            Album = e.Album,
+            TrackUniqueHash = e.UniqueHash,
+            Status = string.IsNullOrEmpty(e.FilePath) ? TrackStatus.Missing : TrackStatus.Downloaded,
+            AvailabilityState = e.AvailabilityState,
+            ResolvedFilePath = e.FilePath,
+            SpotifyTrackId = e.SpotifyTrackId,
+            AlbumArtUrl = e.AlbumArtUrl,
+            BPM = (e.AudioFeatures?.Bpm > 0) ? e.AudioFeatures.Bpm : e.BPM,
+            Energy = (e.AudioFeatures?.Energy > 0) ? e.AudioFeatures.Energy : e.Energy,
+            Danceability = (e.AudioFeatures?.Danceability > 0) ? e.AudioFeatures.Danceability : e.Danceability,
+            Valence = (e.AudioFeatures?.Valence > 0) ? e.AudioFeatures.Valence : e.Valence,
+            Arousal = (e.AudioFeatures?.Arousal > 0) ? (double?)e.AudioFeatures.Arousal : null,
+            IsDjTool = e.AudioFeatures?.IsDjTool ?? false,
+            MusicalKey = !string.IsNullOrEmpty(e.AudioFeatures?.Key) ? e.AudioFeatures.Key : e.MusicalKey,
+            CanonicalDuration = e.DurationSeconds * 1000,
+            SortOrder = 0,
+            AddedAt = e.AddedAt,
+            IsEnriched = e.IsEnriched,
+            Bitrate = e.Bitrate,
+            Format = e.Format,
+            Integrity = e.Integrity,
+            BitrateScore = e.Bitrate,
+            DetectedSubGenre = e.AudioFeatures?.DetectedSubGenre ?? e.DetectedSubGenre,
+            SubGenreConfidence = e.AudioFeatures?.SubGenreConfidence ?? e.SubGenreConfidence,
+            InstrumentalProbability = e.AudioFeatures?.InstrumentalProbability ?? e.InstrumentalProbability,
+            PrimaryGenre = e.PrimaryGenre,
+            AudioFeatures = e.AudioFeatures,
+            Loudness = e.Loudness,
+            TruePeak = e.TruePeak,
+            DynamicRange = e.DynamicRange,
+            IsTrustworthy = e.Integrity != Data.IntegrityLevel.Suspicious && e.Integrity != Data.IntegrityLevel.None,
+            QualityConfidence = (e.Bitrate >= 320 || e.Format == "flac") ? 1.0 : 0.5,
+            
+            // Phase 5: Ultimate Track View
+            DropTimestamp = e.DropTimestamp,
+            ManualEnergy = e.ManualEnergy,
+            SourceProvenance = e.SourceProvenance,
+            Rating = e.Rating,
+            IsLiked = e.IsLiked,
+            PlayCount = e.PlayCount,
+            LastPlayedAt = e.LastPlayedAt
+        }).ToList();
+    }
+
+    public async Task<List<LibraryEntryEntity>> SearchLibraryFtsAsync(string searchTerm, int limit = 100)
+    {
+        using var context = new AppDbContext();
+        var formattedSearch = BuildFtsMatchExpression(searchTerm);
+        if (formattedSearch == null)
+            return new List<LibraryEntryEntity>();
+
+        return await context.LibraryEntries
+            .FromSqlRaw("SELECT * FROM LibraryEntries WHERE rowid IN (SELECT rowid FROM LibraryEntriesFts WHERE LibraryEntriesFts MATCH {0})", formattedSearch)
+            .Include(le => le.AudioFeatures)
+            .AsNoTracking()
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    /// <summary>
+    /// Builds a safe FTS5 MATCH expression from raw user search input. Returns null when there's
+    /// nothing to search on (caller should skip the FTS query entirely and return unfiltered).
+    ///
+    /// Two real bugs this fixes (both were live in the "All Tracks" search path, previously just
+    /// <c>filter.Trim() + "*"</c>):
+    ///   1. Appending "*" to the whole trimmed string, not per word — FTS5 treats space-separated
+    ///      barewords as implicitly ANDed terms, so a multi-word query like "daft punk" became
+    ///      `daft punk*`: only the last word got prefix matching, the rest had to match a complete
+    ///      token exactly. A user who hadn't finished typing an earlier word (or wanted a genuine
+    ///      substring match) got zero/incomplete results.
+    ///   2. No escaping — FTS5 query syntax gives special meaning to `"`, `(`, `)`, `:`, `-`, `*`,
+    ///      and the barewords AND/OR/NOT. Track/artist/album text containing any of those (hyphens
+    ///      in "Artist - Title", parenthetical "(Radio Edit)", colons, quotes) could produce an
+    ///      invalid MATCH expression — and that SQLite exception was being silently swallowed by
+    ///      LibraryService's try/catch around these calls, surfacing as a search that just returns
+    ///      nothing with no visible error.
+    ///
+    /// Fix: split on whitespace, wrap each token in double quotes (escaping embedded quotes by
+    /// doubling them, standard FTS5/SQL convention) so it's treated as a literal phrase rather than
+    /// parsed syntax, then append "*" after the closing quote — FTS5 supports prefix-matching the
+    /// final token of a quoted phrase. Space-joining the quoted-prefix tokens keeps the implicit
+    /// AND-of-terms behavior, now applied consistently to every term instead of just the last one.
+    /// </summary>
+    private static string? BuildFtsMatchExpression(string? rawFilter)
+    {
+        if (string.IsNullOrWhiteSpace(rawFilter))
+            return null;
+
+        var tokens = rawFilter.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0)
+            return null;
+
+        var quotedTokens = tokens.Select(t => "\"" + t.Replace("\"", "\"\"") + "\"*");
+        return string.Join(" ", quotedTokens);
+    }
+
+    public async Task UpdateAllInstancesMetadataAsync(string trackHash, TrackEnrichmentResult result)
+    {
+        if (string.IsNullOrEmpty(trackHash) || !result.Success) return;
+
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            
+            // 1. Update LibraryEntry
+            var entry = await context.LibraryEntries.FindAsync(trackHash);
+            if (entry != null)
+            {
+                ApplyMetadata(entry, result);
+            }
+
+            // 2. Update Master Track record
+            var masterTrack = await context.Tracks.FindAsync(trackHash);
+            if (masterTrack != null)
+            {
+                ApplyMetadata(masterTrack, result);
+            }
+
+            // 3. Update all PlaylistTracks
+            var tracks = await context.PlaylistTracks
+                .Where(t => t.TrackUniqueHash == trackHash)
+                .ToListAsync();
+
+            foreach (var t in tracks)
+            {
+                ApplyMetadata(t, result);
+            }
+
+            // 4. Update AudioFeatures if they exist
+            var features = await context.AudioFeatures.FirstOrDefaultAsync(af => af.TrackUniqueHash == trackHash);
+            if (features != null)
+            {
+                if (!string.IsNullOrEmpty(result.MusicBrainzId)) features.MusicBrainzId = result.MusicBrainzId;
+                if (result.Bpm > 0) features.Bpm = (float)result.Bpm.Value;
+                if (result.Energy > 0) features.Energy = (float)result.Energy.Value;
+                if (result.Danceability > 0) features.Danceability = (float)result.Danceability.Value;
+                if (result.Valence > 0) features.Valence = (float)result.Valence.Value;
+                if (!string.IsNullOrEmpty(result.MusicalKey)) features.Key = result.MusicalKey;
+            }
+
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task UpdateLikeStatusAsync(string trackHash, bool isLiked)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+
+            // 1. Update LibraryEntry
+            var entry = await context.LibraryEntries.FindAsync(trackHash);
+            if (entry != null)
+            {
+                entry.IsLiked = isLiked;
+            }
+
+            // 2. Update Master Track record
+            var tr = await context.Tracks.FindAsync(trackHash);
+            if (tr != null)
+            {
+                tr.IsLiked = isLiked;
+            }
+
+            // 3. Update all PlaylistTracks
+            var tracks = await context.PlaylistTracks
+                .Where(t => t.TrackUniqueHash == trackHash)
+                .ToListAsync();
+
+            foreach (var t in tracks)
+            {
+                t.IsLiked = isLiked;
+            }
+
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task UpdateRatingAsync(string trackHash, int rating)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+
+            // 1. Update LibraryEntry
+            var entry = await context.LibraryEntries.FindAsync(trackHash);
+            if (entry != null)
+            {
+                entry.Rating = rating;
+            }
+
+            // 2. Update Master Track record
+            var tr = await context.Tracks.FindAsync(trackHash);
+            if (tr != null)
+            {
+                tr.Rating = rating;
+            }
+
+            // 3. Update all PlaylistTracks
+            var tracks = await context.PlaylistTracks
+                .Where(t => t.TrackUniqueHash == trackHash)
+                .ToListAsync();
+
+            foreach (var t in tracks)
+            {
+                t.Rating = rating;
+            }
+
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task UpdateBpmAsync(string trackHash, double bpm)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+
+            // Also record ManualBPM (not just the primary BPM field) so this edit survives the
+            // next re-analysis — DatabaseService.SyncDenormalizedFeaturesAsync only overwrites BPM
+            // from Essentia when ManualBPM/TagBPM are both null.
+
+            // 1. Update LibraryEntry
+            var entry = await context.LibraryEntries.FindAsync(trackHash);
+            if (entry != null)
+            {
+                entry.BPM = bpm;
+                entry.ManualBPM = bpm;
+            }
+
+            // 2. Update Master Track record
+            var tr = await context.Tracks.FindAsync(trackHash);
+            if (tr != null)
+            {
+                tr.BPM = bpm;
+                tr.ManualBPM = bpm;
+            }
+
+            // 3. Update all PlaylistTracks
+            var tracks = await context.PlaylistTracks
+                .Where(t => t.TrackUniqueHash == trackHash)
+                .ToListAsync();
+
+            foreach (var t in tracks)
+            {
+                t.BPM = bpm;
+                t.ManualBPM = bpm;
+            }
+
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task UpdateTagBpmAsync(string trackHash, double bpm)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+
+            // 1. Update LibraryEntry
+            var entry = await context.LibraryEntries.FindAsync(trackHash);
+            if (entry != null)
+            {
+                entry.TagBPM = bpm;
+                if (entry.ManualBPM is null) entry.BPM = bpm; // never downgrade a manual edit
+            }
+
+            // 2. Update Master Track record
+            var tr = await context.Tracks.FindAsync(trackHash);
+            if (tr != null)
+            {
+                tr.TagBPM = bpm;
+                if (tr.ManualBPM is null) tr.BPM = bpm;
+            }
+
+            // 3. Update all PlaylistTracks
+            var tracks = await context.PlaylistTracks
+                .Where(t => t.TrackUniqueHash == trackHash)
+                .ToListAsync();
+
+            foreach (var t in tracks)
+            {
+                t.TagBPM = bpm;
+                if (t.ManualBPM is null) t.BPM = bpm;
+            }
+
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task UpdateColorTagAsync(string trackHash, string? colorTag)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+
+            // 1. Update LibraryEntry
+            var entry = await context.LibraryEntries.FindAsync(trackHash);
+            if (entry != null)
+            {
+                entry.ColorTag = colorTag;
+            }
+
+            // 2. Update Master Track record
+            var tr = await context.Tracks.FindAsync(trackHash);
+            if (tr != null)
+            {
+                tr.ColorTag = colorTag;
+            }
+
+            // 3. Update all PlaylistTracks
+            var tracks = await context.PlaylistTracks
+                .Where(t => t.TrackUniqueHash == trackHash)
+                .ToListAsync();
+
+            foreach (var t in tracks)
+            {
+                t.ColorTag = colorTag;
+            }
+
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+
+    internal void ApplyMetadata(object entity, TrackEnrichmentResult result)
+    {
+        // Reflection-based helper or manual mapping for shared properties
+        if (entity is LibraryEntryEntity le)
+        {
+            // Sync human-readable names if they are currently "Unknown" or filenames
+            if (!string.IsNullOrEmpty(result.OfficialArtist) && (le.Artist == "Unknown Artist" || string.IsNullOrWhiteSpace(le.Artist)))
+                le.Artist = result.OfficialArtist;
+            
+            if (!string.IsNullOrEmpty(result.OfficialTitle) && (le.Title == Path.GetFileNameWithoutExtension(le.FilePath) || string.IsNullOrWhiteSpace(le.Title)))
+                le.Title = result.OfficialTitle;
+
+            if (!string.IsNullOrEmpty(result.SpotifyId)) le.SpotifyTrackId = result.SpotifyId;
+            if (!string.IsNullOrEmpty(result.SpotifyAlbumId)) le.SpotifyAlbumId = result.SpotifyAlbumId;
+            if (!string.IsNullOrEmpty(result.SpotifyArtistId)) le.SpotifyArtistId = result.SpotifyArtistId;
+            if (!string.IsNullOrEmpty(result.ISRC)) le.ISRC = result.ISRC;
+            if (!string.IsNullOrEmpty(result.MusicBrainzId)) le.MusicBrainzId = result.MusicBrainzId;
+            if (!string.IsNullOrEmpty(result.AlbumArtUrl)) le.AlbumArtUrl = result.AlbumArtUrl;
+            // BPM/Key: never overwrite the analysis-owned primary field — DSP analysis and
+            // metadata enrichment are both valid sources kept side by side. The external value
+            // is still captured into the Spotify* side-channel for provenance, and only promoted
+            // into the primary field if analysis hasn't populated it yet (fill-if-empty).
+            if (result.Bpm > 0)
+            {
+                le.SpotifyBPM = result.Bpm;
+                if (le.BPM is null or <= 0) le.BPM = result.Bpm;
+            }
+            if (!string.IsNullOrEmpty(result.MusicalKey))
+            {
+                le.SpotifyKey = result.MusicalKey;
+                if (string.IsNullOrEmpty(le.MusicalKey)) le.MusicalKey = result.MusicalKey;
+            }
+            // Energy/Danceability/Valence: no side-channel columns exist yet. Fill-if-empty
+            // only, so a genuine DSP analysis value is never clobbered by metadata enrichment.
+            if (result.Energy > 0 && (le.Energy is null or <= 0)) le.Energy = result.Energy;
+            if (result.Danceability > 0 && (le.Danceability is null or <= 0)) le.Danceability = result.Danceability;
+            if (result.Valence > 0 && (le.Valence is null or <= 0)) le.Valence = result.Valence;
+            if (result.Genres?.Any() == true) le.Genres = string.Join(", ", result.Genres);
+            if (!string.IsNullOrEmpty(result.DetectedSubGenre)) le.DetectedSubGenre = result.DetectedSubGenre;
+            if (result.SubGenreConfidence > 0) le.SubGenreConfidence = result.SubGenreConfidence;
+            if (result.ReleaseDate.HasValue) le.ReleaseDate = result.ReleaseDate;
+            if (!string.IsNullOrEmpty(result.Label)) le.Label = result.Label;
+            le.IsEnriched = true;
+        }
+        else if (entity is PlaylistTrackEntity pt)
+        {
+            // Sync human-readable names
+            if (!string.IsNullOrEmpty(result.OfficialArtist) && (pt.Artist == "Unknown Artist" || string.IsNullOrWhiteSpace(pt.Artist)))
+                pt.Artist = result.OfficialArtist;
+
+            if (!string.IsNullOrEmpty(result.OfficialTitle) && string.IsNullOrWhiteSpace(pt.Title))
+                pt.Title = result.OfficialTitle;
+
+            if (!string.IsNullOrEmpty(result.SpotifyId)) pt.SpotifyTrackId = result.SpotifyId;
+            if (!string.IsNullOrEmpty(result.SpotifyAlbumId)) pt.SpotifyAlbumId = result.SpotifyAlbumId;
+            if (!string.IsNullOrEmpty(result.SpotifyArtistId)) pt.SpotifyArtistId = result.SpotifyArtistId;
+            if (!string.IsNullOrEmpty(result.ISRC)) pt.ISRC = result.ISRC;
+            if (!string.IsNullOrEmpty(result.MusicBrainzId)) pt.MusicBrainzId = result.MusicBrainzId;
+            if (!string.IsNullOrEmpty(result.AlbumArtUrl)) pt.AlbumArtUrl = result.AlbumArtUrl;
+            // BPM/Key/Energy/Danceability/Valence: see the LibraryEntryEntity branch above for
+            // the rationale — never overwrite analysis-owned fields, keep both sources side by side.
+            if (result.Bpm > 0)
+            {
+                pt.SpotifyBPM = result.Bpm;
+                if (pt.BPM is null or <= 0) pt.BPM = result.Bpm;
+            }
+            if (!string.IsNullOrEmpty(result.MusicalKey))
+            {
+                pt.SpotifyKey = result.MusicalKey;
+                if (string.IsNullOrEmpty(pt.MusicalKey)) pt.MusicalKey = result.MusicalKey;
+            }
+            if (result.Energy > 0 && (pt.Energy is null or <= 0)) pt.Energy = result.Energy;
+            if (result.Danceability > 0 && (pt.Danceability is null or <= 0)) pt.Danceability = result.Danceability;
+            if (result.Valence > 0 && (pt.Valence is null or <= 0)) pt.Valence = result.Valence;
+            if (result.Genres?.Any() == true) pt.Genres = string.Join(", ", result.Genres);
+            if (!string.IsNullOrEmpty(result.DetectedSubGenre)) pt.DetectedSubGenre = result.DetectedSubGenre;
+            if (result.ReleaseDate.HasValue) pt.ReleaseDate = result.ReleaseDate;
+            if (!string.IsNullOrEmpty(result.Label)) pt.Label = result.Label;
+            pt.IsEnriched = true;
+        }
+        else if (entity is TrackEntity tr)
+        {
+            // Sync human-readable names
+            if (!string.IsNullOrEmpty(result.OfficialArtist) && (tr.Artist == "Unknown Artist" || string.IsNullOrWhiteSpace(tr.Artist)))
+                tr.Artist = result.OfficialArtist;
+
+            if (!string.IsNullOrEmpty(result.OfficialTitle) && (tr.Title == tr.Filename || string.IsNullOrWhiteSpace(tr.Title)))
+                tr.Title = result.OfficialTitle;
+
+            if (!string.IsNullOrEmpty(result.SpotifyId)) tr.SpotifyTrackId = result.SpotifyId;
+            if (!string.IsNullOrEmpty(result.SpotifyAlbumId)) tr.SpotifyAlbumId = result.SpotifyAlbumId;
+            if (!string.IsNullOrEmpty(result.SpotifyArtistId)) tr.SpotifyArtistId = result.SpotifyArtistId;
+            if (!string.IsNullOrEmpty(result.ISRC)) tr.ISRC = result.ISRC;
+            if (!string.IsNullOrEmpty(result.MusicBrainzId)) tr.MusicBrainzId = result.MusicBrainzId;
+            if (!string.IsNullOrEmpty(result.AlbumArtUrl)) tr.AlbumArtUrl = result.AlbumArtUrl;
+            // BPM/Key/Energy/Danceability/Valence: see the LibraryEntryEntity branch above for
+            // the rationale — never overwrite analysis-owned fields, keep both sources side by side.
+            if (result.Bpm > 0)
+            {
+                tr.SpotifyBPM = result.Bpm;
+                if (tr.BPM is null or <= 0) tr.BPM = result.Bpm;
+            }
+            if (!string.IsNullOrEmpty(result.MusicalKey))
+            {
+                tr.SpotifyKey = result.MusicalKey;
+                if (string.IsNullOrEmpty(tr.MusicalKey)) tr.MusicalKey = result.MusicalKey;
+            }
+            if (result.Energy > 0 && (tr.Energy is null or <= 0)) tr.Energy = result.Energy;
+            if (result.Danceability > 0 && (tr.Danceability is null or <= 0)) tr.Danceability = result.Danceability;
+            if (result.Valence > 0 && (tr.Valence is null or <= 0)) tr.Valence = result.Valence;
+            if (result.Genres?.Any() == true) tr.Genres = string.Join(", ", result.Genres);
+            if (!string.IsNullOrEmpty(result.DetectedSubGenre)) tr.DetectedSubGenre = result.DetectedSubGenre;
+            if (result.ReleaseDate.HasValue) tr.ReleaseDate = result.ReleaseDate;
+            if (!string.IsNullOrEmpty(result.Label)) tr.Label = result.Label;
+            tr.IsEnriched = true;
+        }
+    }
+
+    public async Task UpdateAudioFeaturesAsync(AudioFeaturesEntity entity)
+    {
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var existing = await context.AudioFeatures
+                .FirstOrDefaultAsync(f => f.TrackUniqueHash == entity.TrackUniqueHash);
+
+            if (existing == null)
+            {
+                context.AudioFeatures.Add(entity);
+            }
+            else
+            {
+                context.Entry(existing).CurrentValues.SetValues(entity);
+            }
+
+            // Sync with LibraryEntry for denormalized fields
+            var entry = await context.LibraryEntries.FindAsync(entity.TrackUniqueHash);
+            if (entry != null)
+            {
+                entry.BPM = entity.Bpm;
+                entry.Energy = entity.Energy;
+                entry.MusicalKey = entity.Key;
+                entry.IsEnriched = true;
+            }
+
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+
+    public async Task<List<PlaylistTrackEntity>> SearchPlaylistTracksAsync(string query, int limit = 50)
+    {
+        using var context = new AppDbContext();
+        var lowerQuery = query.ToLower();
+        return await context.PlaylistTracks
+            .Include(t => t.AudioFeatures)
+            .Where(t => t.Artist.ToLower().Contains(lowerQuery) || t.Title.ToLower().Contains(lowerQuery))
+            .OrderByDescending(t => t.AddedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task<List<PlaylistTrackEntity>> FindTracksInOtherProjectsAsync(
+        string artist, string title, Guid excludeProjectId)
+    {
+        // Read-only hot path: no write semaphore needed.
+        // AsNoTracking avoids EF change-tracker overhead.
+        using var context = new AppDbContext();
+        var artistLower = artist.ToLowerInvariant();
+        var titleLower  = title.ToLowerInvariant();
+
+        return await context.PlaylistTracks
+            .AsNoTracking()
+            .Where(t => t.PlaylistId != excludeProjectId
+                     && t.Artist.ToLower() == artistLower
+                     && t.Title.ToLower()  == titleLower
+                     && t.Status == TrackStatus.Downloaded)
+            .ToListAsync();
+    }
+
+    public async Task<List<TrackPhraseEntity>> GetPhrasesByHashAsync(string trackHash)
+    {
+        using var context = new AppDbContext();
+        return await context.TrackPhrases
+            .AsNoTracking()
+            .Where(p => p.TrackUniqueHash == trackHash)
+            .OrderBy(p => p.OrderIndex)
+            .ToListAsync();
+    }
+
+    public async Task SavePhrasesAsync(List<TrackPhraseEntity> phrases)
+    {
+        if (phrases == null || !phrases.Any()) return;
+
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            var hash = phrases.First().TrackUniqueHash;
+
+            // Atomic Refresh: Clear existing segments before adding new detection results
+            var existing = await context.TrackPhrases.Where(p => p.TrackUniqueHash == hash).ToListAsync();
+            context.TrackPhrases.RemoveRange(existing);
+
+            await context.TrackPhrases.AddRangeAsync(phrases);
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
+    }
+}

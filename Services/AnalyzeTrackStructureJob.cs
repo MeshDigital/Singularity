@@ -1,0 +1,486 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Data.Entities;
+using SLSKDONET.Models;
+using SLSKDONET.Services.Audio;
+using SLSKDONET.Services.AudioAnalysis;
+using SLSKDONET.Services.Embeddings;
+
+namespace SLSKDONET.Services;
+
+/// <summary>
+/// Background job that orchestrates full structural audio analysis and auto-cue generation for a single track.
+///
+/// Workflow
+/// ========
+/// 1. Look up the track's stored <see cref="AudioFeaturesEntity"/> (BPM, duration, energy curve).
+/// 2. Run the <see cref="StructuralAnalysisEngine"/> to detect phrase boundaries and drops (feeds the
+///    genre-aware phrase/section map — TrackPhrases, embeddings, energy profile — not cue placement).
+/// 3. Use Rekordbox's own phrase analysis when Rekordbox has analysed the same file.
+/// 4. Use <see cref="Engine.Cueing.CueGenerationService"/> — built from the persisted sub-bass/novelty/
+///    energy signals via <see cref="Engine.Analysis.AnalysisPipelineResultBuilder"/>, the same real-signal
+///    path Cue Forge's manual Auto-Generate button uses — to map the results into <see cref="CuePointEntity"/>
+///    objects and persist them.
+///
+/// If any step fails the error is logged and a failure event is published – the job does NOT throw.
+/// </summary>
+public sealed class AnalyzeTrackStructureJob
+{
+    private readonly DatabaseService _databaseService;
+    private readonly Engine.Cueing.CueGenerationService _cueGenerationService;
+    private readonly IPhraseAlignmentService _phraseAlignmentService;
+    private readonly IEmbeddingExtractionService _embeddingExtractionService;
+    private readonly EnergyAnalysisService _energyAnalysisService;
+    private readonly Rekordbox.IRekordboxPssiService? _rekordboxPssi;
+    private readonly IEventBus _eventBus;
+    private readonly ILogger<AnalyzeTrackStructureJob> _logger;
+
+    public AnalyzeTrackStructureJob(
+        DatabaseService databaseService,
+        Engine.Cueing.CueGenerationService cueGenerationService,
+        IPhraseAlignmentService phraseAlignmentService,
+        IEmbeddingExtractionService embeddingExtractionService,
+        EnergyAnalysisService energyAnalysisService,
+        IEventBus eventBus,
+        ILogger<AnalyzeTrackStructureJob> logger,
+        Rekordbox.IRekordboxPssiService? rekordboxPssiService = null)
+    {
+        _databaseService = databaseService;
+        _cueGenerationService = cueGenerationService;
+        _phraseAlignmentService = phraseAlignmentService;
+        _embeddingExtractionService = embeddingExtractionService;
+        _energyAnalysisService = energyAnalysisService;
+        _rekordboxPssi = rekordboxPssiService;
+        _eventBus = eventBus;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Executes the full structural analysis pipeline for the specified track.
+    /// </summary>
+    /// <param name="trackUniqueHash">Content hash of the track to analyse.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task ExecuteAsync(string trackUniqueHash, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("[AnalyzeTrackStructureJob] Starting structural analysis for track {Hash}", trackUniqueHash);
+
+        try
+        {
+            // Step 1: Fetch audio features from the database
+            var features = await _databaseService.GetAudioFeaturesByHashAsync(trackUniqueHash);
+
+            if (features == null)
+            {
+                _logger.LogWarning(
+                    "[AnalyzeTrackStructureJob] No audio features found for track {Hash}. Skipping.", trackUniqueHash);
+                PublishCompleted(trackUniqueHash, success: false, error: "No audio features available.");
+                return;
+            }
+
+            if (features.Bpm <= 0)
+            {
+                _logger.LogWarning(
+                    "[AnalyzeTrackStructureJob] BPM is 0 for track {Hash}. Skipping drop detection.", trackUniqueHash);
+            }
+
+            // Step 2: Deserialise the pre-computed energy curve (stored as JSON in AudioFeaturesEntity)
+            IReadOnlyList<float>? energyCurve = null;
+            if (!string.IsNullOrWhiteSpace(features.EnergyCurveJson) && features.EnergyCurveJson != "[]")
+            {
+                try
+                {
+                    energyCurve = JsonSerializer.Deserialize<List<float>>(features.EnergyCurveJson);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[AnalyzeTrackStructureJob] Could not deserialise energy curve for {Hash}", trackUniqueHash);
+                }
+            }
+
+            // Step 3: Run the structural analysis engine
+            var analysisResult = StructuralAnalysisEngine.Analyze(
+                bpm: features.Bpm,
+                durationSeconds: features.TrackDuration > 0 ? features.TrackDuration : 0,
+                energyCurve: energyCurve);
+
+            _logger.LogDebug(
+                "[AnalyzeTrackStructureJob] Analysis complete: {PhraseBoundaries} phrase boundaries, {Drops} drops detected, {Sections} sections inferred",
+                analysisResult.PhraseBoundaries.Count, analysisResult.Drops.Count, analysisResult.Sections.Count);
+
+            // Step 4: Snap raw structure into genre-aware sections and persist section embeddings.
+            var rawBoundaries = BuildRawBoundaries(analysisResult);
+            var alignedPhrases = await _phraseAlignmentService.AlignPhrasesAsync(
+                rawBoundaries,
+                features.Bpm > 0 ? features.Bpm : analysisResult.Bpm,
+                !string.IsNullOrWhiteSpace(features.DetectedSubGenre) ? features.DetectedSubGenre : features.ElectronicSubgenre,
+                trackUniqueHash,
+                cancellationToken);
+
+            var sections = alignedPhrases.Count > 0
+                ? await EnrichAlignedPhrasesAsync(alignedPhrases, trackUniqueHash, features, analysisResult, cancellationToken)
+                : await BuildPhraseEntitiesAsync(trackUniqueHash, features, analysisResult, cancellationToken);
+
+            // Bridge the real rule-based phrase analysis into PhraseSegmentsJson. This is the
+            // same field Cue Forge's phrase map reads; without this bridge the phrase map was empty
+            // for any track Rekordbox hadn't analysed, even though this rule-based structural
+            // analysis already ran for every track (into TrackPhrases, which nothing downstream
+            // consulted). Marked "Heuristic" so its provenance stays visible — see
+            // AnalysisPipelineResultBuilder.Build's PhraseSegmentsSource check.
+            if (sections.Count >= 2 && (string.IsNullOrWhiteSpace(features.PhraseSegmentsJson) || features.PhraseSegmentsJson == "[]"))
+            {
+                features.PhraseSegmentsJson = JsonSerializer.Serialize(ToPhraseSegments(sections, features.Bpm));
+                features.PhraseSegmentsSource = "Heuristic";
+            }
+
+            var energyProfile = _energyAnalysisService.BuildEnergyProfile(
+                analysisResult.EnergyCurve,
+                analysisResult.EnergyWindowSeconds,
+                sections);
+            ApplyEnergyProfile(features, sections, energyProfile);
+
+            if (sections.Count > 0)
+                await _databaseService.SavePhrasesAsync(sections);
+
+            // Step 4b: Rekordbox's own phrase analysis (optional — only present if the user has
+            // already analysed this exact file in Rekordbox) — its own commercial-grade analysis,
+            // preferred over the heuristic sections above; see Services/Rekordbox/RekordboxPssiService.cs.
+            if (_rekordboxPssi?.IsAvailable == true)
+            {
+                try
+                {
+                    var audioPath = await _databaseService.GetLocalFilePathByHashAsync(trackUniqueHash);
+                    if (!string.IsNullOrEmpty(audioPath))
+                    {
+                        double rbDownbeat = features.DownbeatOffsetSeconds > 0 ? features.DownbeatOffsetSeconds : 0.0;
+                        List<double>? rbBeatGrid = null;
+                        if (!string.IsNullOrWhiteSpace(features.BeatGridJson) && features.BeatGridJson != "[]")
+                        {
+                            try { rbBeatGrid = JsonSerializer.Deserialize<List<double>>(features.BeatGridJson); }
+                            catch { /* fall back to constant-BPM conversion inside AnalyzeAsync */ }
+                        }
+                        var rbSegments = await _rekordboxPssi.AnalyzeAsync(
+                            audioPath, features.Bpm, rbDownbeat, rbBeatGrid, cancellationToken);
+                        if (rbSegments is { Count: > 0 })
+                        {
+                            features.PhraseSegmentsJson = JsonSerializer.Serialize(rbSegments);
+                            features.PhraseSegmentsSource = "RekordboxPSSI";
+                            _logger.LogInformation(
+                                "[AnalyzeTrackStructureJob] Rekordbox PSSI produced {n} phrase segments for {Hash}",
+                                rbSegments.Count, trackUniqueHash);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[AnalyzeTrackStructureJob] Rekordbox PSSI lookup failed for {Hash}, continuing without it", trackUniqueHash);
+                }
+            }
+
+            // Step 6: Generate and persist cue points — via the real-signal-aware
+            // Engine.Cueing.CueGenerationService, built from the features entity's persisted
+            // sub-bass/novelty/energy JSON (not a fresh, independent recompute), the exact same
+            // way Cue Forge's own Auto-Generate button does it.
+            var analysisPipelineResult = Engine.Analysis.AnalysisPipelineResultBuilder.Build(features);
+            double downbeatAnchor = features.DownbeatOffsetSeconds > 0 ? features.DownbeatOffsetSeconds : 0.0;
+            var cues = await _cueGenerationService.GenerateAndPersistCuesAsync(
+                trackUniqueHash,
+                analysisPipelineResult,
+                downbeatAnchor,
+                features.VocalStartSeconds.HasValue ? (double?)features.VocalStartSeconds.Value : null,
+                features.VocalEndSeconds.HasValue ? (double?)features.VocalEndSeconds.Value : null,
+                features.VocalIntensity > 0 ? (double?)features.VocalIntensity : null,
+                cancellationToken,
+                skipIfManualDrops: true); // drops you placed by hand own the track
+
+            // Step 7: Mark structural analysis version on the features entity
+            features.StructuralVersion += 1;
+            await _databaseService.UpdateAudioFeaturesAsync(features);
+
+            // Step 8: Sync the track embedding for Similarity search
+            try
+            {
+                await _embeddingExtractionService.SyncEmbeddingAsync(trackUniqueHash, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[AnalyzeTrackStructureJob] Failed to sync embedding for {Hash}", trackUniqueHash);
+            }
+
+            // Step 9: Publish completion event
+            PublishCompleted(trackUniqueHash, success: true);
+
+            _logger.LogInformation(
+                "[AnalyzeTrackStructureJob] Finished for track {Hash}: {CueCount} cue points generated.",
+                trackUniqueHash, cues.Count);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("[AnalyzeTrackStructureJob] Cancelled for track {Hash}", trackUniqueHash);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[AnalyzeTrackStructureJob] Failed for track {Hash}", trackUniqueHash);
+            PublishCompleted(trackUniqueHash, success: false, error: ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Re-runs ONLY cue-point mapping (Step 6 of <see cref="ExecuteAsync"/>) against whatever
+    /// phrase/energy/sub-bass/novelty signals are already persisted on the track's
+    /// <see cref="AudioFeaturesEntity"/> — no audio decode, no structural-analysis/
+    /// Rekordbox re-run. For picking up a <see cref="Engine.Cueing.CueGenerationService"/> logic
+    /// change across many tracks without paying for a full re-analysis: cue placement is a pure
+    /// function of already-stored data, so this is a cheap DB round-trip per track instead of an
+    /// audio-decode + DSP pass. Returns false (not an exception) when the track has never been
+    /// fully analysed yet — there's nothing to remap cues from.
+    /// </summary>
+    public async Task<bool> RegenerateCuesOnlyAsync(string trackUniqueHash, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var features = await _databaseService.GetAudioFeaturesByHashAsync(trackUniqueHash);
+            if (features == null)
+            {
+                _logger.LogInformation(
+                    "[AnalyzeTrackStructureJob] Cues-only regen skipped for {Hash}: no analysis data yet (needs a full analysis first).",
+                    trackUniqueHash);
+                return false;
+            }
+
+            var analysisPipelineResult = Engine.Analysis.AnalysisPipelineResultBuilder.Build(features);
+            double downbeatAnchor = features.DownbeatOffsetSeconds > 0 ? features.DownbeatOffsetSeconds : 0.0;
+            var cues = await _cueGenerationService.GenerateAndPersistCuesAsync(
+                trackUniqueHash,
+                analysisPipelineResult,
+                downbeatAnchor,
+                features.VocalStartSeconds.HasValue ? (double?)features.VocalStartSeconds.Value : null,
+                features.VocalEndSeconds.HasValue ? (double?)features.VocalEndSeconds.Value : null,
+                features.VocalIntensity > 0 ? (double?)features.VocalIntensity : null,
+                cancellationToken);
+
+            _logger.LogInformation(
+                "[AnalyzeTrackStructureJob] Cues-only regen finished for {Hash}: {CueCount} cue points.",
+                trackUniqueHash, cues.Count);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[AnalyzeTrackStructureJob] Cues-only regen failed for {Hash}", trackUniqueHash);
+            return false;
+        }
+    }
+
+    private List<RawBoundary> BuildRawBoundaries(StructuralAnalysisResult analysisResult)
+    {
+        if (analysisResult.Sections.Count > 0)
+        {
+            return analysisResult.Sections
+                .OrderBy(s => s.OrderIndex)
+                .Select(s => new RawBoundary
+                {
+                    StartTimeSeconds = s.StartSeconds,
+                    EndTimeSeconds = s.EndSeconds,
+                    EnergyLevel = s.EnergyLevel,
+                    Confidence = s.Confidence,
+                    Label = s.Label,
+                    SuggestedType = s.Type,
+                })
+                .ToList();
+        }
+
+        return analysisResult.PhraseBoundaries
+            .Select((boundary, index) => new RawBoundary
+            {
+                StartTimeSeconds = boundary,
+                EndTimeSeconds = index < analysisResult.PhraseBoundaries.Count - 1 ? analysisResult.PhraseBoundaries[index + 1] : analysisResult.DurationSeconds,
+                EnergyLevel = EstimateEnergyAt(boundary, analysisResult),
+                Confidence = 0.45f,
+                Label = $"Phrase {index + 1}",
+                SuggestedType = InferTypeFromPosition(boundary, analysisResult.DurationSeconds)
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Converts rule-based structural sections into the same <see cref="PhraseSegment"/> shape
+    /// Rekordbox's phrase analysis produces, so both writers of PhraseSegmentsJson are interchangeable.
+    /// </summary>
+    private static List<PhraseSegment> ToPhraseSegments(IReadOnlyList<TrackPhraseEntity> sections, float bpm)
+    {
+        double beatSeconds = bpm > 0 ? 60.0 / bpm : 0;
+        double barSeconds = beatSeconds * 4;
+
+        return sections
+            .OrderBy(s => s.OrderIndex)
+            .Select(s => new PhraseSegment
+            {
+                Label = string.IsNullOrWhiteSpace(s.Label) ? s.Type.ToString() : s.Label,
+                Start = s.StartTimeSeconds,
+                Duration = s.DurationSeconds,
+                Bars = barSeconds > 0 ? (int)Math.Round(s.DurationSeconds / barSeconds) : 0,
+                Beats = beatSeconds > 0 ? (int)Math.Round(s.DurationSeconds / beatSeconds) : 0,
+                Confidence = Math.Clamp(s.Confidence, 0f, 1f),
+            })
+            .ToList();
+    }
+
+    private async Task<List<TrackPhraseEntity>> BuildPhraseEntitiesAsync(
+        string trackUniqueHash,
+        AudioFeaturesEntity features,
+        StructuralAnalysisResult analysisResult,
+        CancellationToken cancellationToken)
+    {
+        if (analysisResult.Sections.Count == 0)
+            return new List<TrackPhraseEntity>();
+
+        var phrases = analysisResult.Sections
+            .OrderBy(s => s.OrderIndex)
+            .Select(section => new TrackPhraseEntity
+            {
+                TrackUniqueHash = trackUniqueHash,
+                Type = section.Type,
+                StartTimeSeconds = (float)section.StartSeconds,
+                EndTimeSeconds = (float)section.EndSeconds,
+                EnergyLevel = Math.Clamp(section.EnergyLevel, 0f, 1f),
+                Confidence = Math.Clamp(section.Confidence, 0f, 1f),
+                OrderIndex = section.OrderIndex,
+                Label = section.Label,
+            })
+            .ToList();
+
+        return await EnrichAlignedPhrasesAsync(phrases, trackUniqueHash, features, analysisResult, cancellationToken);
+    }
+
+    private async Task<List<TrackPhraseEntity>> EnrichAlignedPhrasesAsync(
+        IReadOnlyList<TrackPhraseEntity> phrases,
+        string trackUniqueHash,
+        AudioFeaturesEntity features,
+        StructuralAnalysisResult analysisResult,
+        CancellationToken cancellationToken)
+    {
+        var enriched = new List<TrackPhraseEntity>(phrases.Count);
+
+        foreach (var phrase in phrases.OrderBy(p => p.OrderIndex))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var localWindows = SliceEnergyWindows(phrase.StartTimeSeconds, phrase.EndTimeSeconds, analysisResult);
+            try
+            {
+                var embedding = await _embeddingExtractionService.ExtractSectionEmbeddingAsync(
+                    features,
+                    phrase.Type,
+                    phrase.StartTimeSeconds,
+                    phrase.EndTimeSeconds,
+                    localWindows,
+                    cancellationToken);
+
+                phrase.TrackUniqueHash = trackUniqueHash;
+                phrase.SectionEmbeddingJson = embedding is { Length: > 0 } ? JsonSerializer.Serialize(embedding) : phrase.SectionEmbeddingJson;
+                phrase.EmbeddingMagnitude = ComputeMagnitude(embedding ?? Array.Empty<float>());
+                phrase.EmbeddingModel = embedding is { Length: > 0 } ? "orbit-section-v2" : phrase.EmbeddingModel;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "[AnalyzeTrackStructureJob] Section embedding extraction failed for {Hash} {PhraseType} {Start:F1}-{End:F1}; continuing without section vector.",
+                    trackUniqueHash,
+                    phrase.Type,
+                    phrase.StartTimeSeconds,
+                    phrase.EndTimeSeconds);
+            }
+
+            enriched.Add(phrase);
+        }
+
+        return enriched;
+    }
+
+    private static IReadOnlyList<float> SliceEnergyWindows(float startSeconds, float endSeconds, StructuralAnalysisResult analysisResult)
+    {
+        if (analysisResult.EnergyCurve.Count == 0)
+            return Array.Empty<float>();
+
+        double windowSize = analysisResult.EnergyWindowSeconds > 0 ? analysisResult.EnergyWindowSeconds : 1.0;
+        int startIndex = Math.Clamp((int)Math.Floor(startSeconds / windowSize), 0, analysisResult.EnergyCurve.Count - 1);
+        int endIndex = Math.Clamp((int)Math.Ceiling(endSeconds / windowSize), startIndex + 1, analysisResult.EnergyCurve.Count);
+
+        return analysisResult.EnergyCurve.Skip(startIndex).Take(Math.Max(1, endIndex - startIndex)).ToArray();
+    }
+
+    private void ApplyEnergyProfile(
+        AudioFeaturesEntity features,
+        IReadOnlyList<TrackPhraseEntity> sections,
+        EnergyProfile energyProfile)
+    {
+        features.Energy = energyProfile.OverallEnergy;
+        features.EnergyScore = energyProfile.OverallEnergyScore;
+        features.SegmentedEnergyJson = JsonSerializer.Serialize(
+            energyProfile.Segments.OrderBy(s => s.OrderIndex).Select(s => s.EnergyScore).ToList());
+
+        if (string.IsNullOrWhiteSpace(features.EnergyCurveJson) || features.EnergyCurveJson == "[]")
+        {
+            features.EnergyCurveJson = JsonSerializer.Serialize(
+                energyProfile.Segments.OrderBy(s => s.OrderIndex).Select(s => s.AverageEnergy).ToList());
+        }
+
+        foreach (var phrase in sections)
+        {
+            var segment = energyProfile.Segments.FirstOrDefault(s => s.OrderIndex == phrase.OrderIndex);
+            if (segment is null)
+                continue;
+
+            phrase.EnergyLevel = segment.AverageEnergy;
+            phrase.Label = string.IsNullOrWhiteSpace(phrase.Label) ? segment.Label : phrase.Label;
+        }
+    }
+
+    private static float EstimateEnergyAt(double timeSeconds, StructuralAnalysisResult analysisResult)
+    {
+        if (analysisResult.EnergyCurve.Count == 0)
+            return 0.5f;
+
+        double windowSize = analysisResult.EnergyWindowSeconds > 0 ? analysisResult.EnergyWindowSeconds : 1.0;
+        int index = Math.Clamp((int)Math.Round(timeSeconds / windowSize), 0, analysisResult.EnergyCurve.Count - 1);
+        return analysisResult.EnergyCurve[index];
+    }
+
+    private static PhraseType InferTypeFromPosition(double timeSeconds, double durationSeconds)
+    {
+        if (durationSeconds <= 0)
+            return PhraseType.Unknown;
+
+        double ratio = timeSeconds / durationSeconds;
+        if (ratio <= 0.15d) return PhraseType.Intro;
+        if (ratio >= 0.85d) return PhraseType.Outro;
+        if (ratio >= 0.55d && ratio <= 0.75d) return PhraseType.Drop;
+        return PhraseType.Build;
+    }
+
+    private static float ComputeMagnitude(float[] values)
+    {
+        if (values.Length == 0)
+            return 0f;
+
+        double sum = 0d;
+        foreach (var value in values)
+            sum += value * value;
+
+        return (float)Math.Sqrt(sum);
+    }
+
+    private void PublishCompleted(string trackUniqueHash, bool success, string? error = null)
+    {
+        _eventBus.Publish(new TrackStructureAnalysisCompletedEvent(trackUniqueHash, success, error));
+    }
+}

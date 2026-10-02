@@ -1,0 +1,111 @@
+using Microsoft.EntityFrameworkCore;
+using SLSKDONET.Data;
+using SLSKDONET.Data.Entities;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using SLSKDONET.Models;
+using SLSKDONET.Services.Models;
+
+namespace SLSKDONET.Services.Repositories;
+
+public interface ITrackRepository
+{
+    Task<List<TrackEntity>> LoadTracksAsync();
+    Task<TrackEntity?> FindTrackAsync(string globalId);
+    Task SaveTrackAsync(TrackEntity track);
+    Task UpdateTrackFilePathAsync(string globalId, string newPath);
+    Task RemoveTrackAsync(string globalId);
+    Task<List<PlaylistTrackEntity>> LoadPlaylistTracksAsync(Guid playlistId);
+    Task<PlaylistTrackEntity?> GetPlaylistTrackByHashAsync(Guid playlistId, string hash);
+    Task SavePlaylistTrackAsync(PlaylistTrackEntity track);
+    Task<List<PlaylistTrackEntity>> GetAllPlaylistTracksAsync();
+    Task<int> GetPlaylistTrackCountAsync(Guid playlistId, string? filter = null, bool? downloadedOnly = null, IEnumerable<string>? hashFilter = null, string? camelotKeyFilter = null, string? qualityTier = null);
+    Task<List<PlaylistTrackEntity>> GetPagedPlaylistTracksAsync(Guid playlistId, int skip, int take, string? filter = null, bool? downloadedOnly = null, IEnumerable<string>? hashFilter = null, string? camelotKeyFilter = null, TrackSortColumn sortColumn = TrackSortColumn.Default, bool sortDescending = false, string? qualityTier = null);
+    Task<List<LibraryEntryEntity>> GetLibraryEntriesNeedingEnrichmentAsync(int limit);
+    Task UpdateLibraryEntryEnrichmentAsync(string uniqueHash, TrackEnrichmentResult result);
+    Task<List<PlaylistTrackEntity>> GetPlaylistTracksNeedingEnrichmentAsync(int limit);
+    Task UpdatePlaylistTrackEnrichmentAsync(Guid id, TrackEnrichmentResult result);
+    /// <summary>
+    /// Consolidated Update: Synchronizes status across all playlist instances AND the master track record.
+    /// Phase 3D: High-Efficiency Core - reduces DB transactions by 50% during download loops.
+    /// Returns the playlist/job IDs whose aggregate SuccessfulCount/FailedCount actually changed
+    /// (i.e. this transition entered or left a counted status) — empty for purely intermediate
+    /// state transitions (Searching/Downloading/Queued/retry) that don't move those counts.
+    /// </summary>
+    Task<List<Guid>> UpdatePlaylistTrackStatusAndRecalculateJobsAsync(
+        string trackUniqueHash, 
+        TrackStatus newStatus, 
+        string? resolvedPath, 
+        int searchRetryCount = 0, 
+        int notFoundRestartCount = 0,
+        string? state = null,
+        string? error = null,
+        DateTime? completedAt = null,
+        string? stalledReason = null);
+    /// <summary>
+    /// Batched analog for group actions (VIP Start / bulk Pause / bulk Resume / bulk Retry / bulk
+    /// Cancel) that flip the same status on many tracks at once — one semaphore hold, DbContext,
+    /// and commit for the whole batch instead of one per track. See implementation doc comment for
+    /// the full rationale. <paramref name="isUserPaused"/>, <paramref name="isClearedFromDownloadCenter"/>,
+    /// and <paramref name="priority"/> apply the same fixed value to every track in the batch;
+    /// <paramref name="clearRetryState"/> resets each track's retry counters/error/stalled-reason
+    /// to a clean slate (mirrors DownloadManager.HardRetryTrack's single-track resets).
+    /// </summary>
+    Task<List<Guid>> BulkUpdatePlaylistTrackStatusAsync(
+        IReadOnlyList<string> trackUniqueHashes, TrackStatus? newStatus, string? state = null,
+        bool? isUserPaused = null, bool clearRetryState = false, bool? isClearedFromDownloadCenter = null,
+        int? priority = null);
+    Task SavePlaylistTracksAsync(IEnumerable<PlaylistTrackEntity> tracks);
+    Task DeletePlaylistTracksAsync(Guid playlistId);
+    Task UpdatePlaylistTracksPriorityAsync(Guid playlistId, int newPriority);
+    Task UpdatePlaylistTrackPriorityAsync(Guid trackId, int newPriority);
+    Task DeleteSinglePlaylistTrackAsync(Guid trackId);
+    Task<TrackTechnicalEntity?> GetTrackTechnicalDetailsAsync(Guid playlistTrackId);
+    Task<TrackTechnicalEntity> GetOrCreateTechnicalDetailsAsync(Guid playlistTrackId);
+    Task SaveTechnicalDetailsAsync(TrackTechnicalEntity details);
+    Task<List<LibraryEntryEntity>> GetAllLibraryEntriesAsync();
+    Task<List<LibraryEntryEntity>> GetLibraryEntriesNeedingGenresAsync(int limit);
+    Task<List<PlaylistTrackEntity>> GetPlaylistTracksNeedingGenresAsync(int limit);
+    Task UpdateLibraryEntriesGenresAsync(Dictionary<string, List<string>> artistGenreMap);
+    Task MarkTrackAsVerifiedAsync(string trackHash);
+    Task<int> GetTotalLibraryTrackCountAsync(string? filter = null, bool? downloadedOnly = null, IEnumerable<string>? hashFilter = null, string? camelotKeyFilter = null, string? qualityTier = null);
+    Task<List<PlaylistTrackEntity>> GetPagedAllTracksAsync(int skip, int take, string? filter = null, bool? downloadedOnly = null, IEnumerable<string>? hashFilter = null, string? camelotKeyFilter = null, TrackSortColumn sortColumn = TrackSortColumn.Default, bool sortDescending = false, string? qualityTier = null);
+    Task<List<LibraryEntryEntity>> SearchLibraryFtsAsync(string searchTerm, int limit = 100);
+    Task UpdateAllInstancesMetadataAsync(string trackHash, TrackEnrichmentResult result);
+    /// <summary>
+    /// Phase 2: Updates the surgical structural features for a track.
+    /// </summary>
+    Task UpdateAudioFeaturesAsync(AudioFeaturesEntity entity);
+
+    /// <summary>
+    /// Global "Like" update: synchronizes status across Library and all Projects.
+    /// </summary>
+    Task UpdateLikeStatusAsync(string trackHash, bool isLiked);
+    Task UpdateRatingAsync(string trackHash, int rating);
+    Task UpdateColorTagAsync(string trackHash, string? colorTag);
+    Task UpdateBpmAsync(string trackHash, double bpm);
+    Task UpdateTagBpmAsync(string trackHash, double bpm);
+
+    /// <summary>
+    /// Searches tracks across all playlists.
+    /// </summary>
+    Task<List<PlaylistTrackEntity>> SearchPlaylistTracksAsync(string query, int limit = 50);
+
+    /// <summary>
+    /// Finds downloaded copies of a track in projects other than the specified one.
+    /// Used by the Cross-Project Synergy feature.
+    /// </summary>
+    Task<List<PlaylistTrackEntity>> FindTracksInOtherProjectsAsync(string artist, string title, Guid excludeProjectId);
+
+    /// <summary>
+    /// Retrieves all detected phrases for a specific track.
+    /// </summary>
+    Task<List<TrackPhraseEntity>> GetPhrasesByHashAsync(string trackHash);
+
+    /// <summary>
+    /// Persists a collection of detected musical phrases, replacing any existing ones for the track.
+    /// </summary>
+    Task SavePhrasesAsync(List<TrackPhraseEntity> phrases);
+}

@@ -1,0 +1,614 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Models;
+using SLSKDONET.ViewModels;
+using SpotifyAPI.Web;
+
+namespace SLSKDONET.Services;
+
+/// <summary>
+/// Centralized orchestrator for all import operations.
+/// Handles the entire import pipeline from source parsing to library persistence.
+/// </summary>
+public class ImportOrchestrator
+{
+    private readonly ILogger<ImportOrchestrator> _logger;
+    private readonly ImportPreviewViewModel _previewViewModel;
+    private readonly DownloadManager _downloadManager;
+    private readonly INavigationService _navigationService;
+    private readonly Views.INotificationService _notificationService;
+    private readonly ILibraryService _libraryService;
+
+    // CancellationTokenSource for the active streaming preview task
+    private CancellationTokenSource? _streamCts;
+
+    // Track current import to avoid duplicate event subscriptions in older logic
+    // private bool _isHandlingImport; // REMOVED: Unused
+
+    public ImportOrchestrator(
+        ILogger<ImportOrchestrator> logger,
+        ImportPreviewViewModel previewViewModel,
+        DownloadManager downloadManager,
+        INavigationService navigationService,
+        Views.INotificationService notificationService,
+        ILibraryService libraryService)
+    {
+        _logger = logger;
+        _previewViewModel = previewViewModel;
+        _downloadManager = downloadManager;
+        _navigationService = navigationService;
+        _notificationService = notificationService;
+        _libraryService = libraryService;
+    }
+
+    /// <summary>
+    /// Import with preview screen - allows user to select tracks.
+    /// </summary>
+    /// <summary>
+    /// Import with preview screen - allows user to select tracks.
+    /// Supports streaming for immediate UI feedback.
+    /// </summary>
+    /// <summary>
+    /// Unified Import Method: Streams into Preview, then Hands off to DownloadManager.
+    /// Replaces all legacy blocking/split logic.
+    /// </summary>
+    public async Task StartImportWithPreviewAsync(IImportProvider provider, string input)
+    {
+        if (provider == null)
+        {
+            _logger.LogError("Failed to start import: provider was null");
+            _notificationService.Show("Import Error", "Import provider is unavailable.", Views.NotificationType.Error);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            _logger.LogWarning("Failed to start import from {Provider}: input was empty", provider.Name);
+            _notificationService.Show("Import Error", "Import input is empty.", Views.NotificationType.Error);
+            return;
+        }
+
+        var providerName = string.IsNullOrWhiteSpace(provider.Name) ? provider.GetType().Name : provider.Name;
+
+        try
+        {
+            _logger.LogInformation("Starting unified import from {Provider}: {Input}", providerName, input);
+
+            if (provider is IStreamingImportProvider streamProvider)
+            {
+                try
+                {
+                     // Phase 7: Deterministic ID / Deduplication
+                     // WHY: Prevents duplicate imports of same playlist:
+                     // - User re-pastes Spotify URL -> should update existing, not create duplicate
+                     // - Algorithm: Hash(normalized URL) = consistent GUID for same source
+                     // - Fallback: Check by URL string match if hash fails (legacy imports)
+                     // 
+                     // BENEFITS:
+                     // - Idempotent imports (safe to retry)
+                     // - "Refresh" feature (re-import updates metadata)
+                     // - Storage efficiency (no duplicate playlist entries)
+                     var canonicalInput = CanonicalizeUrl(input);
+                     var normalizedInput = canonicalInput.ToLowerInvariant();
+                     var newJobId = Utils.GuidGenerator.CreateFromUrl(normalizedInput);
+                     _logger.LogInformation("Generated Job ID: {Id} for input: {Input}", newJobId, input);
+                     
+                     // Retrieve existing job if any (Deduplication)
+                     var existingJob = await _libraryService.FindPlaylistJobAsync(newJobId);
+
+                     if (existingJob != null)
+                     {
+                         _logger.LogInformation("Found duplicate playlist by ID match: {Title} ({Id})", existingJob.SourceTitle, existingJob.Id);
+                     }
+                     else
+                     {
+                         _logger.LogInformation("No duplicate found by ID match for {Id}. Checking URL fallback...", newJobId);
+                     }
+
+                     // Fallback: Check by normalized URL if strict ID match failed
+                     if (existingJob == null)
+                     {
+                         existingJob = await _libraryService.FindPlaylistJobBySourceUrlAsync(normalizedInput);
+                         if (existingJob != null)
+                         {
+                             _logger.LogInformation("Found duplicate playlist by URL match: {Title}", existingJob.SourceTitle);
+                         }
+                         else
+                         {
+                             _logger.LogInformation("No duplicate found by URL match for input: {Input}", input);
+                         }
+                     }
+                     
+                     // Spotify-specific fallback: URL/URI variants can differ while playlist ID is identical.
+                     if (existingJob == null && providerName.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
+                     {
+                         existingJob = await FindExistingSpotifyJobByPlaylistIdAsync(normalizedInput);
+                         if (existingJob != null)
+                         {
+                             _logger.LogInformation("Found duplicate playlist by Spotify playlist ID: {Title} ({Id})", existingJob.SourceTitle, existingJob.Id);
+                         }
+                     }
+
+                     // Initialize UI — pass the case-preserved canonical form, since this becomes
+                     // PlaylistJob.SourceUrl on confirm (ImportPreviewViewModel._sourceUrl) and a
+                     // Spotify playlist/album/track id is case-sensitive base62; normalizedInput is
+                     // lowercased purely for the hash/lookup calls above and must never be stored
+                     // as a URL that gets re-fetched later (that was the actual bug: every synced
+                     // Spotify playlist's id was silently and permanently lowercased on import).
+                     _previewViewModel.InitializeStreamingPreview(providerName, providerName, newJobId, canonicalInput, existingJob);
+                     
+                     // Clean/Setup Callbacks
+                     SetupPreviewCallbacks();
+    
+                     // Navigate
+                     _navigationService.NavigateTo("ImportPreview");
+                     _logger.LogInformation("Navigated to ImportPreview");
+                     
+                     // Start Streaming — cancel any prior stream and issue a fresh token
+                     _streamCts?.Cancel();
+                     _streamCts?.Dispose();
+                     _streamCts = new CancellationTokenSource();
+                     _ = Task.Run(async () =>
+                     {
+                         try { await StreamPreviewAsync(streamProvider, input, _streamCts.Token); }
+                         catch (OperationCanceledException) { }
+                         catch (Exception ex) { _logger.LogError(ex, "Background stream preview failed"); }
+                     });
+                }
+                catch (Exception navEx)
+                {
+                    _logger.LogError(navEx, "Critical error during Import Setup/Navigation");
+                    _notificationService.Show("Import Error", $"Navigation failed: {navEx.Message}", Views.NotificationType.Error);
+                    throw; // Rethrow to let caller know
+                }
+            }
+            else
+            {
+                throw new InvalidOperationException($"Provider {providerName} must implement IStreamingImportProvider");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start import from {Provider}", providerName);
+            _notificationService.Show("Import Error", $"Failed to import: {ex.Message}", Views.NotificationType.Error);
+        }
+    }
+
+    /// <summary>
+    /// Import directly to library/downloader without preview UI.
+    /// Useful for background syncing or "Import All" scenarios.
+    /// </summary>
+    public async Task SilentImportAsync(IImportProvider provider, string input)
+    {
+        try
+        {
+            _logger.LogInformation("Starting silent/background import from {Provider}: {Input}", provider.Name, input);
+
+            if (provider is IStreamingImportProvider streamProvider)
+            {
+                var canonicalInput = CanonicalizeUrl(input);
+                var normalizedInput = canonicalInput.ToLowerInvariant();
+                var newJobId = Utils.GuidGenerator.CreateFromUrl(normalizedInput);
+                var existingJob = await _libraryService.FindPlaylistJobAsync(newJobId);
+
+                // Fallback: check by URL if ID lookup fails (e.g., legacy imports)
+                if (existingJob == null)
+                    existingJob = await _libraryService.FindPlaylistJobBySourceUrlAsync(normalizedInput);
+
+                if (existingJob == null && provider.Name.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
+                {
+                    existingJob = await FindExistingSpotifyJobByPlaylistIdAsync(normalizedInput);
+                }
+
+                string sourceTitle = provider.Name;
+                string sourceType = provider.Name;
+                var incomingTracks = new System.Collections.Generic.List<PlaylistTrack>();
+
+                // Stream all incoming tracks from the provider
+                await foreach (var batch in streamProvider.ImportStreamAsync(input))
+                {
+                    if (!string.IsNullOrEmpty(batch.SourceTitle) && sourceTitle == provider.Name)
+                        sourceTitle = batch.SourceTitle;
+
+                    if (!string.IsNullOrEmpty(batch.SourceType) && sourceType == provider.Name)
+                        sourceType = batch.SourceType;
+
+                    foreach (var t in batch.Tracks)
+                    {
+                        incomingTracks.Add(new PlaylistTrack
+                        {
+                            Id = Guid.NewGuid(),
+                            Artist = t.Artist ?? string.Empty,
+                            Title = t.Title ?? string.Empty,
+                            Album = t.Album ?? string.Empty,
+                            TrackUniqueHash = t.TrackHash ?? string.Empty,
+                            SpotifyTrackId = t.SpotifyTrackId,
+                            SpotifyAlbumId = t.SpotifyAlbumId,
+                            SpotifyArtistId = t.SpotifyArtistId,
+                            AlbumArtUrl = t.AlbumArtUrl,
+                            ArtistImageUrl = t.ArtistImageUrl,
+                            Genres = t.Genres,
+                            Popularity = t.Popularity,
+                            CanonicalDuration = t.CanonicalDuration,
+                            ReleaseDate = t.ReleaseDate,
+                            SourcePlaylistId = newJobId,
+                            SourcePlaylistName = sourceTitle,
+                            Status = TrackStatus.Missing,
+                            AddedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+
+                if (incomingTracks.Count == 0)
+                {
+                    _logger.LogWarning("Silent import for {Input} yielded 0 tracks. Skipping.", input);
+                    return;
+                }
+
+                System.Collections.Generic.List<PlaylistTrack> tracksToQueue;
+                int newCount = 0;
+                int skippedCount = 0;
+                int retriedCount = 0;
+
+                if (existingJob != null)
+                {
+                    // ── SYNC MODE: Smart Merge ──────────────────────────────────────────────
+                    // Load existing tracks from DB (the source of truth for status)
+                    var existingTracks = await _libraryService.LoadPlaylistTracksAsync(existingJob.Id);
+                    var existingByHash = existingTracks
+                        .Where(t => !string.IsNullOrEmpty(t.TrackUniqueHash))
+                        .GroupBy(t => t.TrackUniqueHash)
+                        .ToDictionary(g => g.Key, g => g.First());
+
+                    tracksToQueue = new System.Collections.Generic.List<PlaylistTrack>();
+
+                    // Dedupe the incoming batch against ITSELF, not just against what's already in
+                    // the DB — existingByHash only reflects rows that existed before this sync
+                    // started, so if the source yields the same track twice in one fetch (a real,
+                    // observed Spotify paginated-API quirk), both copies passed the existingByHash
+                    // check and both got queued. FRESH IMPORT MODE below already guarded against
+                    // this; SYNC MODE didn't, despite a comment claiming it did.
+                    var seenHashesInBatch = new HashSet<string>(StringComparer.Ordinal);
+                    int duplicatesInBatch = 0;
+
+                    foreach (var incoming in incomingTracks)
+                    {
+                        if (string.IsNullOrEmpty(incoming.TrackUniqueHash))
+                        {
+                            // No hash = can't deduplicate, add as new
+                            tracksToQueue.Add(incoming);
+                            newCount++;
+                            continue;
+                        }
+
+                        if (!seenHashesInBatch.Add(incoming.TrackUniqueHash))
+                        {
+                            duplicatesInBatch++;
+                            continue;
+                        }
+
+                        if (existingByHash.TryGetValue(incoming.TrackUniqueHash, out var existing))
+                        {
+                            if (existing.Status == TrackStatus.Downloaded)
+                            {
+                                // ✅ Already downloaded — skip entirely, preserve progress
+                                skippedCount++;
+                            }
+                            else if (existing.Status == TrackStatus.Failed || existing.Status == TrackStatus.OnHold)
+                            {
+                                // 🔄 Previously failed — update metadata from Spotify and requeue
+                                existing.Artist = incoming.Artist;
+                                existing.Title = incoming.Title;
+                                existing.Album = incoming.Album;
+                                existing.AlbumArtUrl = incoming.AlbumArtUrl ?? existing.AlbumArtUrl;
+                                existing.CanonicalDuration = incoming.CanonicalDuration > 0 ? incoming.CanonicalDuration : existing.CanonicalDuration;
+                                existing.Status = TrackStatus.Missing; // Reset to queue for download
+                                existing.SearchRetryCount = 0;
+                                existing.NotFoundRestartCount = 0;
+                                tracksToQueue.Add(existing);
+                                retriedCount++;
+                            }
+                            // else: Missing/Searching/Downloading — already in queue, leave untouched
+                        }
+                        else
+                        {
+                            // 🆕 New track not in this playlist yet
+                            incoming.SourcePlaylistId = existingJob.Id;
+                            tracksToQueue.Add(incoming);
+                            newCount++;
+                        }
+                    }
+
+                    _logger.LogInformation(
+                        "Sync merge for '{Title}': {New} new, {Retried} retried, {Skipped} already downloaded (preserved), {Duplicates} in-batch duplicates skipped.",
+                        sourceTitle, newCount, retriedCount, skippedCount, duplicatesInBatch);
+                }
+                else
+                {
+                    // ── FRESH IMPORT MODE ────────────────────────────────────────────────────
+                    // Dedupe within the incoming batch itself — a source provider can yield the
+                    // same track twice (pagination hiccups, etc.); without this every copy became
+                    // a separate PlaylistTrack row. Same keep-first-by-hash rule Sync Mode already
+                    // applies above; tracks with no hash can't be deduped so pass through untouched.
+                    var seenHashes = new HashSet<string>(StringComparer.Ordinal);
+                    tracksToQueue = new System.Collections.Generic.List<PlaylistTrack>();
+                    var duplicatesInBatch = 0;
+
+                    foreach (var incoming in incomingTracks)
+                    {
+                        if (string.IsNullOrEmpty(incoming.TrackUniqueHash) || seenHashes.Add(incoming.TrackUniqueHash))
+                        {
+                            tracksToQueue.Add(incoming);
+                        }
+                        else
+                        {
+                            duplicatesInBatch++;
+                        }
+                    }
+
+                    newCount = tracksToQueue.Count;
+                    _logger.LogInformation(
+                        "Fresh import for '{Title}': {Count} tracks ({Duplicates} in-batch duplicates skipped)",
+                        sourceTitle, newCount, duplicatesInBatch);
+                }
+
+                // Build and queue the job
+                var job = new PlaylistJob
+                {
+                    Id = newJobId,
+                    SourceUrl = canonicalInput,
+                    SourceTitle = sourceTitle,
+                    SourceType = sourceType,
+                    PlaylistTracks = tracksToQueue,
+                    CreatedAt = existingJob?.CreatedAt ?? DateTime.UtcNow,
+                    DateUpdated = DateTime.UtcNow
+                };
+
+                await _downloadManager.QueueProject(job);
+
+                var message = existingJob != null
+                    ? $"Synced '{sourceTitle}': {newCount} new, {retriedCount} retried, {skippedCount} already downloaded"
+                    : $"Imported {tracksToQueue.Count} tracks from '{sourceTitle}'";
+                _notificationService.Show("Sync Complete", message, Views.NotificationType.Success);
+            }
+        }
+        catch (APIException apiEx) when (apiEx.Response?.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Spotify returns a bare 404 "Resource not found" both when a playlist was deleted
+            // and when it was switched to private/collaborative-only since we last synced it —
+            // there's no way to tell those apart from the API response, so give the user the
+            // actionable read rather than the raw exception text.
+            _logger.LogWarning(apiEx, "Spotify playlist no longer reachable for {Input} (404)", input);
+            _notificationService.Show(
+                "Sync Failed",
+                "This Spotify playlist could not be found — it may have been deleted or made private since it was last synced.",
+                Views.NotificationType.Error);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to perform silent import for {Input}", input);
+            _notificationService.Show("Import Error", $"Silent import failed: {ex.Message}", Views.NotificationType.Error);
+        }
+    }
+
+    /// <summary>
+    /// Strips tracking query params and a trailing slash, WITHOUT touching case — this is what
+    /// must be stored as <see cref="PlaylistJob.SourceUrl"/> and re-sent to a streaming provider,
+    /// since a Spotify playlist/album/track id is case-sensitive base62 (e.g. mixed upper/lower
+    /// like "37i9dQZF1DXcBWIGoYBM5M"). <see cref="NormalizeImportInput"/> exists separately for
+    /// job-id hashing/lookup only, where case-folding is fine because that comparison was already
+    /// case-insensitive anyway — but it used to ALSO be what got stored as SourceUrl, silently
+    /// lowercasing every synced Spotify playlist/album id into something Spotify's API 404s on
+    /// forever after. Confirmed against this environment's real database: both stored Spotify
+    /// SourceUrls were fully-lowercase 22-char ids, which is not a real Spotify id — every "Sync"
+    /// on those two playlists was refetching a URL that could never have existed.
+    /// </summary>
+    private static string CanonicalizeUrl(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+
+        var value = input.Trim();
+        if (value.StartsWith("spotify:", StringComparison.OrdinalIgnoreCase))
+        {
+            return value;
+        }
+
+        if (Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        {
+            return uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
+        }
+
+        return value;
+    }
+
+    /// <summary>Case-folded form of <see cref="CanonicalizeUrl"/>, for job-id hashing and
+    /// case-insensitive lookups only — never store this as a URL to be re-fetched later.</summary>
+    private static string NormalizeImportInput(string input) => CanonicalizeUrl(input).ToLowerInvariant();
+
+    private async Task<PlaylistJob?> FindExistingSpotifyJobByPlaylistIdAsync(string input)
+    {
+        var playlistId = ExtractSpotifyPlaylistId(input);
+        if (string.IsNullOrWhiteSpace(playlistId))
+        {
+            return null;
+        }
+
+        var allJobs = await _libraryService.LoadAllPlaylistJobsAsync();
+        foreach (var job in allJobs)
+        {
+            if (!job.SourceType.Equals("Spotify", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var existingId = ExtractSpotifyPlaylistId(job.SourceUrl);
+            if (!string.IsNullOrWhiteSpace(existingId) && existingId.Equals(playlistId, StringComparison.OrdinalIgnoreCase))
+            {
+                return job;
+            }
+        }
+
+        return null;
+    }
+
+    private static string ExtractSpotifyPlaylistId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var input = value.Trim();
+
+        if (input.StartsWith("spotify:", StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = input.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length >= 3 && parts[1].Equals("playlist", StringComparison.OrdinalIgnoreCase))
+            {
+                return parts[2].Trim();
+            }
+        }
+
+        if (Uri.TryCreate(input, UriKind.Absolute, out var uri))
+        {
+            var segments = uri.AbsolutePath
+                .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            for (int i = 0; i < segments.Length - 1; i++)
+            {
+                if (segments[i].Equals("playlist", StringComparison.OrdinalIgnoreCase))
+                {
+                    return segments[i + 1].Trim();
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private async Task StreamPreviewAsync(IStreamingImportProvider provider, string input, CancellationToken ct = default)
+    {
+        try
+        {
+            await foreach (var batch in provider.ImportStreamAsync(input).WithCancellation(ct))
+            {
+                 if (ct.IsCancellationRequested) break;
+
+                 // Update Title/Type from the first batch that reports something more specific than the provider's own name
+                 if (!string.IsNullOrEmpty(batch.SourceTitle) && _previewViewModel.SourceTitle == provider.Name)
+                 {
+                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                     {
+                         _previewViewModel.SourceTitle = batch.SourceTitle;
+                     });
+                 }
+
+                 if (!string.IsNullOrEmpty(batch.SourceType) && _previewViewModel.SourceType == provider.Name)
+                 {
+                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                     {
+                         _previewViewModel.SourceType = batch.SourceType;
+                     });
+                 }
+
+                 if (!string.IsNullOrEmpty(batch.SourceUrl))
+                 {
+                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                     {
+                         _previewViewModel.UpdateSourceUrl(batch.SourceUrl!);
+                     });
+                 }
+
+                 await _previewViewModel.AddTracksToPreviewAsync(batch.Tracks);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+             _logger.LogInformation("Streaming preview cancelled by user");
+        }
+        catch (Exception ex)
+        {
+             _logger.LogError(ex, "Error during streaming preview");
+             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => _previewViewModel.StatusMessage = "Stream error: " + ex.Message);
+        }
+        finally
+        {
+             // Only reset IsLoading if not cancelled — cancellation means the ViewModel may have been reset already
+             if (!ct.IsCancellationRequested)
+             {
+                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                 {
+                     _previewViewModel.IsLoading = false;
+                     // Clear, distinct "done" message — the per-batch "Loading tracks… (N so
+                     // far)" message would otherwise just freeze at whatever count the last batch
+                     // reported, giving no positive confirmation the import actually finished.
+                     _previewViewModel.StatusMessage = $"Loaded {_previewViewModel.ImportedTracks.Count} track(s) — ready to import.";
+                 });
+             }
+        }
+    }
+
+    /// <summary>
+    /// Set up event handlers for preview screen callbacks.
+    /// </summary>
+    private void SetupPreviewCallbacks()
+    {
+        // Always clean up any existing subscriptions first to avoid doubles
+        _logger.LogInformation("Setting up ImportPreviewViewModel event callbacks");
+        _previewViewModel.AddedToLibrary -= OnPreviewConfirmed;
+        _previewViewModel.Cancelled -= OnPreviewCancelled;
+
+        // Subscribe
+        _previewViewModel.AddedToLibrary += OnPreviewConfirmed;
+        _previewViewModel.Cancelled += OnPreviewCancelled;
+    }
+
+    /// <summary>
+    /// Handle when user confirms tracks in preview screen.
+    /// </summary>
+    private void OnPreviewConfirmed(object? sender, PlaylistJob job)
+    {
+        try
+        {
+            _logger.LogInformation("Preview confirmed: {Title} with {Count} tracks",
+                job.SourceTitle, job.OriginalTracks.Count);
+
+            // Navigate to library
+            _navigationService.NavigateTo("Library");
+
+            _logger.LogInformation("Import completed and navigated to Library");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to handle preview confirmation");
+        }
+        finally
+        {
+            CleanupCallbacks();
+        }
+    }
+
+    /// <summary>
+    /// Handle when user cancels preview.
+    /// </summary>
+    private void OnPreviewCancelled(object? sender, EventArgs e)
+    {
+        _logger.LogInformation("Import preview cancelled");
+        _streamCts?.Cancel(); // Stop the background streaming task immediately
+        _navigationService.GoBack();
+        CleanupCallbacks();
+    }
+
+    /// <summary>
+    /// Remove event handlers after import completes.
+    /// </summary>
+    private void CleanupCallbacks()
+    {
+        _previewViewModel.AddedToLibrary -= OnPreviewConfirmed;
+        _previewViewModel.Cancelled -= OnPreviewCancelled;
+    }
+}

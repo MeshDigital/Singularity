@@ -1,0 +1,2187 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Windows.Input; // For ICommand
+using SLSKDONET.Models;
+using SLSKDONET.Services;
+using SLSKDONET.Views; // For RelayCommand
+using SLSKDONET.Data; // For IntegrityLevel
+using SLSKDONET.Events;
+
+namespace SLSKDONET.ViewModels;
+
+/// <summary>One entry in the AI genre classifier's ranked output, for the Track Inspector.</summary>
+public sealed record GenreScore(string Label, double Confidence);
+
+/// <summary>
+/// ViewModel representing a track in the download queue.
+/// Manages state, progress, and updates for the UI.
+/// </summary>
+public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNode, IDisposable
+{
+    private PlaylistTrackState _state;
+    private double _progress;
+    private string _currentSpeed = string.Empty;
+    private string? _errorMessage;
+    private string? _coverArtUrl;
+    private ArtworkProxy _artwork; // Replaces _artworkBitmap
+    private bool _isAnalyzing; // New field for analysis feedback
+    private bool _isEnriching; // New field for metadata enrichment feedback
+    private bool _isSelected;
+    private List<OrbitCue> _cues = new();
+    
+    // NEW Phase 12.1: Live Console Log for granular updates
+    public System.Collections.ObjectModel.ObservableCollection<string> LiveConsoleLog { get; } = new();
+
+    private bool _isConsoleOpen;
+    public bool IsConsoleOpen
+    {
+        get => _isConsoleOpen;
+        set => SetProperty(ref _isConsoleOpen, value);
+    }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (SetProperty(ref _isSelected, value) && value)
+            {
+                // Trigger the lazy-load of waveform data from DB
+                _ = LoadTechnicalDataAsync();
+            }
+        }
+    }
+
+    private bool _isSavedDoublePartner;
+    public bool IsSavedDoublePartner
+    {
+        get => _isSavedDoublePartner;
+        set => SetProperty(ref _isSavedDoublePartner, value);
+    }
+
+    // MixedInKey-style harmonic mixing highlight, driven by TrackListViewModel
+    // relative to the currently selected/lead track. Mutually exclusive.
+    private bool _isHarmonicMatch;
+    public bool IsHarmonicMatch
+    {
+        get => _isHarmonicMatch;
+        set => SetProperty(ref _isHarmonicMatch, value);
+    }
+
+    private bool _isExactKeyMatch;
+    public bool IsExactKeyMatch
+    {
+        get => _isExactKeyMatch;
+        set => SetProperty(ref _isExactKeyMatch, value);
+    }
+
+    private int _sortOrder;
+    public DateTime AddedAt => Model?.AddedAt ?? DateTime.MinValue;
+
+    public DateTime? ReleaseDate => Model?.ReleaseDate;
+    public string ReleaseYear => Model?.ReleaseDate?.Year.ToString() ?? "";
+    public string YearDisplay => ReleaseYear; // Alias for StandardTrackRow compatibility
+    public string? PrimaryGenre => Model.PrimaryGenre;
+
+    /// <summary>Genre label for tracks with no ranked AI breakdown stored yet (see <see cref="TopGenres"/>).</summary>
+    public string? LegacyGenreLabel => !string.IsNullOrEmpty(DetectedSubGenre) ? DetectedSubGenre : PrimaryGenre;
+    public bool ShowLegacyGenreFallback => !HasTopGenres && !string.IsNullOrEmpty(LegacyGenreLabel);
+
+    // Phase 2: Pure UX Alignment - DataGrid Extras
+    public DateTime? CompletedAt => Model.CompletedAt;
+    public string CompletedAtDisplay => CompletedAt.HasValue ? CompletedAt.Value.ToString("yyyy-MM-dd HH:mm") : "—";
+    public string FormatDisplay => !string.IsNullOrEmpty(Format) ? Format.ToUpper() : "—";
+
+    public bool IsPrepared => Model.IsPrepared;
+    public string PreparationStatus => IsPrepared ? "Prepared" : "Raw";
+    public Avalonia.Media.IBrush PreparationColor => IsPrepared ? Avalonia.Media.Brushes.DodgerBlue : Avalonia.Media.Brushes.Gray;
+
+    public Avalonia.Media.IBrush QualityColor 
+    {
+        get
+        {
+            // Simple bitrate based color as fallback
+            var bitrate = Model.Bitrate ?? 0;
+            if (bitrate >= 320) return Avalonia.Media.Brushes.LimeGreen;
+            if (bitrate >= 256) return Avalonia.Media.Brushes.Gold;
+            if (bitrate > 0) return Avalonia.Media.Brushes.Orange;
+            return Avalonia.Media.Brushes.Gray;
+        }
+    }
+
+    public string TierBadge => string.Empty;
+    public string Tier => "Standard";
+    
+
+
+    public int SortOrder 
+    {
+        get => _sortOrder;
+        set
+        {
+             if (_sortOrder != value)
+             {
+                 _sortOrder = value;
+                 OnPropertyChanged();
+                 // Propagate to Model
+                 if (Model != null) Model.SortOrder = value;
+             }
+        }
+    }
+
+    public Guid SourceId { get; set; } // Project ID (PlaylistJob.Id)
+    public Guid Id => Model.Id;
+    public bool IsAnalyzing
+    {
+        get => _isAnalyzing;
+        set => SetProperty(ref _isAnalyzing, value);
+    }
+
+    public bool IsEnriching
+    {
+        get => _isEnriching;
+        set => SetProperty(ref _isEnriching, value);
+    }
+
+    private bool _isExpanded;
+    private bool _technicalDataLoaded = false;
+    private Data.Entities.TrackTechnicalEntity? _technicalEntity;
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set
+        {
+            if (SetProperty(ref _isExpanded, value))
+            {
+                if (_isExpanded && !_technicalDataLoaded)
+                {
+                    _ = LoadTechnicalDataAsync();
+                }
+            }
+        }
+    }
+
+    // Integrity Level
+    public IntegrityLevel IntegrityLevel
+    {
+        get => Model.Integrity;
+        set
+        {
+            if (Model.Integrity != value)
+            {
+                Model.Integrity = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IntegrityBadge));
+                OnPropertyChanged(nameof(IntegrityColor));
+                OnPropertyChanged(nameof(IntegrityTooltip));
+            }
+        }
+    }
+
+    private bool _isDuplicate;
+    public bool IsDuplicate
+    {
+        get => _isDuplicate;
+        set => SetProperty(ref _isDuplicate, value);
+    }
+
+    public string IntegrityBadge => Model.Integrity switch
+    {
+        Data.IntegrityLevel.Gold => "🥇",
+        Data.IntegrityLevel.Verified => "🛡️",
+        Data.IntegrityLevel.Suspicious => "📉",
+        _ => ""
+    };
+
+    public string IntegrityColor => Model.Integrity switch
+    {
+        Data.IntegrityLevel.Gold => "#FFD700",      // Gold
+        Data.IntegrityLevel.Verified => "#32CD32",  // LimeGreen
+        Data.IntegrityLevel.Suspicious => "#FFA500",// Orange
+        _ => "Transparent"
+    };
+
+    public string IntegrityTooltip => Model.Integrity switch
+    {
+        Data.IntegrityLevel.Gold => "Perfect Match (Gold)",
+        Data.IntegrityLevel.Verified => "Verified Log/Hash",
+        Data.IntegrityLevel.Suspicious => "Suspicious (Upscale/Transcode)",
+        _ => "Not Analyzed"
+    };
+
+    // 2026 Forensic UX: compact quality pill + detailed hover HUD.
+    public string ForensicVerdictText => Model.Integrity switch
+    {
+        Data.IntegrityLevel.Gold => "Gold",
+        Data.IntegrityLevel.Verified => "Verified",
+        Data.IntegrityLevel.Suspicious => "Review",
+        _ => "Unknown"
+    };
+
+    public string ForensicHudText
+    {
+        get
+        {
+            var details = Model.QualityDetails;
+            string cutoffText = "";
+            if (Model.FrequencyCutoff.HasValue && Model.FrequencyCutoff.Value > 0)
+            {
+                var khz = Model.FrequencyCutoff.Value / 1000.0;
+                cutoffText = $"\nHard cutoff at {khz:F1}kHz detected.";
+            }
+
+            if (string.IsNullOrWhiteSpace(details))
+            {
+                return $"{IntegrityTooltip}{cutoffText}".Trim();
+            }
+
+            return $"{IntegrityTooltip}\n{details}{cutoffText}".Trim();
+        }
+    }
+
+    // Phase 10: Spectral FLAC auditing
+    public bool IsTranscoded => Model.IsTranscoded;
+
+    public double Energy
+    {
+        get => Model.Energy ?? 0.0;
+        set
+        {
+            Model.Energy = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SonicProfile));
+        }
+    }
+
+    public double Danceability
+    {
+        get => Model.Danceability ?? 0.0;
+        set
+        {
+            Model.Danceability = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public int? ManualEnergy
+    {
+        get => Model.ManualEnergy;
+        set
+        {
+            if (Model.ManualEnergy != value)
+            {
+                Model.ManualEnergy = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(EnergyRating));
+            }
+        }
+    }
+
+    public string EnergyRating => ManualEnergy?.ToString() ?? (Energy > 0 ? $"{(int)(Energy * 10):0}" : "—");
+
+    public double? DropTimestamp
+    {
+        get => Model.DropTimestamp;
+        set
+        {
+            if (Model.DropTimestamp != value)
+            {
+                Model.DropTimestamp = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DropDisplay));
+            }
+        }
+    }
+
+    public string DropDisplay => DropTimestamp.HasValue ? TimeSpan.FromSeconds(DropTimestamp.Value).ToString(@"mm\:ss") : "—";
+
+    public double Valence
+    {
+        get => Model.Valence ?? 0.0;
+        set
+        {
+            Model.Valence = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SonicProfile));
+        }
+    }
+
+    public string? MoodTag
+    {
+        get => Model.MoodTag;
+        set
+        {
+            Model.MoodTag = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasMood));
+            OnPropertyChanged(nameof(HasVibeData));
+        }
+    }
+    
+    public bool HasMood => !string.IsNullOrEmpty(MoodTag) && MoodTag != "Neutral";
+
+    /// <summary>
+    /// Probability score for the primary <see cref="MoodTag"/> (0.0 – 1.0).
+    /// From the Phase 13 AI layer (Essentia TensorFlow mood models).
+    /// </summary>
+    public float MoodConfidence => Model.MoodConfidence ?? 0f;
+
+    public Models.SonicProfileData SonicProfile => new Models.SonicProfileData(
+        Energy, 
+        Valence, 
+        Model.InstrumentalProbability ?? 0.0);
+    
+    public double InstrumentalProbability => Model.InstrumentalProbability ?? 0.0;
+    
+    public double BPM => Model.BPM ?? 0.0;
+    public string MusicalKey => Model.MusicalKey ?? "—";
+
+    /// <summary>Applies a BPM edit already persisted elsewhere (e.g. TrackRepository.UpdateBpmAsync)
+    /// to THIS view-model instance and re-raises the properties that read it. Callers that hold a
+    /// different PlaylistTrackViewModel instance for the same track (e.g. a Flow Builder card,
+    /// which wraps its own separate instance — see MixTransitionViewModel.LoadPairAsync's
+    /// freshly-constructed pair) won't see this change; publish TrackMetadataUpdatedEvent for
+    /// those to pick up.</summary>
+    public void ApplyBpmUpdate(double bpm)
+    {
+        Model.BPM = bpm;
+        OnPropertyChanged(nameof(BPM));
+        OnPropertyChanged(nameof(BpmDisplay));
+        OnPropertyChanged(nameof(HasBpm));
+    }
+    
+    public string GlobalId { get; set; } // TrackUniqueHash
+    
+    // Properties linked to Model and Notification
+    public string Artist 
+    { 
+        get => Model.Artist ?? string.Empty;
+        set
+        {
+            if (Model.Artist != value)
+            {
+                Model.Artist = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ArtistName));
+            }
+        }
+    }
+
+    public string Title 
+    { 
+        get => Model.Title ?? string.Empty;
+        set
+        {
+            if (Model.Title != value)
+            {
+                Model.Title = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(TrackTitle));
+            }
+        }
+    }
+
+    public string Album
+    {
+        get => Model.Album ?? string.Empty;
+        set
+        {
+            if (Model.Album != value)
+            {
+                Model.Album = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(AlbumName));
+            }
+        }
+    }
+    
+    // Aliases for StandardTrackRow.axaml compatibility (binds to ArtistName/TrackTitle)
+    public string ArtistName => !string.IsNullOrWhiteSpace(Artist) ? Artist : "Unknown Artist";
+    public string TrackTitle => !string.IsNullOrWhiteSpace(Title) ? Title : "Unknown Title";
+    public string AlbumName => !string.IsNullOrWhiteSpace(Album) ? Album : "Unknown Album";
+    
+    public string? Genres => GenresDisplay;
+    public int Popularity => Model.Popularity ?? 0;
+    public string? Duration => DurationDisplay;
+    public string? DurationFormatted => DurationDisplay; // Alias for DataGrid
+    
+    // Phase 5: Fixed Bitrate (ensure it doesn't show BPM values)
+    public string? Bitrate 
+    {
+        get
+        {
+            var val = Model.Bitrate ?? Model.BitrateScore ?? 0;
+            if (val > 0 && val < 100 && BPM > 0) return "—"; // Likely a swapped BPM value
+            return val > 0 ? $"{val}" : "—";
+        }
+    }
+    public string? BitrateFormatted => Bitrate; // Alias for DataGrid
+    public string? Status => StatusText;
+
+    public string? Label
+    {
+        get => Model.Label;
+        set
+        {
+            if (Model.Label != value)
+            {
+                Model.Label = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string? Comments
+    {
+        get => Model.Comments;
+        set
+        {
+            if (Model.Comments != value)
+            {
+                Model.Comments = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string Source => Model.SourceProvenance ?? Model.Source.ToString();
+    public string? SourceProvenance => Model.SourceProvenance;
+
+    public ArtworkProxy Artwork => _artwork;
+
+    public Avalonia.Media.Imaging.Bitmap? ArtworkBitmap => _artwork?.Image;
+
+    // Deterministic color + monogram shown in place of real artwork wherever it's still loading
+    // or was never found — every "no art" row used to render as the exact same flat gray tile
+    // with a faint music-note glyph, giving no visual distinction between rows at a glance.
+    // Same Artist/Title seed always produces the same color, so a track's tile stays stable
+    // across scrolls and sessions rather than flickering.
+    public Avalonia.Media.IBrush FallbackArtBrush => Utils.ArtworkFallback.GetBrush($"{Artist}{Title}");
+    public string FallbackArtLetter => Utils.ArtworkFallback.GetLetter(Title ?? Artist);
+
+    // Status Properties for StandardTrackRow
+    public bool IsActive => (State == PlaylistTrackState.Downloading || State == PlaylistTrackState.Searching || State == PlaylistTrackState.Queued || State == PlaylistTrackState.Pending) && State != PlaylistTrackState.Stalled;
+    public bool IsFailed => State == PlaylistTrackState.Failed || State == PlaylistTrackState.Cancelled;
+    public bool IsCompleted => State == PlaylistTrackState.Completed;
+    public bool IsStalled => State == PlaylistTrackState.Stalled;
+    public string? StalledReason => Model.StalledReason;
+    public bool IsOnHold => Model.Status == TrackStatus.OnHold;
+    
+    // UI Layout Bools (For clean XAML)
+    public bool IsSearching => State == PlaylistTrackState.Searching || State == PlaylistTrackState.Pending;
+    public bool IsDownloading => State == PlaylistTrackState.Downloading;
+    public bool HasBpm => BPM > 0;
+    public bool HasKey => !string.IsNullOrEmpty(MusicalKey) && MusicalKey != "—";
+    public bool HasGenre => !string.IsNullOrEmpty(DetectedSubGenre) || !string.IsNullOrEmpty(Genres) || !string.IsNullOrEmpty(PrimaryGenre);
+    public bool HasVibeData => HasGenre || HasMood;
+
+    public string StatusText => State switch
+    {
+        PlaylistTrackState.Completed => "Ready",
+        PlaylistTrackState.Downloading => Progress > 0 ? $"{(int)Progress}%" : "Downloading...",
+        PlaylistTrackState.Searching => "Searching...",
+        PlaylistTrackState.Queued => "Queued",
+        PlaylistTrackState.Failed => !string.IsNullOrEmpty(ErrorMessage) ? ErrorMessage : "Failed",
+        PlaylistTrackState.Paused => Model.Status == TrackStatus.OnHold ? "On Hold (Pending MP3 Search)" : "Paused",
+        PlaylistTrackState.Stalled => $"Stalled: {StalledReason ?? "Waiting for data"}",
+        _ => State.ToString()
+    };
+
+    public Avalonia.Media.IBrush StatusColor => State switch
+    {
+        PlaylistTrackState.Completed => Avalonia.Media.Brushes.LimeGreen,
+        PlaylistTrackState.Failed => Avalonia.Media.Brushes.OrangeRed,
+        PlaylistTrackState.Cancelled => Avalonia.Media.Brushes.Gray,
+        PlaylistTrackState.Downloading => Avalonia.Media.Brushes.Cyan,
+        PlaylistTrackState.Searching => Avalonia.Media.Brushes.Yellow,
+        PlaylistTrackState.Stalled => Avalonia.Media.Brushes.Orange,
+        PlaylistTrackState.Paused => Model.Status == TrackStatus.OnHold ? Avalonia.Media.Brushes.MediumSlateBlue : Avalonia.Media.Brushes.LightGray,
+        _ => Avalonia.Media.Brushes.LightGray
+    };
+
+    public string DetailedStatusText => IsFailed 
+        ? $"Failed: {ErrorMessage ?? "Unknown Error"}" 
+        : StatusText;
+
+    public string TechnicalSummary
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (Model.Bitrate.HasValue) parts.Add($"{Model.Bitrate}k");
+            if (!string.IsNullOrEmpty(Format)) parts.Add(Format.ToUpper());
+            if (FileSizeBytes > 0) parts.Add($"{FileSizeBytes / 1024.0 / 1024.0:F1}MB");
+            return string.Join(" • ", parts);
+        }
+    }
+
+    public string Format => Model.Format ?? "Unknown";
+    public IEnumerable<OrbitCue> Cues => _cues;
+    public bool HasCues => _cues.Count > 0;
+    public bool HasAnalysisData => HasBpm || HasKey || HasCues || HasGenre || SampleRate > 0 || EnergyCurvePoints.Count > 0;
+    public double BpmConfidence => Model.QualityConfidence is > 0 ? Math.Clamp(Model.QualityConfidence.Value, 0.0, 1.0) : (HasBpm ? 0.82 : 0.0);
+    public double RadarEnergy => Math.Clamp(Energy, 0.0, 1.0);
+    public double RadarDanceability => Math.Clamp(Danceability, 0.0, 1.0);
+    public double ValenceNorm => Math.Clamp(Valence, 0.0, 1.0);
+    public double ArousalNorm
+    {
+        get
+        {
+            // Prefer emomusic-derived Arousal (already 0-1 normalised)
+            if (Model.Arousal is > 0.0 and var a)
+                return Math.Clamp(a, 0.0, 1.0);
+
+            // Heuristic fallback when no Essentia data is present
+            var loudnessNorm = Model.Loudness.HasValue
+                ? Math.Clamp((Model.Loudness.Value + 18.0) / 18.0, 0.0, 1.0)
+                : 0.5;
+            return Math.Clamp((RadarEnergy * 0.65) + (loudnessNorm * 0.35), 0.0, 1.0);
+        }
+    }
+    public bool IsDjTool => Model.IsDjTool;
+    public double RadarInstrumentalness => Math.Clamp(InstrumentalProbability, 0.0, 1.0);
+
+    // ── AI mood breakdown (DiscogsEffnet classifier heads, 5 independent binary scores) ──────
+    public double MoodHappyNorm => Math.Clamp(Model.MoodHappy ?? 0.0, 0.0, 1.0);
+    public double MoodSadNorm => Math.Clamp(Model.Sadness ?? 0.0, 0.0, 1.0);
+    public double MoodRelaxedNorm => Math.Clamp(Model.MoodRelaxed ?? 0.0, 0.0, 1.0);
+    public double MoodPartyNorm => Math.Clamp(Model.MoodParty ?? 0.0, 0.0, 1.0);
+    public double MoodAggressiveNorm => Math.Clamp(Model.MoodAggressive ?? 0.0, 0.0, 1.0);
+    public bool HasMoodBreakdown =>
+        MoodHappyNorm > 0 || MoodSadNorm > 0 || MoodRelaxedNorm > 0 || MoodPartyNorm > 0 || MoodAggressiveNorm > 0;
+
+    // ── AI genre classification (MTG-Jamendo classifier head, fused with other sources) ──────
+    public double SubGenreConfidenceNorm => Math.Clamp(Model.SubGenreConfidence ?? 0f, 0.0, 1.0);
+
+    public IReadOnlyList<GenreScore> TopGenres
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Model.GenreDistributionJson))
+                return Array.Empty<GenreScore>();
+
+            try
+            {
+                var dict = JsonSerializer.Deserialize<Dictionary<string, double>>(Model.GenreDistributionJson);
+                if (dict is null || dict.Count == 0) return Array.Empty<GenreScore>();
+
+                return dict
+                    .OrderByDescending(kv => kv.Value)
+                    .Take(3)
+                    .Select(kv => new GenreScore(kv.Key, Math.Clamp(kv.Value, 0.0, 1.0)))
+                    .ToArray();
+            }
+            catch (JsonException)
+            {
+                return Array.Empty<GenreScore>();
+            }
+        }
+    }
+    public bool HasTopGenres => TopGenres.Count > 0;
+    public double AudioVocalDensity => Model.VocalDensityCurve?.Length > 0
+        ? Math.Clamp(Model.VocalDensityCurve.Average(), 0.0, 1.0)
+        : Math.Clamp(1.0 - InstrumentalProbability, 0.0, 1.0);
+    public string DetectedVocalTypeDisplay => AudioVocalDensity switch
+    {
+        >= 0.7 => "Vocal",
+        <= 0.25 => "Instrumental",
+        _ => "Mixed"
+    };
+    public IReadOnlyList<double> EnergyCurvePoints => BuildEnergyCurvePoints();
+    public IReadOnlyList<PhraseSegment> PhraseSegments => BuildPhraseSegments();
+    public bool HasPhraseSegments => (Model.CanonicalDuration ?? 0) > 0;
+
+    // Inspector panel: last analysis timestamp + model version tooltip
+    public string LastAnalyzedDisplay =>
+        _technicalEntity?.LastUpdated is { } dt
+            ? dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            : "—";
+
+    private bool _hasInspectorA10PairwiseContext;
+    public bool HasInspectorA10PairwiseContext
+    {
+        get => _hasInspectorA10PairwiseContext;
+        private set => SetProperty(ref _hasInspectorA10PairwiseContext, value);
+    }
+
+    private string _inspectorA10PairContextLabel = string.Empty;
+    public string InspectorA10PairContextLabel
+    {
+        get => _inspectorA10PairContextLabel;
+        private set => SetProperty(ref _inspectorA10PairContextLabel, value);
+    }
+
+    private double _inspectorA10OverallScore;
+    public double InspectorA10OverallScore
+    {
+        get => _inspectorA10OverallScore;
+        private set => SetProperty(ref _inspectorA10OverallScore, value);
+    }
+
+    private double _inspectorA10HarmonicScore;
+    public double InspectorA10HarmonicScore
+    {
+        get => _inspectorA10HarmonicScore;
+        private set => SetProperty(ref _inspectorA10HarmonicScore, value);
+    }
+
+    private double _inspectorA10BeatScore;
+    public double InspectorA10BeatScore
+    {
+        get => _inspectorA10BeatScore;
+        private set => SetProperty(ref _inspectorA10BeatScore, value);
+    }
+
+    private double _inspectorA10DropScore;
+    public double InspectorA10DropScore
+    {
+        get => _inspectorA10DropScore;
+        private set => SetProperty(ref _inspectorA10DropScore, value);
+    }
+
+    private string _inspectorA10ReasonTags = string.Empty;
+    public string InspectorA10ReasonTags
+    {
+        get => _inspectorA10ReasonTags;
+        private set => SetProperty(ref _inspectorA10ReasonTags, value);
+    }
+
+    private string _inspectorTransitionStyleLabel = string.Empty;
+    public string InspectorTransitionStyleLabel
+    {
+        get => _inspectorTransitionStyleLabel;
+        private set => SetProperty(ref _inspectorTransitionStyleLabel, value);
+    }
+
+    private string _inspectorTransitionStyleReason = string.Empty;
+    public string InspectorTransitionStyleReason
+    {
+        get => _inspectorTransitionStyleReason;
+        private set => SetProperty(ref _inspectorTransitionStyleReason, value);
+    }
+
+    public void SetInspectorA10PairwiseContext(
+        string contextLabel,
+        double overallScore,
+        double harmonicScore,
+        double beatScore,
+        double dropScore,
+        string reasonTags,
+        string? transitionStyleLabel = null,
+        string? transitionStyleReason = null)
+    {
+        InspectorA10PairContextLabel = contextLabel;
+        InspectorA10OverallScore = overallScore;
+        InspectorA10HarmonicScore = harmonicScore;
+        InspectorA10BeatScore = beatScore;
+        InspectorA10DropScore = dropScore;
+        InspectorA10ReasonTags = reasonTags;
+        InspectorTransitionStyleLabel = transitionStyleLabel ?? string.Empty;
+        InspectorTransitionStyleReason = transitionStyleReason ?? string.Empty;
+        HasInspectorA10PairwiseContext = true;
+    }
+
+    public void ClearInspectorA10PairwiseContext()
+    {
+        InspectorA10PairContextLabel = string.Empty;
+        InspectorA10OverallScore = 0;
+        InspectorA10HarmonicScore = 0;
+        InspectorA10BeatScore = 0;
+        InspectorA10DropScore = 0;
+        InspectorA10ReasonTags = string.Empty;
+        InspectorTransitionStyleLabel = string.Empty;
+        InspectorTransitionStyleReason = string.Empty;
+        HasInspectorA10PairwiseContext = false;
+    }
+
+    public string AnalysisModelVersion =>
+        _technicalEntity?.LastUpdated is { } dt
+            ? $"Analysis run: {dt.ToLocalTime():yyyy-MM-dd HH:mm:ss} UTC"
+            : "No analysis recorded";
+
+    public string FileSizeDisplay => FileSizeBytes > 0 ? $"{FileSizeBytes / 1024.0 / 1024.0:F1} MB" : "—";
+    public string BpmDisplay => Model.BPM.HasValue ? $"{Model.BPM:0}" : "—";
+    public string KeyDisplay
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(Model.MusicalKey)) return "—";
+            
+            var camelot = Utils.KeyConverter.ToCamelot(Model.MusicalKey);
+            // Show both: "G minor (6A)" or just "6A" if already in Camelot format
+            if (camelot == Model.MusicalKey)
+                return camelot; // Already Camelot
+            
+            return $"{Model.MusicalKey} ({camelot})";
+        }
+    }
+
+    public string CamelotDisplay => !string.IsNullOrEmpty(Model.MusicalKey) ? Utils.KeyConverter.ToCamelot(Model.MusicalKey) : "—";
+
+    // Mix (Spotify-Mix-parity) transition badge — set externally by TrackListViewModel's
+    // UpdateMixTransitionBadges(), mirroring how IsHarmonicMatch/IsExactKeyMatch above are
+    // computed relative to sibling rows rather than owned by this row in isolation.
+    private bool _showMixTransitionBadge;
+    public bool ShowMixTransitionBadge
+    {
+        get => _showMixTransitionBadge;
+        set => SetProperty(ref _showMixTransitionBadge, value);
+    }
+
+    // Play-queue position, maintained by PlayerViewModel.UpdateQueueStates() for the rows in its
+    // Queue, so every queue list (sidepanel, Now Playing page, fullscreen player) can mark the
+    // playing track and dim the ones already played.
+    private bool _isQueueCurrent;
+    public bool IsQueueCurrent
+    {
+        get => _isQueueCurrent;
+        set => SetProperty(ref _isQueueCurrent, value);
+    }
+
+    private bool _isQueuePlayed;
+    public bool IsQueuePlayed
+    {
+        get => _isQueuePlayed;
+        set => SetProperty(ref _isQueuePlayed, value);
+    }
+
+    private int _queueNumber;
+    /// <summary>1-based position in the play queue.</summary>
+    public int QueueNumber
+    {
+        get => _queueNumber;
+        set => SetProperty(ref _queueNumber, value);
+    }
+
+    private string _transitionPresetLabel = "Auto";
+    public string TransitionPresetLabel
+    {
+        get => _transitionPresetLabel;
+        set => SetProperty(ref _transitionPresetLabel, value);
+    }
+
+    private string _transitionBadgeColor = "#66888888";
+    public string TransitionBadgeColor
+    {
+        get => _transitionBadgeColor;
+        set => SetProperty(ref _transitionBadgeColor, value);
+    }
+
+    // Set alongside TransitionBadgeColor by TrackListViewModel.UpdateMixTransitionBadgesAsync —
+    // human-readable reasons (BPM gap, genre drift, harmonic risk, energy jump) the transition
+    // into the next track scored poorly, joined for the badge tooltip. Empty when the transition
+    // is fine.
+    private string _transitionWarningText = string.Empty;
+    public string TransitionWarningText
+    {
+        get => _transitionWarningText;
+        set
+        {
+            SetProperty(ref _transitionWarningText, value);
+            OnPropertyChanged(nameof(HasTransitionWarning));
+            OnPropertyChanged(nameof(TransitionTooltip));
+        }
+    }
+
+    public bool HasTransitionWarning => !string.IsNullOrEmpty(TransitionWarningText);
+
+    public string TransitionTooltip => HasTransitionWarning
+        ? TransitionWarningText
+        : "Edit transition into the next track";
+
+    /// <summary>The next track's PlaylistTracks.Id, i.e. the "incoming" side of this row's
+    /// transition badge — null when this is the last row or Mix mode is off.</summary>
+    public Guid? NextPlaylistTrackId { get; set; }
+
+
+    public Avalonia.Media.IBrush ColorBrush
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(Model.MusicalKey)) return Avalonia.Media.Brushes.Transparent;
+            var camelot = Utils.KeyConverter.ToCamelot(Model.MusicalKey);
+            return GetHarmonicColor(camelot);
+        }
+    }
+
+    private static Avalonia.Media.IBrush GetHarmonicColor(string camelot)
+    {
+        if (string.IsNullOrEmpty(camelot) || camelot.Length < 2) return Avalonia.Media.Brushes.Transparent;
+
+        bool isMinor = camelot.EndsWith("A", StringComparison.OrdinalIgnoreCase);
+        string numPart = camelot.Substring(0, camelot.Length - 1);
+
+        if (isMinor)
+        {
+            return numPart switch
+            {
+                "1" => Avalonia.Media.Brushes.Teal,
+                "2" => Avalonia.Media.Brushes.SteelBlue,
+                "3" => Avalonia.Media.Brushes.RoyalBlue,
+                "4" => Avalonia.Media.Brushes.Indigo,
+                "5" => Avalonia.Media.Brushes.DarkViolet,
+                "6" => Avalonia.Media.Brushes.MediumVioletRed,
+                "7" => Avalonia.Media.Brushes.Crimson,
+                "8" => Avalonia.Media.Brushes.DarkOrange,
+                "9" => Avalonia.Media.Brushes.Gold,
+                "10" => Avalonia.Media.Brushes.YellowGreen,
+                "11" => Avalonia.Media.Brushes.MediumSeaGreen,
+                "12" => Avalonia.Media.Brushes.DarkCyan,
+                _ => Avalonia.Media.Brushes.SlateGray
+            };
+        }
+        else
+        {
+            return numPart switch
+            {
+                "1" => Avalonia.Media.Brushes.Aquamarine,
+                "2" => Avalonia.Media.Brushes.LightSkyBlue,
+                "3" => Avalonia.Media.Brushes.DodgerBlue,
+                "4" => Avalonia.Media.Brushes.SlateBlue,
+                "5" => Avalonia.Media.Brushes.Plum,
+                "6" => Avalonia.Media.Brushes.HotPink,
+                "7" => Avalonia.Media.Brushes.LightCoral,
+                "8" => Avalonia.Media.Brushes.Orange,
+                "9" => Avalonia.Media.Brushes.Khaki,
+                "10" => Avalonia.Media.Brushes.PaleGreen,
+                "11" => Avalonia.Media.Brushes.MediumSpringGreen,
+                "12" => Avalonia.Media.Brushes.Turquoise,
+                _ => Avalonia.Media.Brushes.LightSlateGray
+            };
+        }
+    }
+    public string DurationDisplay => Model.CanonicalDuration.HasValue ? TimeSpan.FromMilliseconds(Model.CanonicalDuration.Value).ToString(@"mm\:ss") : "—";
+
+    // Curation & Trust
+    // Phase 0.6: Truth in UI (Must be completed to be verified)
+    public bool IsSecure => Model.Status == TrackStatus.Downloaded && Model.QualityConfidence > 0.9 && !string.IsNullOrEmpty(Model.ResolvedFilePath);
+    public string CurationIcon => Model.CurationConfidence switch
+    {
+        Data.Entities.CurationConfidence.Manual => "🛡️",
+        Data.Entities.CurationConfidence.High => "🏅",
+        Data.Entities.CurationConfidence.Medium => "🥈",
+        Data.Entities.CurationConfidence.Low => "📉",
+        _ => string.Empty
+    };
+    
+    public Avalonia.Media.IBrush CurationColor => Model.CurationConfidence switch
+    {
+        Data.Entities.CurationConfidence.Manual => Avalonia.Media.Brushes.LimeGreen,
+        Data.Entities.CurationConfidence.High => Avalonia.Media.Brushes.Gold,
+        Data.Entities.CurationConfidence.Medium => Avalonia.Media.Brushes.Silver,
+        Data.Entities.CurationConfidence.Low => Avalonia.Media.Brushes.OrangeRed,
+        _ => Avalonia.Media.Brushes.Transparent
+    };
+
+    public string ProvenanceTooltip => $"Confidence: {Model.CurationConfidence}\nSource: {Model.Source}";
+
+    public string? DetectedSubGenre => Model.DetectedSubGenre;
+    public Avalonia.Media.IBrush VibeColor => GetGenreColor(DetectedSubGenre);
+
+    public string VibeTooltip
+    {
+        get
+        {
+            var list = new List<string>();
+            if (!string.IsNullOrEmpty(DetectedSubGenre)) list.Add($"Sub-Genre: {DetectedSubGenre}");
+            if (!string.IsNullOrEmpty(PrimaryGenre)) list.Add($"Primary Genre: {PrimaryGenre}");
+            if (!string.IsNullOrEmpty(MoodTag)) list.Add($"Mood: {MoodTag}");
+            if (Energy > 0) list.Add($"Energy: {Energy:P0}");
+            if (Valence > 0) list.Add($"Valence: {Valence:P0}");
+            if (Model.InstrumentalProbability > 0) list.Add($"Instrumental: {Model.InstrumentalProbability:P0}");
+            
+            return list.Count > 0 ? string.Join("\n", list) : "No AI analysis data";
+        }
+    }
+
+    // public record VibePill(string Icon, string Label, Avalonia.Media.IBrush Color); // Moved to VibePillRecord.cs
+
+    // 1. Define the colors (Helper)
+    private static Avalonia.Media.IBrush GetGenreColor(string? genre)
+    {
+        return genre?.ToLower() switch
+        {
+            "techno" => Avalonia.Media.Brushes.MediumPurple,
+            "house" => Avalonia.Media.Brushes.DeepPink,
+            "dnb" or "drum and bass" => Avalonia.Media.Brushes.OrangeRed,
+            "ambient" => Avalonia.Media.Brushes.Teal,
+            "dubstep" => Avalonia.Media.Brushes.Indigo,
+            _ => Avalonia.Media.Brushes.SlateGray
+        };
+    }
+
+    public IEnumerable<VibePill> VibePills
+    {
+        get
+        {
+            var list = new List<VibePill>();
+            if (!string.IsNullOrEmpty(DetectedSubGenre))
+            {
+                 list.Add(new VibePill("🎵", DetectedSubGenre, GetGenreColor(DetectedSubGenre)));
+            }
+
+            // Energy/Mood Pills
+            // Refined thresholds (normalized 0-1)
+            if (Energy > 0.85) list.Add(new VibePill("⚡", "High Energy", Avalonia.Media.Brushes.Gold));
+            else if (Energy < 0.3 && Energy > 0.05) list.Add(new VibePill("🌙", "Chill", Avalonia.Media.Brushes.CornflowerBlue));
+
+            if (Valence > 0.75) list.Add(new VibePill("😎", "Positive", Avalonia.Media.Brushes.LimeGreen));
+            else if (Valence < 0.25 && Valence > 0.05) list.Add(new VibePill("💀", "Dark", Avalonia.Media.Brushes.DarkSlateGray));
+            
+            if (!string.IsNullOrEmpty(MoodTag) && MoodTag != "Neutral")
+            {
+                list.Add(new VibePill("🎭", MoodTag, Avalonia.Media.Brushes.MediumSlateBlue));
+            }
+
+            if (Model.InstrumentalProbability > 0.85)
+            {
+                list.Add(new VibePill("🎤", "Instrumental", Avalonia.Media.Brushes.DarkCyan));
+            }
+
+            return list;
+        }
+    }
+
+    private WaveformAnalysisData? _cachedWaveformData;
+
+    public WaveformAnalysisData WaveformData
+    {
+        get
+        {
+            if (_cachedWaveformData != null) return _cachedWaveformData;
+
+             // TrackTechnicalEntity's own waveform columns were dead (never populated — dropped in
+             // SchemaMigratorService's patch #27); Model's bands are the real, live source, resolved
+             // from AudioFeaturesEntity.WaveformBlob by LibraryService.ResolveWaveformBands.
+             var waveData = Model.WaveformData ?? Array.Empty<byte>();
+
+             _cachedWaveformData = new WaveformAnalysisData
+             {
+                 PeakData = waveData,
+                 RmsData = Model.RmsData ?? Array.Empty<byte>(),
+                 LowData = Model.LowData ?? Array.Empty<byte>(),
+                 MidData = Model.MidData ?? Array.Empty<byte>(),
+                 HighData = Model.HighData ?? Array.Empty<byte>(),
+                 DurationSeconds = (Model.CanonicalDuration ?? 0) / 1000.0
+             };
+
+             return _cachedWaveformData;
+        }
+    }
+
+    // Band extraction for legacy WaveformControl bindings
+    public byte[] LowData => WaveformData.LowData;
+    public byte[] MidData => WaveformData.MidData;
+    public byte[] HighData => WaveformData.HighData;
+
+    /// <summary>
+    /// True when the track has stored waveform data suitable for the library row underlay.
+    /// Checks the base model bytes so no lazy-load is required.
+    /// </summary>
+    public bool HasWaveformData =>
+        (Model.RmsData?.Length > 0) || (Model.WaveformData?.Length > 0);
+    
+    // Technical Stats
+    public int SampleRate => Model.SpectralSampleRateHz ?? 0;
+    public string SampleRateDisplay => Model.SpectralSampleRateHz.HasValue && Model.SpectralSampleRateHz.Value > 0
+        ? $"{Model.SpectralSampleRateHz.Value / 1000.0:F1} kHz"
+        : "—";
+
+    public string LastPlayedDisplay => Model.LastPlayedAt.HasValue
+        ? Model.LastPlayedAt.Value.ToString("yyyy-MM-dd HH:mm")
+        : "—";
+
+    public string QualityScoreDisplay => Model.Integrity switch
+    {
+        Data.IntegrityLevel.Gold => "Gold",
+        Data.IntegrityLevel.Verified => "Verified",
+        Data.IntegrityLevel.Suspicious => "Review",
+        _ => Model.QualityConfidence.HasValue ? $"{Model.QualityConfidence.Value * 100:F0}%" : "—"
+    };
+
+    public bool SpectralAnalysisAvailable => !string.IsNullOrEmpty(Model.SpectralVerdictText) || (Model.SpectralSampleRateHz.GetValueOrDefault() > 0);
+    public string SpectralAnalysisDisplay => SpectralAnalysisAvailable ? "Analyzed" : "—";
+
+    // Fix: LoudnessDisplay was previously incorrectly bound to QualityConfidence
+    public string ConfidenceDisplay => Model.QualityConfidence.HasValue ? $"{Model.QualityConfidence:P0} Confidence" : "—";
+    
+    public double MatchConfidence => (Model.QualityConfidence ?? 0) * 100;
+    
+    public string MatchConfidenceColor => MatchConfidence switch
+    {
+        >= 90 => "#1DB954", // Spotify Green
+        >= 70 => "#FFD700", // Gold/Yellow
+        _ => "#E91E63"      // Pink/Red
+    };
+
+    // Phase 12.1: Only show High Risk badge if it's a final heuristic score, not while searching
+    public bool IsHighRisk => Model.IsFlagged && State != PlaylistTrackState.Searching && State != PlaylistTrackState.Queued && State != PlaylistTrackState.Pending;
+    public string? FlagReason => Model.FlagReason;
+    
+    public string LoudnessDisplay => Model.Loudness.HasValue ? $"{Model.Loudness:F1} LUFS" : "—";
+    public string TruePeakDisplay => Model.TruePeak.HasValue ? $"{Model.TruePeak:F1} dBTP" : "—";
+    public string DynamicRangeDisplay => Model.DynamicRange.HasValue ? $"{Model.DynamicRange:F1} LU" : "—";
+    
+    public string IntegritySymbol => IntegrityBadge;
+    public string IntegrityText => IntegrityTooltip;
+    
+    // Phase 21: Stem Separation Support
+    private bool? _hasStems;
+    public bool HasStems
+    {
+        get
+        {
+            // Phase 0.6: Truth in UI (Must be completed to have stems)
+            if (Model.Status != TrackStatus.Downloaded) return false;
+
+            if (!_hasStems.HasValue)
+            {
+                // Initial check
+                _hasStems = false; // Default
+                _ = CheckStemsAsync();
+            }
+            return _hasStems.Value;
+        }
+        private set => SetProperty(ref _hasStems, value);
+    }
+
+    private async Task CheckStemsAsync()
+    {
+        if (string.IsNullOrEmpty(Model.ResolvedFilePath))
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => HasStems = false);
+            return;
+        }
+
+        try
+        {
+            var found = await Services.StemAvailabilityProbe.HasStemsAsync(Model.ResolvedFilePath);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                _hasStems = found;
+                OnPropertyChanged(nameof(HasStems));
+            });
+        }
+        catch { /* Fail silently */ }
+    }
+    // AlbumArtPath and Progress are already present in this class.
+
+    // Reference to the underlying model if needed for persistence later
+    public PlaylistTrack Model { get; private set; }
+
+    // Status=Downloaded is a stronger, more consistently-maintained signal than AvailabilityState
+    // that a track's file is actually on disk. Confirmed live, repeatedly, across several separate
+    // write paths (fast "already exists" completion paths, the reconciliation scan, the normal
+    // download-completion path under a race) that AvailabilityState can drift back to/stay at
+    // Ghost even for a Status=Downloaded row whose file plays fine — each one an independent bug
+    // rather than a single root cause, so instead of chasing every future write path that could
+    // leave the two fields disagreeing, the "FILE MISSING" badge itself no longer trusts
+    // AvailabilityState alone when Status already says the file was successfully downloaded.
+    public bool IsGhost => Model.AvailabilityState == SLSKDONET.Models.TrackAvailabilityState.Ghost
+        && Model.Status != SLSKDONET.Models.TrackStatus.Downloaded;
+
+    /// <summary>
+    /// True only for the shared <see cref="Placeholder"/> instance returned by
+    /// <see cref="Library.VirtualizedTrackCollection"/> on a cache miss, standing in for a row
+    /// whose real data hasn't loaded from the DB yet. Never a real track — consumers must treat
+    /// it as inert (no selection, no drag, no reverse index lookups) rather than acting on it.
+    /// </summary>
+    public bool IsPlaceholder { get; }
+
+    /// <summary>Sentinel hash — deliberately not shaped like a real TrackUniqueHash, so it can never collide with one.</summary>
+    public const string PlaceholderGlobalId = "__orbit_placeholder__00000000-0000-0000-0000-000000000000";
+
+    private static readonly Lazy<PlaylistTrackViewModel> _placeholderInstance = new(() => new PlaylistTrackViewModel(
+        new PlaylistTrack { TrackUniqueHash = PlaceholderGlobalId, Artist = string.Empty, Title = "Loading…" },
+        isPlaceholder: true));
+
+    /// <summary>
+    /// Shared "row not loaded yet" stand-in returned by <see cref="Library.VirtualizedTrackCollection"/>
+    /// on a cache miss. A single shared instance (not one per index) so cache misses during a fast
+    /// scroll fling stay allocation-free. Must never be persisted into any selection/identity
+    /// collection — see <see cref="IsPlaceholder"/>.
+    /// </summary>
+    public static PlaylistTrackViewModel Placeholder => _placeholderInstance.Value;
+
+    // Cancellation token source for this specific track's operation
+    public System.Threading.CancellationTokenSource? CancellationTokenSource { get; set; }
+
+    // User engagement
+    public int Rating
+    {
+        get => Model.Rating;
+        set
+        {
+            if (Model.Rating != value)
+            {
+                Model.Rating = value;
+                OnPropertyChanged();
+                
+                // Persistence
+                if (_libraryService != null)
+                {
+                    _ = _libraryService.UpdateRatingAsync(GlobalId, value);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Track-level colour tag (hex, e.g. "#FF0000"), independent of any cue colours.
+    /// Flows through to the Rekordbox XML export's Colour attribute.
+    /// </summary>
+    public string? ColorTag
+    {
+        get => Model.ColorTag;
+        set
+        {
+            if (Model.ColorTag != value)
+            {
+                Model.ColorTag = value;
+                OnPropertyChanged();
+
+                if (_libraryService != null)
+                {
+                    _ = _libraryService.UpdateColorTagAsync(GlobalId, value);
+                }
+            }
+        }
+    }
+
+    public bool IsLiked
+    {
+        get => Model.IsLiked;
+        set
+        {
+            if (Model.IsLiked != value)
+            {
+                Model.IsLiked = value;
+                OnPropertyChanged();
+                
+                // Persistence
+                if (_libraryService != null)
+                {
+                    _ = _libraryService.UpdateLikeStatusAsync(GlobalId, value);
+                }
+            }
+        }
+    }
+
+    public int PlayCount
+    {
+        get => Model.PlayCount;
+        set
+        {
+            if (Model.PlayCount != value)
+            {
+                Model.PlayCount = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    // Commands
+    public ICommand RetryCommand { get; }
+    public ICommand HardRetryCommand { get; }
+    public ICommand ForceStartCommand { get; }
+    public ICommand BumpToTopCommand { get; }
+    public ICommand PauseCommand { get; }
+    public ICommand ResumeCommand { get; }
+    public ICommand CancelCommand { get; }
+    public ICommand FindNewVersionCommand { get; }
+    public ICommand AnalyzeTrackCommand { get; }
+    public ICommand SeparateStemsCommand { get; }
+    public ICommand PlayCommand { get; }
+    public ICommand RevealFileCommand { get; }
+    public ICommand OpenWorkstationCommand { get; }
+    public ICommand AddToProjectCommand { get; }
+    public ICommand ToggleLikeCommand { get; }
+    public ICommand FilterByKeyCommand { get; }
+    public ICommand RequestRemoveCommand { get; }
+    public ICommand RequestEditTagsCommand { get; }
+    public ICommand PreviousInspectorTabCommand { get; }
+    public ICommand NextInspectorTabCommand { get; }
+    public ICommand SearchAgainCommand { get; }
+
+    private int _selectedInspectorTab = 0; // default to IDENTITY tab
+    public int SelectedInspectorTab
+    {
+        get => _selectedInspectorTab;
+        set
+        {
+            if (SetProperty(ref _selectedInspectorTab, value))
+                OnPropertyChanged(nameof(InspectorTabName));
+        }
+    }
+
+    public string InspectorTabName => SelectedInspectorTab switch
+    {
+        0 => "IDENTITY",
+        1 => "ANALYSIS",
+        2 => "ACTIONS",
+        _ => ""
+    };
+
+    private readonly IEventBus? _eventBus;
+    private readonly ILibraryService? _libraryService;
+    private readonly ArtworkCacheService? _artworkCacheService;
+
+    // Disposal
+    private readonly System.Reactive.Disposables.CompositeDisposable _disposables = new();
+    private bool _isDisposed;
+
+    public PlaylistTrackViewModel(
+        PlaylistTrack track,
+        IEventBus? eventBus = null,
+        ILibraryService? libraryService = null,
+        ArtworkCacheService? artworkCacheService = null,
+        bool isPlaceholder = false)
+    {
+        _eventBus = eventBus;
+        _libraryService = libraryService;
+        _artworkCacheService = artworkCacheService;
+        IsPlaceholder = isPlaceholder;
+        Model = track;
+        SourceId = track.PlaylistId;
+        GlobalId = track.TrackUniqueHash;
+        Artist = track.Artist;
+        Title = track.Title;
+        SortOrder = track.TrackNumber; // Initialize SortOrder
+        State = PlaylistTrackState.Pending;
+        
+        // Map initial status from model
+        if (track.Status == TrackStatus.Downloaded)
+        {
+            State = PlaylistTrackState.Completed;
+            Progress = 1.0;
+            // PERFORMANCE FIX: Defer disk I/O to background thread
+            // Don't block constructor with file system calls
+            _ = Task.Run(LoadFileSizeFromDisk);
+        }
+
+        PauseCommand = new RelayCommand(Pause, () => CanPause);
+        ResumeCommand = new RelayCommand(Resume, () => CanResume);
+        CancelCommand = new RelayCommand(Cancel, () => CanCancel);
+        FindNewVersionCommand = new RelayCommand(FindNewVersion, () => CanHardRetry);
+        AnalyzeTrackCommand = new RelayCommand(AnalyzeTrack, () => State == PlaylistTrackState.Completed); // Enable only if available locally
+        SeparateStemsCommand = new RelayCommand(SeparateStems, () => State == PlaylistTrackState.Completed && !HasStems);
+        PlayCommand = new RelayCommand(PlayTrack, () => IsCompleted);
+        RevealFileCommand = new RelayCommand(RevealFile, () => IsCompleted);
+        OpenWorkstationCommand = new RelayCommand(OpenWorkstation, () => IsCompleted);
+        AddToProjectCommand = new RelayCommand(() => _eventBus?.Publish(new Models.AddToProjectRequestEvent(new[] { Model })), () => IsCompleted);
+        RetryCommand = new RelayCommand(FindNewVersion, () => CanHardRetry);
+        HardRetryCommand = RetryCommand;
+        ForceStartCommand = new RelayCommand(ForceStart, () => CanForceStart);
+        BumpToTopCommand = new RelayCommand(BumpToTop, () => CanBumpToTop);
+        ToggleLikeCommand = new RelayCommand(() => IsLiked = !IsLiked);
+        FilterByKeyCommand = new RelayCommand<string>(key => _eventBus?.Publish(new SetCamelotKeyFilterEvent(key)));
+        RequestRemoveCommand = new RelayCommand(() => _eventBus?.Publish(new Models.RemoveTrackFromInspectorEvent(GlobalId)));
+        RequestEditTagsCommand = new RelayCommand(() => _eventBus?.Publish(new Models.EditTagsFromInspectorEvent(GlobalId)));
+        PreviousInspectorTabCommand = new RelayCommand(() => { if (SelectedInspectorTab > 0) SelectedInspectorTab--; });
+        NextInspectorTabCommand = new RelayCommand(() => { if (SelectedInspectorTab < 2) SelectedInspectorTab++; });
+        SearchAgainCommand = new RelayCommand(Reset);
+        
+        // REMOVED: 8000+ redundant event listeners eliminated.
+        // Centralized dispatch moved to VirtualizedTrackCollection.
+        
+        // Initialize ArtworkProxy
+        _artwork = new ArtworkProxy(_artworkCacheService!, track.AlbumArtUrl);
+            
+            // PERFORMANCE FIX: Don't eagerly trigger artwork load in constructor
+            // Let UI trigger it via property access when visible (lazy loading)
+            // This was causing 1600+ async operations on library open
+        }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_isDisposed) return;
+
+        if (disposing)
+        {
+            _disposables.Dispose();
+            CancellationTokenSource?.Cancel();
+            CancellationTokenSource?.Dispose();
+            
+            // Shared Bitmap: Do NOT dispose. 
+            // _artwork is a proxy, does not own the bitmap resource (cache does).
+            // _artworkBitmap = null;
+        }
+
+        _isDisposed = true;
+    }
+
+    // Event Handlers (Internal for centralized update from collection)
+    internal void OnMetadataUpdated(Models.TrackMetadataUpdatedEvent evt)
+    {
+        if (evt.TrackGlobalId != GlobalId) return;
+        
+        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+          try
+          {
+             _isAnalyzing = false; // Clear analyzing flag
+
+             // Reload track data from database to get updated metadata.
+             // GetPlaylistTrackByHashAsync queries the real PlaylistTracks table scoped by
+             // PlaylistId — but "All Tracks" rows carry the synthetic sentinel PlaylistId ==
+             // Guid.Empty (TrackRepository.GetPagedAllTracksAsync), which no real PlaylistTracks
+             // row ever has, so that lookup always returned null there — refresh silently no-op'd
+             // for the primary Library browsing mode. GetPagedPlaylistTracksAsync already knows
+             // how to route Guid.Empty to the LibraryEntries-backed adapter instead, so reuse it
+             // with a single-hash filter rather than duplicating that routing here.
+             if (_libraryService != null)
+             {
+                 var refetched = await _libraryService.GetPagedPlaylistTracksAsync(
+                     Model.PlaylistId, 0, 1, hashFilter: new[] { GlobalId });
+                 var updatedTrack = refetched.FirstOrDefault();
+
+                 if (updatedTrack != null)
+                 {
+                     // Update model with fresh data
+                     Model.AlbumArtUrl = updatedTrack.AlbumArtUrl;
+                     Model.SpotifyTrackId = updatedTrack.SpotifyTrackId;
+                     Model.SpotifyAlbumId = updatedTrack.SpotifyAlbumId;
+                     Model.SpotifyArtistId = updatedTrack.SpotifyArtistId;
+                     Model.IsEnriched = updatedTrack.IsEnriched;
+                     Model.Album = updatedTrack.Album;
+                     
+                     // Sync Audio Features & Extended Metadata
+                     Model.BPM = updatedTrack.BPM;
+                     Model.MusicalKey = updatedTrack.MusicalKey;
+                     Model.Energy = updatedTrack.Energy;
+                     Model.Danceability = updatedTrack.Danceability;
+                     Model.Valence = updatedTrack.Valence;
+                     Model.Loudness = updatedTrack.Loudness;
+                     Model.TruePeak = updatedTrack.TruePeak;
+                     Model.DynamicRange = updatedTrack.DynamicRange;
+                     Model.MoodTag = updatedTrack.MoodTag;
+                     Model.MoodConfidence = updatedTrack.MoodConfidence;
+                     Model.InstrumentalProbability = updatedTrack.InstrumentalProbability;
+                     Model.Arousal = updatedTrack.Arousal;
+                     Model.IsDjTool = updatedTrack.IsDjTool;
+                     Model.Sadness = updatedTrack.Sadness;
+                     Model.MoodHappy = updatedTrack.MoodHappy;
+                     Model.MoodRelaxed = updatedTrack.MoodRelaxed;
+                     Model.MoodParty = updatedTrack.MoodParty;
+                     Model.MoodAggressive = updatedTrack.MoodAggressive;
+                     Model.SubGenreConfidence = updatedTrack.SubGenreConfidence;
+                     Model.GenreDistributionJson = updatedTrack.GenreDistributionJson;
+                     Model.VectorEmbedding = updatedTrack.VectorEmbedding;
+                     
+                     // Update Analysis info if available
+                     Model.Popularity = updatedTrack.Popularity;
+                     Model.Popularity = updatedTrack.Popularity;
+                     Model.Genres = updatedTrack.Genres;
+                     Model.IsReviewNeeded = updatedTrack.IsReviewNeeded; // Phase 10.4
+                     Model.Label = updatedTrack.Label;
+                     Model.Comments = updatedTrack.Comments;
+                     Model.DetectedSubGenre = updatedTrack.DetectedSubGenre;
+                     Model.PrimaryGenre = updatedTrack.PrimaryGenre;
+                     
+                     // NEW: Sync Waveform and Technical Analysis results
+                     Model.WaveformData = updatedTrack.WaveformData;
+                     Model.RmsData = updatedTrack.RmsData;
+                     Model.LowData = updatedTrack.LowData;
+                     Model.MidData = updatedTrack.MidData;
+                     Model.HighData = updatedTrack.HighData;
+                     Model.CanonicalDuration = updatedTrack.CanonicalDuration;
+                     Model.Bitrate = updatedTrack.Bitrate;
+                     Model.Format = updatedTrack.Format;
+                     Model.SpectralSampleRateHz = updatedTrack.SpectralSampleRateHz;
+                     Model.QualityConfidence = updatedTrack.QualityConfidence;
+                     Model.IsTrustworthy = updatedTrack.IsTrustworthy;
+                     
+                     // Technical Audio
+                     Model.Loudness = updatedTrack.Loudness;
+                     Model.TruePeak = updatedTrack.TruePeak;
+                     Model.DynamicRange = updatedTrack.DynamicRange;
+                     
+                      // Load artwork if URL is available
+                      if (!string.IsNullOrWhiteSpace(updatedTrack.AlbumArtUrl))
+                      {
+                          // Refresh proxy
+                          _artwork = new ArtworkProxy(_artworkCacheService!, updatedTrack.AlbumArtUrl);
+                          OnPropertyChanged(nameof(Artwork));
+                          OnPropertyChanged(nameof(AlbumArtPath));
+                      }
+                 }
+             }
+             
+             OnPropertyChanged(nameof(Artist));
+             OnPropertyChanged(nameof(Title));
+             OnPropertyChanged(nameof(Album));
+             OnPropertyChanged(nameof(ArtistName)); // Alias for StandardTrackRow
+             OnPropertyChanged(nameof(TrackTitle)); // Alias for StandardTrackRow
+             OnPropertyChanged(nameof(AlbumName));  // Alias for StandardTrackRow
+             OnPropertyChanged(nameof(CoverArtUrl));
+             OnPropertyChanged(nameof(AlbumArtPath));
+             OnPropertyChanged(nameof(SpotifyTrackId));
+             OnPropertyChanged(nameof(IsEnriched));
+             OnPropertyChanged(nameof(MetadataStatus));
+             OnPropertyChanged(nameof(MetadataStatusColor));
+             OnPropertyChanged(nameof(MetadataStatusSymbol));
+             
+             // Notify Extended Props
+             OnPropertyChanged(nameof(BPM));
+             OnPropertyChanged(nameof(MusicalKey));
+             OnPropertyChanged(nameof(CamelotDisplay));
+             OnPropertyChanged(nameof(ColorBrush));
+             OnPropertyChanged(nameof(LoudnessDisplay));
+             OnPropertyChanged(nameof(Energy));
+             OnPropertyChanged(nameof(Danceability));
+             OnPropertyChanged(nameof(Valence));
+             OnPropertyChanged(nameof(ValenceNorm));
+             OnPropertyChanged(nameof(ArousalNorm));
+             OnPropertyChanged(nameof(IsDjTool));
+             OnPropertyChanged(nameof(MoodTag));
+             OnPropertyChanged(nameof(HasMood));
+             OnPropertyChanged(nameof(HasVibeData));
+             OnPropertyChanged(nameof(MoodConfidence));
+             OnPropertyChanged(nameof(SonicProfile));
+             OnPropertyChanged(nameof(Genres));
+             OnPropertyChanged(nameof(Popularity));
+             OnPropertyChanged(nameof(Label));
+             OnPropertyChanged(nameof(Comments));
+             OnPropertyChanged(nameof(Source));
+             OnPropertyChanged(nameof(DurationFormatted));
+             OnPropertyChanged(nameof(BitrateFormatted));
+             OnPropertyChanged(nameof(DetectedSubGenre));
+             OnPropertyChanged(nameof(PrimaryGenre));
+             OnPropertyChanged(nameof(VibePills));
+             OnPropertyChanged(nameof(MatchConfidence));
+             OnPropertyChanged(nameof(VibeColor));
+             OnPropertyChanged(nameof(VibeTooltip));
+             OnPropertyChanged(nameof(InstrumentalProbability));
+
+             // AI mood breakdown + genre classification (DiscogsEffnet/MTG-Jamendo)
+             OnPropertyChanged(nameof(MoodHappyNorm));
+             OnPropertyChanged(nameof(MoodSadNorm));
+             OnPropertyChanged(nameof(MoodRelaxedNorm));
+             OnPropertyChanged(nameof(MoodPartyNorm));
+             OnPropertyChanged(nameof(MoodAggressiveNorm));
+             OnPropertyChanged(nameof(HasMoodBreakdown));
+             OnPropertyChanged(nameof(SubGenreConfidenceNorm));
+             OnPropertyChanged(nameof(TopGenres));
+             OnPropertyChanged(nameof(HasTopGenres));
+             OnPropertyChanged(nameof(LegacyGenreLabel));
+             OnPropertyChanged(nameof(ShowLegacyGenreFallback));
+
+             // NEW: Notify Waveform and technical props
+             OnPropertyChanged(nameof(WaveformData));
+             OnPropertyChanged(nameof(Bitrate));
+             OnPropertyChanged(nameof(BitrateFormatted));
+             OnPropertyChanged(nameof(IntegritySymbol));
+             OnPropertyChanged(nameof(IntegrityText));
+
+             // Inspector's TRACK DETAILS section binds to these Display properties directly, not
+             // to the Duration/DurationFormatted aliases below — those were the only ones notified
+             // here, so Duration/Format/Sample Rate kept showing stale/"—"/"UNKNOWN" even once the
+             // Model fields above were correctly refreshed.
+             OnPropertyChanged(nameof(DurationDisplay));
+             OnPropertyChanged(nameof(FormatDisplay));
+             OnPropertyChanged(nameof(SampleRate));
+             OnPropertyChanged(nameof(SampleRateDisplay));
+             OnPropertyChanged(nameof(SpectralAnalysisAvailable));
+
+             // CRITICAL: Reload technical data (waveforms) from TechnicalDetails table
+             _ = LoadTechnicalDataAsync();
+             OnPropertyChanged(nameof(Duration));
+
+             OnPropertyChanged(nameof(LoudnessDisplay));
+             OnPropertyChanged(nameof(TruePeakDisplay));
+             OnPropertyChanged(nameof(DynamicRangeDisplay));
+             OnPropertyChanged(nameof(ConfidenceDisplay));
+
+             // Dates
+             OnPropertyChanged(nameof(ReleaseDate));
+             OnPropertyChanged(nameof(ReleaseYear));
+              OnPropertyChanged(nameof(IsReviewNeeded)); // Phase 10.4
+              OnPropertyChanged(nameof(PrimaryGenre)); // New
+              OnPropertyChanged(nameof(IsPrepared)); // New
+              OnPropertyChanged(nameof(PreparationStatus)); // New
+              OnPropertyChanged(nameof(PreparationColor)); // New
+              OnPropertyChanged(nameof(QualityColor)); // New
+              OnPropertyChanged(nameof(StatusColor)); // New
+              OnPropertyChanged(nameof(YearDisplay)); // New
+             
+              // Phase 11.5
+              OnPropertyChanged(nameof(CurationIcon));
+              OnPropertyChanged(nameof(CurationColor));
+              OnPropertyChanged(nameof(ProvenanceTooltip));
+          }
+          catch (Exception ex)
+          {
+              // This whole handler runs fire-and-forget from Dispatcher.UIThread.InvokeAsync
+              // (OnMetadataUpdated itself doesn't await it) — an unobserved exception here used
+              // to vanish silently, permanently leaving the Inspector showing stale/pre-analysis
+              // data with no error anywhere to explain why.
+              Serilog.Log.Warning(ex, "OnMetadataUpdated refresh failed for track {GlobalId}", GlobalId);
+          }
+        });
+    }
+
+    internal void OnStateChanged(TrackStateChangedEvent evt)
+    {
+        if (evt.TrackGlobalId != GlobalId) return;
+        
+        // Marshal to UI Thread
+        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        {
+             State = evt.State;
+             if (evt.Error != null) ErrorMessage = evt.Error;
+             OnPropertyChanged(nameof(DetailedStatusText)); // Update tooltip
+             OnPropertyChanged(nameof(IsHighRisk)); // Notify IsHighRisk changes based on state
+             
+             // NEW: Load file size from disk when track completes
+             if (evt.State == PlaylistTrackState.Completed && FileSizeBytes == 0)
+             {
+                 LoadFileSizeFromDisk();
+             }
+        });
+    }
+    
+    // Phase 12.1: Live Console Updates
+    internal void OnDetailedStatus(Events.TrackDetailedStatusEvent evt)
+    {
+        if (evt.TrackHash != GlobalId) return;
+        
+        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        {
+             // Add to log (max 100 items to prevent memory leaks)
+             if (LiveConsoleLog.Count >= 100)
+             {
+                 LiveConsoleLog.RemoveAt(0);
+             }
+             
+             string timeStamp = DateTime.Now.ToString("HH:mm:ss");
+             string prefix = evt.IsError ? "❌" : "ℹ️";
+             var correlationSuffix = string.IsNullOrWhiteSpace(evt.CorrelationId)
+                 ? string.Empty
+                 : $" [corr:{evt.CorrelationId[..Math.Min(8, evt.CorrelationId.Length)]}]";
+             LiveConsoleLog.Add($"[{timeStamp}] {prefix}{correlationSuffix} {evt.Message}");
+             
+             // If we get an error detailed status and we are searching, we could optionally update the main StatusText too,
+             // but staying focused on LiveConsoleLog for the granular details is preferred.
+        });
+    }
+    
+    /// <summary>
+    /// Loads file size from disk for existing completed tracks (fallback when event didn't provide TotalBytes)
+    /// </summary>
+    private void LoadFileSizeFromDisk()
+    {
+        if (string.IsNullOrEmpty(Model.ResolvedFilePath))
+            return;
+            
+        try
+        {
+            if (System.IO.File.Exists(Model.ResolvedFilePath))
+            {
+                var fileInfo = new System.IO.FileInfo(Model.ResolvedFilePath);
+                FileSizeBytes = fileInfo.Length;
+            }
+        }
+        catch { /* Fail silently */ }
+    }
+
+    private void AnalyzeTrack()
+    {
+        if (_eventBus == null || string.IsNullOrEmpty(GlobalId)) return;
+        
+        // Publish event to request analysis
+        // The AnalysisOrchestrator or AnalysisQueueService should listen to this.
+        _eventBus.Publish(new Models.TrackAnalysisRequestedEvent(GlobalId));
+        
+        // Optimistic UI update
+        _isAnalyzing = true;
+        OnPropertyChanged(nameof(MetadataStatus));
+        OnPropertyChanged(nameof(MetadataStatusSymbol));
+    }
+
+    internal void OnProgressChanged(TrackProgressChangedEvent evt)
+    {
+        if (evt.TrackGlobalId != GlobalId) return;
+        
+        // Throttling could be added here if needed, but for now we rely on simple marshaling
+        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        {
+             Progress = evt.Progress;
+             
+             // NEW: Capture file size during download
+             if (evt.TotalBytes > 0)
+             {
+                 FileSizeBytes = evt.TotalBytes;
+             }
+        });
+    }
+
+    internal void OnAnalysisStarted(Models.TrackAnalysisStartedEvent evt)
+    {
+        if (evt.TrackGlobalId != GlobalId) return;
+        
+        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        {
+             _isAnalyzing = true;
+             OnPropertyChanged(nameof(MetadataStatus));
+             OnPropertyChanged(nameof(MetadataStatusColor));
+             OnPropertyChanged(nameof(MetadataStatusSymbol));
+        });
+    }
+
+    internal void OnAnalysisFailed(Models.TrackAnalysisFailedEvent evt)
+    {
+        if (evt.TrackGlobalId != GlobalId) return;
+        
+        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        {
+             _isAnalyzing = false;
+             // Could update ErrorMessage here if desired
+             OnPropertyChanged(nameof(MetadataStatus));
+             OnPropertyChanged(nameof(MetadataStatusColor));
+             OnPropertyChanged(nameof(MetadataStatusSymbol));
+        });
+    }
+
+    public PlaylistTrackState State
+    {
+        get => _state;
+        set
+        {
+            if (_state != value)
+            {
+                _state = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsActive));
+                OnPropertyChanged(nameof(StatusColor));
+                OnPropertyChanged(nameof(StatusText));
+                
+                // Notify command availability
+                OnPropertyChanged(nameof(CanPause));
+                OnPropertyChanged(nameof(CanResume));
+                OnPropertyChanged(nameof(CanCancel));
+                OnPropertyChanged(nameof(CanHardRetry));
+                OnPropertyChanged(nameof(CanDeleteFile));
+                
+                // Visual distinctions
+                OnPropertyChanged(nameof(IsCompleted));
+                
+                // CommandManager.InvalidateRequerySuggested() happens automatically or via interaction
+            }
+        }
+    }
+
+    public double Progress
+    {
+        get => _progress;
+        set
+        {
+            if (Math.Abs(_progress - value) > 0.001)
+            {
+                _progress = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(StatusText));
+            }
+        }
+    }
+
+    public string CurrentSpeed
+    {
+        get => _currentSpeed;
+        set
+        {
+            if (_currentSpeed != value)
+            {
+                _currentSpeed = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+    
+    public string? ErrorMessage
+    {
+        get => _errorMessage;
+        set
+        {
+            if (_errorMessage != value)
+            {
+                _errorMessage = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DetailedStatusText));
+            }
+        }
+    }
+
+    public string? CoverArtUrl
+    {
+        get => _coverArtUrl;
+        set
+        {
+            if (_coverArtUrl != value)
+            {
+                _coverArtUrl = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string? AlbumArtPath => Model.AlbumArtUrl;
+
+    public string? AlbumArtUrl => Model.AlbumArtUrl;
+    
+    // Phase 3.1: Expose Spotify Metadata ID
+    public string? SpotifyTrackId
+    {
+        get => Model.SpotifyTrackId;
+        set
+        {
+            if (Model.SpotifyTrackId != value)
+            {
+                Model.SpotifyTrackId = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string? SpotifyAlbumId => Model.SpotifyAlbumId;
+
+    public bool IsEnriched
+    {
+        get => Model.IsEnriched;
+        set
+        {
+            if (Model.IsEnriched != value)
+            {
+                Model.IsEnriched = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(MetadataStatus));
+            }
+        }
+    }
+    
+
+    // Phase 10.4: Industrial Prep
+    public bool IsReviewNeeded
+    {
+        get => Model.IsReviewNeeded;
+        set
+        {
+            if (Model.IsReviewNeeded != value)
+            {
+                Model.IsReviewNeeded = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string MetadataStatus
+    {
+        get
+        {
+            if (_isAnalyzing) return "Analyzing";
+            if (Model.IsEnriched) return "Enriched";
+            if (!string.IsNullOrEmpty(Model.SpotifyTrackId)) return "Identified"; // Partial state
+            return "Pending"; // Waiting for enrichment worker
+        }
+
+    }
+
+    // Phase 1: UI Metadata
+    
+    public string GenresDisplay
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Model.Genres)) return string.Empty;
+            try
+            {
+                var list = System.Text.Json.JsonSerializer.Deserialize<List<string>>(Model.Genres);
+                return list != null ? string.Join(", ", list) : string.Empty;
+            }
+            catch
+            {
+                return Model.Genres ?? string.Empty;
+            }
+        }
+    }
+
+
+
+
+
+    /// <summary>
+    /// Raw file size in bytes (populated during download via event or from disk for existing files)
+    /// </summary>
+    private long _fileSizeBytes = 0;
+    public long FileSizeBytes
+    {
+        get => _fileSizeBytes;
+        private set
+        {
+            if (_fileSizeBytes != value)
+            {
+                _fileSizeBytes = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(FileSizeDisplay));
+            }
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+    // Computed Properties for Logic
+    public bool CanPause => State == PlaylistTrackState.Downloading || State == PlaylistTrackState.Queued || State == PlaylistTrackState.Searching;
+    public bool CanResume => State == PlaylistTrackState.Paused;
+    public bool CanCancel => State != PlaylistTrackState.Completed && State != PlaylistTrackState.Cancelled;
+    public bool CanHardRetry => State == PlaylistTrackState.Failed || State == PlaylistTrackState.Cancelled; // Or Completed if we want to re-download
+    public bool CanDeleteFile => State == PlaylistTrackState.Completed || State == PlaylistTrackState.Failed || State == PlaylistTrackState.Cancelled;
+    public bool CanForceStart => State == PlaylistTrackState.Pending || State == PlaylistTrackState.Stalled || State == PlaylistTrackState.Paused;
+
+    public string MetadataStatusColor => MetadataStatus switch
+    {
+        "Analyzing" => "#00BFFF", // Deep Sky Blue
+        "Enriched" => "#FFD700", // Gold
+        "Identified" => "#1E90FF", // DodgerBlue
+        _ => "#505050"
+    };
+
+    public string MetadataStatusSymbol => MetadataStatus switch
+    {
+
+        "Analyzing" => "⚙️",
+        "Enriched" => "✨",
+        "Identified" => "🆔",
+        _ => "⏳"
+    };
+
+    // Actions
+    public void Pause()
+    {
+        if (CanPause)
+        {
+            // Cancel current work but set state to Paused instead of Cancelled
+            CancellationTokenSource?.Cancel();
+            State = PlaylistTrackState.Paused;
+            CurrentSpeed = "Paused";
+        }
+    }
+
+    public void Resume()
+    {
+        if (CanResume)
+        {
+            State = PlaylistTrackState.Pending; // Back to queue
+        }
+    }
+
+    public void Cancel()
+    {
+        if (CanCancel)
+        {
+            CancellationTokenSource?.Cancel();
+            State = PlaylistTrackState.Cancelled;
+            CurrentSpeed = "Cancelled";
+        }
+    }
+
+    public void FindNewVersion()
+    {
+        if (CanHardRetry)
+        {
+            // Similar to Hard Retry, we reset to Pending to allow new search
+            Reset(); 
+        }
+    }
+    
+    public void Reset()
+    {
+        CancellationTokenSource?.Cancel();
+        CancellationTokenSource?.Dispose();
+        CancellationTokenSource = null;
+        State = PlaylistTrackState.Pending;
+        Progress = 0;
+        CurrentSpeed = "";
+        ErrorMessage = null;
+    }
+
+    // ArtworkBitmap and LoadAlbumArtworkAsync removed. 
+    // Replaced by ArtworkProxy logic (see Artwork property).
+
+    /// <summary>
+    /// Lazy loads heavy technical data (Waveforms, etc.) from the database.
+    /// Triggered when the track is expanded or viewed in Inspector.
+    /// </summary>
+    public async Task LoadTechnicalDataAsync()
+    {
+        if (_technicalDataLoaded || _libraryService == null) return;
+        
+        try
+        {
+             // Fetch from LibraryService (which calls DB)
+              _technicalEntity = await _libraryService.GetTechnicalDetailsAsync(this.Id);
+              
+            if (_technicalEntity != null)
+            {
+                // Parse Cues
+                if (!string.IsNullOrEmpty(_technicalEntity.CuePointsJson))
+                {
+                    try
+                    {
+                        var cues = System.Text.Json.JsonSerializer.Deserialize<List<OrbitCue>>(_technicalEntity.CuePointsJson);
+                        if (cues != null)
+                        {
+                            _cues = cues;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Serilog.Log.Warning(ex, "Failed to parse cue points for track {GlobalId}", GlobalId);
+                    }
+                }
+
+                _technicalDataLoaded = true;
+                _cachedWaveformData = null; // Invalidate cache
+
+                // Notify UI
+                OnPropertyChanged(nameof(WaveformData));
+                OnPropertyChanged(nameof(LowData));
+                OnPropertyChanged(nameof(MidData));
+                OnPropertyChanged(nameof(HighData));
+                OnPropertyChanged(nameof(TechnicalSummary));
+                OnPropertyChanged(nameof(Cues));
+                OnPropertyChanged(nameof(PhraseSegments));
+                OnPropertyChanged(nameof(EnergyCurvePoints));
+                OnPropertyChanged(nameof(HasAnalysisData));
+                OnPropertyChanged(nameof(BpmConfidence));
+                OnPropertyChanged(nameof(AudioVocalDensity));
+                OnPropertyChanged(nameof(DetectedVocalTypeDisplay));
+                OnPropertyChanged(nameof(FileSizeBytes));
+                OnPropertyChanged(nameof(LoudnessDisplay));
+                OnPropertyChanged(nameof(Format));
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Warning(ex, "Failed to load technical data for track {GlobalId}", GlobalId);
+        }
+    }
+
+    /// <summary>Loads analysis/technical data for this track. Alias for <see cref="LoadTechnicalDataAsync"/>.</summary>
+    public Task LoadAnalysisDataAsync() => LoadTechnicalDataAsync();
+
+    /// <summary>Updates the label on a cue point and persists the full cue list for this track.</summary>
+    public async Task SaveCueLabelAsync(OrbitCue cue, string newLabel)
+    {
+        cue.Name = newLabel;
+
+        if (_libraryService == null || string.IsNullOrEmpty(GlobalId))
+            return;
+
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(_cues);
+            await _libraryService.UpdateTrackCuePointsAsync(GlobalId, json);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Warning(ex, "Failed to persist cue label change for track {GlobalId}", GlobalId);
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    public void NotifyMetadataChanged()
+    {
+        OnPropertyChanged(nameof(Artist));
+        OnPropertyChanged(nameof(Title));
+        OnPropertyChanged(nameof(Album));
+        OnPropertyChanged(nameof(ArtistName));
+        OnPropertyChanged(nameof(TrackTitle));
+        OnPropertyChanged(nameof(AlbumName));
+        OnPropertyChanged(nameof(Genres));
+        OnPropertyChanged(nameof(GenresDisplay));
+        OnPropertyChanged(nameof(PrimaryGenre));
+        OnPropertyChanged(nameof(ReleaseDate));
+        OnPropertyChanged(nameof(ReleaseYear));
+        OnPropertyChanged(nameof(YearDisplay));
+        OnPropertyChanged(nameof(Rating));
+    }
+
+    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
+    }
+
+    public void SeparateStems()
+    {
+        if (_eventBus == null || string.IsNullOrEmpty(GlobalId)) return;
+        _eventBus.Publish(new Models.StemSeparationRequestedEvent(GlobalId, Model.ResolvedFilePath ?? ""));
+        _eventBus.Publish(new Models.OpenStemWorkspaceRequestEvent(Model, OpenStemRack: true));
+        
+        // UI notification or temporary state if needed
+        ErrorMessage = "Opening stem rack...";
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(DetailedStatusText));
+    }
+
+    // Every consumer is a small chart (the tracklist sparkline is ~75px wide, the inspector bar a
+    // few hundred), but the waveform arrays hold 1,000–5,000+ samples per track. Drawing all of
+    // them in every visible row was the dominant render-thread cost when scrolling large playlists.
+    private const int MaxEnergyCurvePoints = 256;
+
+    private byte[]? _energyCurveLowSource, _energyCurveMidSource, _energyCurveHighSource;
+    private IReadOnlyList<double> _energyCurveCache = Array.Empty<double>();
+
+    /// <summary>Cached: this is read on every binding evaluation (and by HasAnalysisData just to
+    /// check Count), so rebuilding it per read allocated a multi-thousand-element array each time.
+    /// Recomputed only when the underlying waveform arrays are replaced.</summary>
+    private IReadOnlyList<double> BuildEnergyCurvePoints()
+    {
+        var low = WaveformData.LowData;
+        var mid = WaveformData.MidData;
+        var high = WaveformData.HighData;
+        if (ReferenceEquals(low, _energyCurveLowSource) &&
+            ReferenceEquals(mid, _energyCurveMidSource) &&
+            ReferenceEquals(high, _energyCurveHighSource))
+        {
+            return _energyCurveCache;
+        }
+
+        _energyCurveLowSource = low;
+        _energyCurveMidSource = mid;
+        _energyCurveHighSource = high;
+        _energyCurveCache = ComputeEnergyCurve(low ?? Array.Empty<byte>(), mid ?? Array.Empty<byte>(), high ?? Array.Empty<byte>());
+        return _energyCurveCache;
+    }
+
+    internal static IReadOnlyList<double> ComputeEnergyCurve(byte[] low, byte[] mid, byte[] high)
+    {
+        var len = Math.Max(low.Length, Math.Max(mid.Length, high.Length));
+        if (len == 0) return Array.Empty<double>();
+
+        var outCount = Math.Min(len, MaxEnergyCurvePoints);
+        var points = new double[outCount];
+        for (var o = 0; o < outCount; o++)
+        {
+            // Average every sample (all three bands) that falls into this output bucket.
+            var start = (int)((long)o * len / outCount);
+            var end = (int)((long)(o + 1) * len / outCount);
+            double sum = 0;
+            int count = 0;
+            for (var i = start; i < end; i++)
+            {
+                if (i < low.Length) { sum += low[i] / 255.0; count++; }
+                if (i < mid.Length) { sum += mid[i] / 255.0; count++; }
+                if (i < high.Length) { sum += high[i] / 255.0; count++; }
+            }
+            points[o] = count > 0 ? sum / count : 0;
+        }
+
+        return points;
+    }
+
+    private IReadOnlyList<PhraseSegment> BuildPhraseSegments()
+    {
+        var duration = Math.Max(0.0, (Model.CanonicalDuration ?? 0) / 1000.0);
+        var orderedCues = _cues.OrderBy(c => c.Timestamp).ToList();
+
+        if (orderedCues.Count == 0)
+        {
+            if (duration <= 0)
+                return Array.Empty<PhraseSegment>();
+
+            var introEnd = Math.Max(8.0, duration * 0.15);
+            var outroStart = Math.Max(introEnd, duration * 0.82);
+            return new[]
+            {
+                new PhraseSegment { Label = "Intro", Start = 0f, Duration = (float)Math.Max(4.0, introEnd), Color = "#1E3A5F" },
+                new PhraseSegment { Label = "Main", Start = (float)introEnd, Duration = (float)Math.Max(4.0, outroStart - introEnd), Color = "#6A0DAD" },
+                new PhraseSegment { Label = "Outro", Start = (float)outroStart, Duration = (float)Math.Max(4.0, duration - outroStart), Color = "#708090" }
+            };
+        }
+
+        var segments = new List<PhraseSegment>(orderedCues.Count);
+        for (var i = 0; i < orderedCues.Count; i++)
+        {
+            var current = orderedCues[i];
+            var nextTime = i < orderedCues.Count - 1
+                ? orderedCues[i + 1].Timestamp
+                : Math.Max(duration, current.Timestamp + 8.0);
+
+            segments.Add(new PhraseSegment
+            {
+                Label = string.IsNullOrWhiteSpace(current.Name) ? $"Cue {i + 1}" : current.Name,
+                Start = (float)Math.Max(0.0, current.Timestamp),
+                Duration = (float)Math.Max(2.0, nextTime - current.Timestamp),
+                Confidence = (float)Math.Clamp(current.Confidence, 0.0, 1.0),
+                Color = string.IsNullOrWhiteSpace(current.Color) ? "#708090" : current.Color
+            });
+        }
+
+        return segments;
+    }
+
+    private void OpenWorkstation()
+    {
+        PlayTrack();
+
+        if (_eventBus != null)
+            _eventBus.Publish(new Models.OpenStemWorkspaceRequestEvent(Model));
+    }
+
+    private void PlayTrack()
+    {
+        _eventBus?.Publish(new Models.PlayTrackRequestEvent(this));
+    }
+
+    private void RevealFile()
+    {
+        if (!string.IsNullOrEmpty(Model.ResolvedFilePath))
+        {
+            _eventBus?.Publish(new Models.RevealFileRequestEvent(Model.ResolvedFilePath));
+        }
+    }
+
+    public void ForceStart()
+    {
+        if (CanForceStart && _eventBus != null)
+        {
+            _eventBus.Publish(new Models.ForceStartRequestEvent(GlobalId));
+        }
+    }
+
+    public void BumpToTop()
+    {
+        if (CanBumpToTop && _eventBus != null)
+        {
+            _eventBus.Publish(new Models.BumpToTopRequestEvent(GlobalId));
+        }
+    }
+
+    public bool CanBumpToTop => (State == PlaylistTrackState.Pending || State == PlaylistTrackState.Paused || State == PlaylistTrackState.Stalled) && !IsCompleted;
+}

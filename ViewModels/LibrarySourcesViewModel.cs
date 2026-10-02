@@ -1,0 +1,264 @@
+using System;
+using System.Collections.Generic; // Added for EqualityComparer
+using System.Collections.ObjectModel;
+using System.ComponentModel; // Added for INotifyPropertyChanged
+using System.Linq;
+using System.Runtime.CompilerServices; // Added for CallerMemberName
+using System.Threading.Tasks;
+using System.Windows.Input;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Configuration;
+using SLSKDONET.Data;
+using SLSKDONET.Services;
+using SLSKDONET.Views; // For AsyncRelayCommand (if strict match needed)
+using SLSKDONET.Models; // For Events
+
+namespace SLSKDONET.ViewModels;
+
+public class LibrarySourcesViewModel : INotifyPropertyChanged, IDisposable
+{
+    private readonly IDisposable? _foldersChangedSubscription;
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
+    }
+
+    private readonly ILogger<LibrarySourcesViewModel> _logger;
+    private readonly LibraryFolderScannerService _libraryFolderScannerService;
+    private readonly IFileInteractionService _fileInteractionService;
+    private readonly IEventBus _eventBus;
+    private readonly IDbContextFactory<Data.AppDbContext> _dbFactory;
+    private readonly AppConfig _config;
+
+    // Library Folders
+    public ObservableCollection<LibraryFolderViewModel> LibraryFolders { get; } = new();
+
+    private string _scanStatus = string.Empty;
+    public string ScanStatus
+    {
+        get => _scanStatus;
+        set => SetProperty(ref _scanStatus, value);
+    }
+
+    public ICommand AddLibraryFolderCommand { get; }
+    public ICommand RemoveLibraryFolderCommand { get; }
+    public ICommand ScanAllLibraryFoldersCommand { get; }
+    public ICommand ToggleWatchCommand { get; }
+
+    public LibrarySourcesViewModel(
+        ILogger<LibrarySourcesViewModel> logger,
+        LibraryFolderScannerService libraryFolderScannerService,
+        IFileInteractionService fileInteractionService,
+        IEventBus eventBus,
+        IDbContextFactory<Data.AppDbContext> dbFactory,
+        AppConfig config)
+    {
+        _logger = logger;
+        _libraryFolderScannerService = libraryFolderScannerService;
+        _fileInteractionService = fileInteractionService;
+        _eventBus = eventBus;
+        _dbFactory = dbFactory;
+        _config = config;
+
+        AddLibraryFolderCommand = new AsyncRelayCommand(AddLibraryFolderAsync);
+        RemoveLibraryFolderCommand = new RelayCommand<LibraryFolderViewModel?>(RemoveLibraryFolder);
+        ScanAllLibraryFoldersCommand = new AsyncRelayCommand(ScanAllLibraryFoldersAsync);
+        ToggleWatchCommand = new AsyncRelayCommand<LibraryFolderViewModel?>(ToggleWatchAsync);
+
+        // Load existing on init
+        _ = LoadLibraryFoldersAsync();
+        
+        // Phase 0.10: Sync
+        _foldersChangedSubscription = _eventBus.GetEvent<LibraryFoldersChangedEvent>().Subscribe(e => { _ = LoadLibraryFoldersAsync(); });
+    }
+
+    private async Task LoadLibraryFoldersAsync()
+    {
+        try
+        {
+            await using var context = _dbFactory.CreateDbContext();
+            var folders = await context.LibraryFolders.ToListAsync();
+
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                LibraryFolders.Clear();
+                foreach (var folder in folders)
+                {
+                    LibraryFolders.Add(new LibraryFolderViewModel(folder));
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load library folders");
+        }
+    }
+
+    private async Task AddLibraryFolderAsync()
+    {
+        try
+        {
+            var folderPath = await _fileInteractionService.OpenFolderDialogAsync("Select Library Folder");
+            if (string.IsNullOrEmpty(folderPath)) return;
+
+            await using var context = _dbFactory.CreateDbContext();
+
+            // Check if folder already exists
+            var exists = await context.LibraryFolders.AnyAsync(f => f.FolderPath == folderPath);
+
+            if (exists)
+            {
+                _logger.LogWarning("Folder already added: {Path}", folderPath);
+                return;
+            }
+
+            var folderEntity = new Data.Entities.LibraryFolderEntity
+            {
+                Id = Guid.NewGuid(),
+                FolderPath = folderPath,
+                IsEnabled = true,
+                AddedAt = DateTime.UtcNow
+            };
+
+            context.LibraryFolders.Add(folderEntity);
+            await context.SaveChangesAsync();
+
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                LibraryFolders.Add(new LibraryFolderViewModel(folderEntity));
+            });
+
+            _logger.LogInformation("Added library folder: {Path}", folderPath);
+            _eventBus.Publish(new LibraryFoldersChangedEvent());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add library folder");
+        }
+    }
+
+    private async Task ToggleWatchAsync(LibraryFolderViewModel? folderVm)
+    {
+        if (folderVm == null) return;
+
+        try
+        {
+            var newValue = !folderVm.IsWatched;
+            await using var context = _dbFactory.CreateDbContext();
+            var folder = await context.LibraryFolders.FindAsync(folderVm.Id);
+            if (folder == null) return;
+
+            folder.IsWatched = newValue;
+            await context.SaveChangesAsync();
+
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => folderVm.IsWatched = newValue);
+
+            _logger.LogInformation("Library folder watch {State}: {Path}", newValue ? "enabled" : "disabled", folderVm.FolderPath);
+            _eventBus.Publish(new LibraryFoldersChangedEvent());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to toggle folder watch state");
+        }
+    }
+
+    private async void RemoveLibraryFolder(LibraryFolderViewModel? folderVm)
+    {
+        if (folderVm == null) return;
+
+        try
+        {
+            await using var context = _dbFactory.CreateDbContext();
+            var folder = await context.LibraryFolders.FindAsync(folderVm.Id);
+            if (folder != null)
+            {
+                context.LibraryFolders.Remove(folder);
+                await context.SaveChangesAsync();
+
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    LibraryFolders.Remove(folderVm);
+                });
+
+                _logger.LogInformation("Removed library folder: {Path}", folderVm.FolderPath);
+                _eventBus.Publish(new LibraryFoldersChangedEvent());
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to remove library folder");
+        }
+    }
+
+    private async Task ScanAllLibraryFoldersAsync()
+    {
+        try
+        {
+            ScanStatus = "Scanning...";
+
+            // Auto-register configured paths so all drives are included even if the
+            // user hasn't manually added them via the Library Folders panel.
+            if (!string.IsNullOrEmpty(_config.DownloadDirectory))
+                await _libraryFolderScannerService.EnsureDefaultFolderAsync(_config.DownloadDirectory);
+
+            if (!string.IsNullOrEmpty(_config.SharedFolderPath) &&
+                !string.Equals(_config.SharedFolderPath, _config.DownloadDirectory, StringComparison.OrdinalIgnoreCase))
+                await _libraryFolderScannerService.EnsureDefaultFolderAsync(_config.SharedFolderPath);
+
+            var progress = new Progress<ScanProgress>(p =>
+            {
+                var where = string.IsNullOrWhiteSpace(p.CurrentFile) ? string.Empty : $" | {p.CurrentFile}";
+                ScanStatus = $"Found: {p.FilesDiscovered} | Imported: {p.FilesImported} | Upgraded: {p.FilesAutoUpgraded} | RemoveCands: {p.FilesMarkedForRemoval} | DupPath: {p.FilesDuplicateByPath} | DupTrack: {p.FilesDuplicateByHash} | Skipped: {p.FilesSkipped}{where}";
+            });
+
+            var results = await _libraryFolderScannerService.ScanAllFoldersAsync(progress);
+
+            var totalImported = results.Values.Sum(r => r.FilesImported);
+            var totalSkipped = results.Values.Sum(r => r.FilesSkipped);
+            var totalDupPath = results.Values.Sum(r => r.FilesDuplicateByPath);
+            var totalDupHash = results.Values.Sum(r => r.FilesDuplicateByHash);
+            var totalMetadataFailed = results.Values.Sum(r => r.FilesMetadataFailed);
+            var totalUpgraded = results.Values.Sum(r => r.FilesAutoUpgraded);
+            var totalRemovalCandidates = results.Values.Sum(r => r.FilesMarkedForRemoval);
+
+            ScanStatus = $"✅ Complete! Imported: {totalImported}, Upgraded: {totalUpgraded}, RemoveCands: {totalRemovalCandidates}, DupPath: {totalDupPath}, DupTrack: {totalDupHash}, MetaFail: {totalMetadataFailed}, Skipped: {totalSkipped}";
+
+            _logger.LogInformation(
+                "Library folder scan complete: {Imported} imported, {Upgraded} upgraded, {RemoveCandidates} removal-candidates, {Skipped} skipped, DupPath: {DupPath}, DupHash: {DupHash}, MetaFailed: {MetaFailed}",
+                totalImported,
+                totalUpgraded,
+                totalRemovalCandidates,
+                totalSkipped,
+                totalDupPath,
+                totalDupHash,
+                totalMetadataFailed);
+
+            // Clear status after 5 seconds
+            await Task.Delay(5000);
+            ScanStatus = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to scan library folders");
+            ScanStatus = "❌ Scan failed";
+            await Task.Delay(3000);
+            ScanStatus = string.Empty;
+        }
+    }
+
+    public void Dispose()
+    {
+        _foldersChangedSubscription?.Dispose();
+    }
+}

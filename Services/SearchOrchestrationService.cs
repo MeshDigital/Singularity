@@ -1,0 +1,916 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Channels;
+using System.Threading.Tasks;
+using Avalonia.Threading;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Configuration;
+using SLSKDONET.Models;
+using SLSKDONET.Services.InputParsers;
+using SLSKDONET.Services.Ranking;
+using SLSKDONET.Utils;
+
+namespace SLSKDONET.Services;
+
+/// <summary>
+/// Orchestrates search operations including Soulseek searches, result ranking, and album grouping.
+/// Extracted from MainViewModel to separate business logic from UI coordination.
+/// </summary>
+public class SearchOrchestrationService
+{
+    private static readonly HashSet<string> LosslessFormats = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "flac", "wav", "aif", "aiff", "ape", "alac"
+    };
+
+    private static readonly string[] StrictLosslessNegativeTokens =
+    {
+        "-mp3", "-aac", "-m4a", "-ogg", "-opus", "-wma", "-youtube", "-yt"
+    };
+
+    private readonly ILogger<SearchOrchestrationService> _logger;
+    private readonly ISoulseekAdapter _soulseek;
+    private readonly SearchQueryNormalizer _searchQueryNormalizer;
+    private readonly SearchNormalizationService _searchNormalization; // Phase 4.6: Replaces broken parenthesis stripping
+    private readonly ISafetyFilterService _safetyFilter; // Week 2: Gatekeeper
+    private readonly Network.ProtocolHardeningService _hardeningService;
+    private readonly AppConfig _config;
+    
+    private readonly ILibraryService _libraryService;
+    private readonly IEventBus _eventBus;
+    private readonly EngineDiagnosticsService _diagnostics;
+
+    // Set when server sends a ban global message; checked before each search.
+    private DateTime _searchBanUntilUtc = DateTime.MinValue;
+    private IDisposable? _banSub;
+
+    public SearchOrchestrationService(
+        ILogger<SearchOrchestrationService> logger,
+        ISoulseekAdapter soulseek,
+        SearchQueryNormalizer searchQueryNormalizer,
+        SearchNormalizationService searchNormalization,
+        ISafetyFilterService safetyFilter,
+        AppConfig config,
+        Network.ProtocolHardeningService hardeningService,
+        ILibraryService libraryService,
+        IEventBus eventBus,
+        EngineDiagnosticsService diagnostics)
+    {
+        _logger = logger;
+        _soulseek = soulseek;
+        _searchQueryNormalizer = searchQueryNormalizer;
+        _searchNormalization = searchNormalization;
+        _safetyFilter = safetyFilter;
+        _hardeningService = hardeningService;
+        _config = config;
+        _libraryService = libraryService;
+        _eventBus = eventBus;
+        _diagnostics = diagnostics;
+
+        _banSub = _eventBus.GetEvent<SearchBanDetectedEvent>().Subscribe(e =>
+        {
+            _searchBanUntilUtc = e.LockoutUntilUtc;
+            _logger.LogWarning(
+                "[SearchOrchestration] Search lockout active until {Until:HH:mm:ss} UTC due to server ban.",
+                e.LockoutUntilUtc);
+        });
+    }
+
+    public bool IsConnected => _soulseek.IsLoggedIn;
+    public bool IsLoggedIn => _soulseek.IsLoggedIn;
+    private int _activeSearchCount = 0;
+    public int GetActiveSearchCount() => _activeSearchCount;
+
+    /// <summary>Passthrough to the adapter's targeted single-peer search (SearchScope.User).</summary>
+    public Task<List<Track>> SearchUserForTrackAsync(
+        string username,
+        string query,
+        IEnumerable<string>? formatFilter,
+        (int? Min, int? Max) bitrateFilter,
+        int timeoutMs,
+        CancellationToken ct = default)
+        => _soulseek.SearchUserForTrackAsync(username, query, formatFilter, bitrateFilter, timeoutMs, ct);
+
+    /// <summary>
+    /// Execute a search with the given parameters and stream ranked results.
+    /// </summary>
+    public async IAsyncEnumerable<Track> SearchAsync(
+        string query,
+        string preferredFormats,
+        int minBitrate,
+        int maxBitrate,
+        bool isAlbumSearch,
+        bool fastClearance = false,
+        int maxResultsPerLane = 5,
+        bool progressiveYield = false,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var searchPlan = _searchNormalization.BuildSearchPlan(query);
+        await foreach (var track in SearchAsyncCore(
+            query,
+            searchPlan,
+            preferredFormats,
+            minBitrate,
+            maxBitrate,
+            isAlbumSearch,
+            fastClearance,
+            maxResultsPerLane,
+            progressiveYield,
+            cancellationToken))
+        {
+            yield return track;
+        }
+    }
+
+    public async IAsyncEnumerable<Track> SearchAsync(
+        PlaylistTrack target,
+        string query,
+        string preferredFormats,
+        int minBitrate,
+        int maxBitrate,
+        bool isAlbumSearch,
+        bool fastClearance = false,
+        int maxResultsPerLane = 5,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var searchPlan = _searchNormalization.BuildSearchPlan(target, query);
+        await foreach (var track in SearchAsyncCore(
+            query,
+            searchPlan,
+            preferredFormats,
+            minBitrate,
+            maxBitrate,
+            isAlbumSearch,
+            fastClearance,
+            maxResultsPerLane,
+            progressiveYield: false,
+            cancellationToken))
+        {
+            yield return track;
+        }
+    }
+
+    private async IAsyncEnumerable<Track> SearchAsyncCore(
+        string query,
+        SearchPlan searchPlan,
+        string preferredFormats,
+        int minBitrate,
+        int maxBitrate,
+        bool isAlbumSearch,
+        bool fastClearance,
+        int maxResultsPerLane,
+        bool progressiveYield,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var banRemaining = _searchBanUntilUtc - DateTime.UtcNow;
+        if (banRemaining > TimeSpan.Zero)
+        {
+            _logger.LogWarning(
+                "[SearchOrchestration] Search blocked for '{Query}' — server ban active for {Remaining:F0}s more.",
+                query, banRemaining.TotalSeconds);
+            yield break;
+        }
+
+        var activeNow = Math.Max(1, Volatile.Read(ref _activeSearchCount) + 1);
+        var executionProfile = SearchLoadSheddingPolicy.Compute(_config, activeNow);
+
+        var generatedLanes = searchPlan.EnumerateLanes().ToList();
+
+        if (generatedLanes.Count == 0)
+        {
+            generatedLanes = _searchNormalization.GenerateSearchVariations(query)
+                .Select((variation, index) => new PlannedSearchLane(index switch
+                {
+                    0 => SearchQueryLane.Strict,
+                    1 => SearchQueryLane.Standard,
+                    _ => SearchQueryLane.Desperate
+                }, variation))
+                .ToList();
+        }
+
+        var variationCap = Math.Max(1, executionProfile.EffectiveVariationCap);
+        var variations = generatedLanes.Take(variationCap).ToList();
+        if (generatedLanes.Count > variations.Count)
+        {
+            _logger.LogInformation(
+                "Cascade variation cap applied for query '{Query}': using {Used}/{Generated} variations.",
+                query,
+                variations.Count,
+                generatedLanes.Count);
+        }
+
+            if (executionProfile.PressureLevel != SearchPressureLevel.Normal)
+            {
+                _logger.LogInformation(
+                "Search load shedding active ({Pressure}) for '{Query}': responseLimit={ResponseLimit}, fileLimit={FileLimit}, variationCap={VariationCap}, extraDelayMs={ExtraDelayMs}",
+                executionProfile.PressureLevel,
+                query,
+                executionProfile.EffectiveResponseLimit,
+                executionProfile.EffectiveFileLimit,
+                executionProfile.EffectiveVariationCap,
+                executionProfile.AdditionalThrottleDelayMs);
+            }
+
+        var seenHashes = new HashSet<string>();
+        var formatFilter = preferredFormats.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var strictSufficientResultCount = Math.Max(1, _config.StrictSearchSufficientResultCount);
+        int totalFound = 0;
+
+        bool countedAsActive = false;
+        try 
+        {
+            Interlocked.Increment(ref _activeSearchCount);
+            countedAsActive = true;
+
+            for (var variationIndex = 0; variationIndex < variations.Count; variationIndex++)
+            {
+                var plannedLane = variations[variationIndex];
+                var variation = plannedLane.Query;
+                _logger.LogInformation("Cascade Search: Attempting {Lane} variation '{Variation}' (Attempting {Idx} of {Count})", 
+                    plannedLane.Lane, variation, variationIndex + 1, variations.Count);
+
+                if (plannedLane.Lane == SearchQueryLane.Desperate && !isAlbumSearch && totalFound > 0)
+                {
+                    _logger.LogInformation(
+                        "Cascade Search: Skipping desperate fallback for '{Query}' because accepted results already exist ({Count}).",
+                        query,
+                        totalFound);
+                    break;
+                }
+
+                if (plannedLane.Lane == SearchQueryLane.Desperate)
+                {
+                    var desperateDelayMs = Math.Max(
+                        _config.SearchThrottleDelayMs + executionProfile.AdditionalThrottleDelayMs,
+                        Math.Clamp(_config.RelaxationTimeoutSeconds, 1, 30) * 1000);
+                    _logger.LogInformation(
+                        "Cascade Search: Escalating to desperate lane for '{Query}' after {DelayMs}ms of prior misses.",
+                        query,
+                        desperateDelayMs);
+                    await Task.Delay(desperateDelayMs, cancellationToken);
+                }
+
+                bool foundInThisVariation = false;
+                bool strictHighConfidenceWinnerFound = false;
+                
+                var hardenedVariation = _hardeningService.NormalizeSearchQuery(variation);
+                if (hardenedVariation == null) continue; // Skip banned query
+                
+                await foreach (var track in StreamAndRankResultsAsync(
+                    hardenedVariation, 
+                    searchPlan.Target,
+                    plannedLane.Lane,
+                    preferredFormats, 
+                    minBitrate, 
+                    maxBitrate,
+                    executionProfile,
+                    maxResultsPerLane,
+                    progressiveYield,
+                    cancellationToken))
+                {
+                    if (seenHashes.Add(track.UniqueHash))
+                    {
+                        yield return track;
+                        totalFound++;
+                        foundInThisVariation = true;
+
+                        if (!isAlbumSearch && variationIndex == 0 && IsFastLaneWinner(track, formatFilter, minBitrate))
+                        {
+                            strictHighConfidenceWinnerFound = true;
+                        }
+
+                        if (fastClearance && _config.EnableFastClearanceEarlyExit && !isAlbumSearch && IsFastLaneWinner(track, formatFilter, minBitrate))
+                        {
+                            _logger.LogInformation(
+                                "Fast lane triggered for '{Variation}'. Short-circuiting cascade on idle peer {User} ({Bitrate} kbps, queue {QueueLength}).",
+                                variation,
+                                track.Username ?? "Unknown",
+                                track.Bitrate,
+                                track.QueueLength);
+                            yield break;
+                        }
+                    }
+                }
+
+                if (!isAlbumSearch && variationIndex == 0)
+                {
+                    if (_config.EnableStrictHighConfidenceShortCircuit && strictHighConfidenceWinnerFound)
+                    {
+                        _logger.LogInformation(
+                            "Cascade Search: Strict variation produced a high-confidence winner. Skipping relaxed fallbacks.");
+                        break;
+                    }
+
+                    if (_config.EnableStrictSufficientResultShortCircuit && totalFound >= strictSufficientResultCount)
+                    {
+                        _logger.LogInformation(
+                            "Cascade Search: Strict variation reached sufficient result threshold ({Count}/{Threshold}). Skipping relaxed fallbacks.",
+                            totalFound,
+                            strictSufficientResultCount);
+                        break;
+                    }
+                }
+
+                // Smart Stop: If we found hits with a better strategy, don't fallback to noisier ones
+                // Unless it's an album search where we want as much coverage as possible.
+                if (_config.EnableStrictSufficientResultShortCircuit && foundInThisVariation && !isAlbumSearch && totalFound >= strictSufficientResultCount)
+                {
+                    _logger.LogInformation("Cascade Search: Found {Count} results for '{Variation}'. Stopping cascade.", totalFound, variation);
+                    break;
+                }
+
+                if (!foundInThisVariation && variationIndex < variations.Count - 1)
+                {
+                    _logger.LogInformation("Cascade Search: No new results for '{Variation}'. Trying next variation...", variation);
+                    var delayMs = Math.Max(50, _config.SearchThrottleDelayMs + executionProfile.AdditionalThrottleDelayMs);
+                    await Task.Delay(delayMs, cancellationToken); // Stagger
+                }
+            }
+        }
+        finally
+        {
+            if (countedAsActive)
+            {
+                Interlocked.Decrement(ref _activeSearchCount);
+            }
+        }
+    }
+
+    private static bool IsFastLaneWinner(Track track, string[] formatFilter, int minBitrate)
+    {
+        if (track.IsFlagged)
+            return false;
+
+        // Relevance floor: file quality and peer availability alone must never be enough to
+        // short-circuit search. Without this, a high-bitrate file from an idle peer for a
+        // completely different song can still clear the blended match-score threshold below,
+        // because that score weights quality/availability far more heavily than text match (see
+        // ResultSorter.CalculateRank). This directly compares artist/title relevance instead.
+        if (track.MetadataMatchScore < ScoringConstants.Availability.FastLaneMinMetadataScore)
+            return false;
+
+        var minimumScore = Math.Min(ScoringConstants.Availability.FastLaneMinMatchScore, 50);
+        if (track.CurrentRank < minimumScore)
+            return false;
+
+        if (track.QueueLength > ScoringConstants.Availability.FastLaneMaxQueue)
+            return false;
+
+        if (!track.HasFreeUploadSlot && track.QueueLength != 0)
+            return false;
+
+        var ext = track.GetExtension().ToLowerInvariant();
+        var format = (track.Format ?? string.Empty).ToLowerInvariant();
+        if (formatFilter.Length > 0 &&
+            !formatFilter.Contains(format, StringComparer.OrdinalIgnoreCase) &&
+            !formatFilter.Contains(ext, StringComparer.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var isLossless = ext is "flac" or "wav" or "aif" or "aiff" or "ape" or "alac" ||
+                         format is "flac" or "wav" or "aif" or "aiff" or "ape" or "alac";
+
+        var effectiveMinBitrate = Math.Max(minBitrate, ScoringConstants.Availability.FastLaneMinBitrate);
+        return isLossless || track.Bitrate >= effectiveMinBitrate;
+    }
+
+    private static bool IsLosslessFormat(string? format)
+    {
+        if (string.IsNullOrWhiteSpace(format))
+            return false;
+
+        return LosslessFormats.Contains(format.Trim());
+    }
+
+    private async IAsyncEnumerable<Track> StreamAndRankResultsAsync(
+        string normalizedQuery,
+        TargetMetadata target,
+        SearchQueryLane lane,
+        string preferredFormats,
+        int minBitrate,
+        int maxBitrate,
+        SearchExecutionProfile executionProfile,
+        int maxResultsToYield,
+        bool progressiveYield,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        // Brain buffer: desperate lanes get the full accumulator window.
+        // Non-desperate lanes get the full SearchTimeout + overhead so the Soulseek network
+        // reply window isn't cut off by the CTS before responses arrive.
+        // Previous clamp (3–6 s) was shorter than the token-bucket refill (3.5 s/search),
+        // causing the 2nd queued search to only get ~1.5 s of actual network time.
+        var formatFilter = preferredFormats.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var searchTimeoutSeconds = Math.Max(5, _config.SearchTimeout / 1000);
+        var isLosslessOnlyIntent = formatFilter.Length > 0 &&
+                                   formatFilter.Any(IsLosslessFormat) &&
+                                   !formatFilter.Contains("mp3", StringComparer.OrdinalIgnoreCase);
+
+        // Upper bounds raised from 20 to 30: with SearchTimeout now 20s (was 12s) to give distant/
+        // slower peers real time to answer, the non-desperate lane's floor (searchTimeoutSeconds +
+        // 2) could already reach 22 — above the old 20 cap, which made Math.Clamp throw outright.
+        // AccumulatorShortCircuit still exits early the moment a good candidate arrives, so this
+        // only extends the worst-case wait for genuinely scarce tracks, not the common case.
+        var brainBufferSeconds = lane == SearchQueryLane.Desperate
+            ? Math.Clamp(_config.SearchAccumulatorWindowSeconds, 5, 30)
+            : Math.Clamp(_config.MinSearchDurationSeconds, searchTimeoutSeconds + 2, 30);
+
+        if (isLosslessOnlyIntent)
+        {
+            brainBufferSeconds = Math.Clamp(
+                Math.Max(brainBufferSeconds, _config.MinLosslessSearchDurationSeconds),
+                10,
+                30);
+        }
+
+        var brainWinnerCount = lane == SearchQueryLane.Desperate
+            ? Math.Max(maxResultsToYield, _config.StrictSearchSufficientResultCount)
+            : maxResultsToYield;
+
+        var networkQuery = BuildNetworkQuery(normalizedQuery, formatFilter, minBitrate);
+
+        // Progressive mode: score and yield each result immediately as it arrives from
+        // the network so the UI can render and re-sort results in real-time.
+        // Runs outside the try/catch because yield return is not allowed inside try/catch.
+        if (progressiveYield && lane != SearchQueryLane.Desperate)
+        {
+            var allowLossy = maxBitrate > 0 || System.Linq.Enumerable.Contains(formatFilter, "mp3", StringComparer.OrdinalIgnoreCase);
+            // Progressive lanes stream/yield immediately rather than buffering then ranking, so
+            // there's no final winner list to build the buffered path's full SearchSelectionAudit
+            // from (see LogSelectionAudit below) — this was a real audit gap (every progressive
+            // search was invisible to engine diagnostics). Track just the count/outcome here; the
+            // per-candidate score detail progressive lanes lack is exactly what Part 3's structured
+            // diagnostics table is for.
+            var progressiveCandidateCount = 0;
+            await foreach (var track in _soulseek.StreamResultsAsync(
+                networkQuery,
+                formatFilter,
+                (minBitrate, maxBitrate),
+                DownloadMode.Normal,
+                executionProfile,
+                cancellationToken))
+            {
+                _safetyFilter.EvaluateSafety(track, normalizedQuery, allowLossy, _config?.SearchPolicy);
+                ScoreSingleTrack(track, target, normalizedQuery, formatFilter, minBitrate, maxBitrate);
+                progressiveCandidateCount++;
+                yield return track;
+
+                if (_config.EnableAccumulatorPerfectMatchShortCircuit && IsPerfectAccumulatorWinner(track, target, formatFilter, minBitrate))
+                {
+                    _logger.LogInformation(
+                        "Search accumulator short-circuit: found ideal candidate for '{Query}' from {User}.",
+                        normalizedQuery,
+                        track.Username ?? "Unknown");
+                    _logger.LogInformation(
+                        "[SEARCH_AUDIT] Query='{Query}' NetworkQuery='{NetworkQuery}' Lane={Lane} Progressive=true Candidates={Count} Outcome=ShortCircuit",
+                        normalizedQuery, networkQuery, lane, progressiveCandidateCount);
+                    var fireAndForgetShortCircuit = _diagnostics.LogSearchResolvedAsync(
+                        trackHash: null, normalizedQuery, $"{progressiveCandidateCount} candidate(s) — short-circuit match",
+                        details: new { networkQuery, lane = lane.ToString(), progressive = true, progressiveCandidateCount, outcome = "ShortCircuit" });
+                    yield break;
+                }
+            }
+
+            _logger.LogInformation(
+                "[SEARCH_AUDIT] Query='{Query}' NetworkQuery='{NetworkQuery}' Lane={Lane} Progressive=true Candidates={Count} Outcome=Exhausted",
+                normalizedQuery, networkQuery, lane, progressiveCandidateCount);
+            var fireAndForgetExhausted = _diagnostics.LogSearchResolvedAsync(
+                trackHash: null, normalizedQuery, $"{progressiveCandidateCount} candidate(s) — {(progressiveCandidateCount == 0 ? "no results" : "exhausted, no short-circuit")}",
+                details: new { networkQuery, lane = lane.ToString(), progressive = true, progressiveCandidateCount, outcome = "Exhausted" });
+            yield break;
+        }
+
+        var bufferedTracks = new List<Track>();
+        using var brainBufferCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        brainBufferCts.CancelAfter(TimeSpan.FromSeconds(brainBufferSeconds));
+
+        try
+        {
+            if (lane == SearchQueryLane.Desperate)
+            {
+                bufferedTracks = await CollectDesperateLaneCandidatesAsync(
+                    normalizedQuery,
+                    networkQuery,
+                    target,
+                    formatFilter,
+                    minBitrate,
+                    maxBitrate,
+                    executionProfile,
+                    brainBufferCts.Token);
+            }
+            else
+            {
+                var allowLossy = maxBitrate > 0 || System.Linq.Enumerable.Contains(formatFilter, "mp3", StringComparer.OrdinalIgnoreCase);
+                await foreach (var track in _soulseek.StreamResultsAsync(
+                    networkQuery,
+                    formatFilter,
+                    (minBitrate, maxBitrate),
+                    DownloadMode.Normal,
+                    executionProfile,
+                    brainBufferCts.Token))
+                {
+                    _safetyFilter.EvaluateSafety(track, normalizedQuery, allowLossy, _config?.SearchPolicy);
+                    bufferedTracks.Add(track);
+
+                    if (_config.EnableAccumulatorPerfectMatchShortCircuit && IsPerfectAccumulatorWinner(track, target, formatFilter, minBitrate))
+                    {
+                        _logger.LogInformation(
+                            "Search accumulator short-circuit: found ideal candidate for '{Query}' from {User}.",
+                            normalizedQuery,
+                            track.Username ?? "Unknown");
+                        break;
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) when (brainBufferCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Brain buffer window elapsed for {Lane} query '{Query}'. Ranking {Count} buffered candidates.",
+                lane,
+                normalizedQuery,
+                bufferedTracks.Count);
+        }
+
+        if (bufferedTracks.Count == 0)
+        {
+            yield break;
+        }
+
+        var ranked = RankTrackResults(bufferedTracks, target, normalizedQuery, formatFilter, minBitrate, maxBitrate)
+            .Take(brainWinnerCount)
+            .ToList();
+
+        var audit = BuildSelectionAudit(
+            normalizedQuery,
+            networkQuery,
+            brainBufferSeconds,
+            minBitrate,
+            maxBitrate,
+            formatFilter,
+            bufferedTracks,
+            ranked);
+        LogSelectionAudit(audit);
+
+        foreach (var track in ranked)
+        {
+            yield return track;
+        }
+    }
+
+    private async Task<List<Track>> CollectDesperateLaneCandidatesAsync(
+        string normalizedQuery,
+        string networkQuery,
+        TargetMetadata target,
+        string[] formatFilter,
+        int minBitrate,
+        int maxBitrate,
+        SearchExecutionProfile executionProfile,
+        CancellationToken cancellationToken)
+    {
+        var capacity = Math.Max(32, executionProfile.EffectiveFileLimit);
+        var channel = Channel.CreateBounded<Track>(new BoundedChannelOptions(capacity)
+        {
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = true,
+            SingleWriter = true
+        });
+
+        var producer = Task.Run(async () =>
+        {
+            Exception? failure = null;
+            try
+            {
+                await foreach (var track in _soulseek.StreamResultsAsync(
+                    networkQuery,
+                    formatFilter,
+                    (minBitrate, maxBitrate),
+                    DownloadMode.Normal,
+                    executionProfile,
+                    cancellationToken))
+                {
+                    _safetyFilter.EvaluateSafety(track, normalizedQuery, policy: _config?.SearchPolicy);
+                    await channel.Writer.WriteAsync(track, cancellationToken);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+            }
+            catch (Exception ex)
+            {
+                failure = ex;
+            }
+            finally
+            {
+                channel.Writer.TryComplete(failure);
+            }
+        }, cancellationToken);
+
+        var bufferedTracks = new List<Track>();
+        try
+        {
+            await foreach (var track in channel.Reader.ReadAllAsync(cancellationToken))
+            {
+                bufferedTracks.Add(track);
+
+                if (_config.EnableAccumulatorPerfectMatchShortCircuit && IsPerfectAccumulatorWinner(track, target, formatFilter, minBitrate))
+                {
+                    _logger.LogInformation(
+                        "Desperate lane short-circuit: found ideal candidate for '{Query}' from {User}.",
+                        normalizedQuery,
+                        track.Username ?? "Unknown");
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            try
+            {
+                await producer;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+            }
+        }
+
+        return bufferedTracks;
+    }
+
+    private bool IsPerfectAccumulatorWinner(
+        Track track,
+        TargetMetadata target,
+        string[] formatFilter,
+        int minBitrate)
+    {
+        if (track.IsFlagged)
+            return false;
+
+        if (!IsFastLaneWinner(track, formatFilter, minBitrate))
+            return false;
+
+        var fitScore = CalculateAccumulatorFitScore(track, target, formatFilter, minBitrate);
+        if (fitScore < 85)
+            return false;
+
+        return track.QueueLength == 0 || track.HasFreeUploadSlot;
+    }
+
+    private double CalculateAccumulatorFitScore(
+        Track candidate,
+        TargetMetadata target,
+        string[] formatFilter,
+        int minBitrate)
+    {
+        return SearchCandidateFitScorer.CalculateScore(
+            candidate,
+            target,
+            formatFilter,
+            minBitrate,
+            _config.SearchLengthToleranceSeconds);
+    }
+
+    private static bool ContainsNormalizedToken(string? candidate, string expected)
+    {
+        return SearchCandidateFitScorer.ContainsNormalizedToken(candidate, expected);
+    }
+
+    private static string BuildNetworkQuery(string normalizedQuery, string[] formatFilter, int minBitrate)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedQuery))
+            return normalizedQuery;
+
+        var hasStrictLosslessFormatFilter = formatFilter.Length > 0 && formatFilter.All(format =>
+            LosslessFormats.Contains(format));
+        var hasStrictLosslessBitrate = minBitrate >= 701;
+        var shouldInjectNegatives = hasStrictLosslessFormatFilter || hasStrictLosslessBitrate;
+
+        if (!shouldInjectNegatives)
+            return normalizedQuery;
+
+        var existingTokens = normalizedQuery
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var missingNegatives = StrictLosslessNegativeTokens
+            .Where(token => !existingTokens.Contains(token))
+            .ToArray();
+
+        if (missingNegatives.Length == 0)
+            return normalizedQuery;
+
+        return $"{normalizedQuery} {string.Join(" ", missingNegatives)}";
+    }
+    
+    private List<Track> RankTrackResults(
+        List<Track> results, 
+        TargetMetadata target,
+        string normalizedQuery, 
+        string[] formatFilter, 
+        int minBitrate, 
+        int maxBitrate)
+    {
+        if (results.Count == 0)
+            return results;
+            
+        _logger.LogInformation("Ranking {Count} search results", results.Count);
+        
+        // Create search track from query for ranking
+        var searchTrack = new Track { Title = normalizedQuery };
+        
+        // Create evaluator based on current filter settings
+        var evaluator = new FileConditionEvaluator();
+        if (formatFilter.Length > 0)
+        {
+            evaluator.AddRequired(new FormatCondition { AllowedFormats = formatFilter.ToList() });
+        }
+        
+        if (minBitrate > 0 || maxBitrate > 0)
+        {
+            evaluator.AddPreferred(new BitrateCondition 
+            { 
+                MinBitrate = minBitrate > 0 ? minBitrate : null, 
+                MaxBitrate = maxBitrate > 0 ? maxBitrate : null 
+            });
+        }
+        
+        // Rank the results using TieredTrackComparer (deterministic tiers) with blend-score
+        // tie-breaking within the same tier.
+        var policy  = _config?.SearchPolicy ?? SearchPolicy.QualityFirst();
+        var tieredComparer = new TieredTrackComparer(policy, searchTrack);
+
+        var rankedResults = ResultSorter.OrderResults(results, searchTrack, evaluator)
+            .Select(track =>
+            {
+                var fitScore = CalculateAccumulatorFitScore(track, target, formatFilter, minBitrate);
+                var baseMatchScore = SearchCandidateRankingPolicy.MatchScoreFromRank(track.CurrentRank);
+                var finalScore = SearchCandidateRankingPolicy.CalculateFinalScore(
+                    baseMatchScore,
+                    fitScore,
+                    reliability: 0.5,
+                    queueLength: track.QueueLength,
+                    hasFreeUploadSlot: track.HasFreeUploadSlot);
+                EnsureBlendTelemetryMetadata(track, baseMatchScore, fitScore, 0.5, finalScore);
+                var existingBreakdown = track.ScoreBreakdown;
+                var blendBreakdown = $"Blend: Match={baseMatchScore:F1}, Fit={fitScore:F1}, Rel=0.50, Queue={track.QueueLength}, FreeSlot={track.HasFreeUploadSlot}, Final={finalScore:F1}";
+                track.ScoreBreakdown = string.IsNullOrWhiteSpace(existingBreakdown)
+                    ? blendBreakdown
+                    : $"{existingBreakdown}; {blendBreakdown}";
+                track.MatchReason ??= SearchBlendReasonFormatter.BuildCompactReason(track.Metadata);
+                track.CurrentRank = finalScore;
+                return track;
+            })
+            .ToList();
+
+        // Final sort: tier first (TieredTrackComparer), then blend score within the same tier.
+        rankedResults.Sort((a, b) =>
+        {
+            int tierCmp = tieredComparer.Compare(a, b);
+            return tierCmp != 0 ? tierCmp : b.CurrentRank.CompareTo(a.CurrentRank);
+        });
+        
+        _logger.LogInformation("Results ranked successfully");
+        return rankedResults;
+    }
+
+    // Score a single track in-place so it can be yielded immediately in progressive mode.
+    private void ScoreSingleTrack(Track track, TargetMetadata target, string normalizedQuery, string[] formatFilter, int minBitrate, int maxBitrate)
+    {
+        var searchTrack = new Track { Title = normalizedQuery };
+        var evaluator = new FileConditionEvaluator();
+        if (formatFilter.Length > 0)
+            evaluator.AddRequired(new FormatCondition { AllowedFormats = formatFilter.ToList() });
+        if (minBitrate > 0 || maxBitrate > 0)
+            evaluator.AddPreferred(new BitrateCondition { MinBitrate = minBitrate > 0 ? minBitrate : null, MaxBitrate = maxBitrate > 0 ? maxBitrate : null });
+
+        ResultSorter.CalculateRank(track, searchTrack, evaluator);
+
+        var fitScore = CalculateAccumulatorFitScore(track, target, formatFilter, minBitrate);
+        var baseMatchScore = SearchCandidateRankingPolicy.MatchScoreFromRank(track.CurrentRank);
+        var finalScore = SearchCandidateRankingPolicy.CalculateFinalScore(
+            baseMatchScore, fitScore, reliability: 0.5, queueLength: track.QueueLength,
+            hasFreeUploadSlot: track.HasFreeUploadSlot);
+        EnsureBlendTelemetryMetadata(track, baseMatchScore, fitScore, 0.5, finalScore);
+        track.MatchReason ??= SearchBlendReasonFormatter.BuildCompactReason(track.Metadata);
+        track.CurrentRank = finalScore;
+    }
+
+    private SearchSelectionAudit BuildSelectionAudit(
+        string normalizedQuery,
+        string networkQuery,
+        int bufferSeconds,
+        int minBitrate,
+        int maxBitrate,
+        string[] formatFilter,
+        List<Track> candidates,
+        List<Track> winners)
+    {
+        return new SearchSelectionAudit
+        {
+            TimestampUtc = DateTime.UtcNow,
+            Query = normalizedQuery,
+            NetworkQuery = networkQuery,
+            BufferSeconds = bufferSeconds,
+            CandidateCount = candidates.Count,
+            WinnerCount = winners.Count,
+            MinBitrate = minBitrate > 0 ? minBitrate : null,
+            MaxBitrate = maxBitrate > 0 ? maxBitrate : null,
+            PreferredFormats = formatFilter,
+            Candidates = candidates.Select(MapAuditCandidate).ToList(),
+            Winners = winners.Select(MapAuditCandidate).ToList()
+        };
+    }
+
+    private static SearchSelectionAuditCandidate MapAuditCandidate(Track track)
+    {
+        return new SearchSelectionAuditCandidate
+        {
+            Username = track.Username ?? string.Empty,
+            Filename = track.Filename ?? string.Empty,
+            Format = track.Format ?? track.GetExtension(),
+            Bitrate = track.Bitrate,
+            QueuePos = track.QueueLength,
+            PeerSpeed = track.UploadSpeed,
+            IsDedup = TryGetDedupSignal(track),
+            IsFlagged = track.IsFlagged,
+            Rank = track.CurrentRank,
+            BlendMatchScore = TryGetMetadataDouble(track, "BlendMatchScore"),
+            BlendFitScore = TryGetMetadataDouble(track, "BlendFitScore"),
+            BlendReliability = TryGetMetadataDouble(track, "BlendReliability"),
+            BlendFinalScore = TryGetMetadataDouble(track, "BlendFinalScore"),
+            ScoreBreakdown = track.ScoreBreakdown ?? string.Empty
+        };
+    }
+
+    private static void EnsureBlendTelemetryMetadata(Track track, double matchScore, double fitScore, double reliability, double finalScore)
+    {
+        track.Metadata ??= new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        track.Metadata["BlendMatchScore"] = matchScore;
+        track.Metadata["BlendFitScore"] = fitScore;
+        track.Metadata["BlendReliability"] = reliability;
+        track.Metadata["BlendFinalScore"] = finalScore;
+    }
+
+    private static bool TryGetDedupSignal(Track track)
+    {
+        if (track.Metadata == null ||
+            !track.Metadata.TryGetValue("IsDedup", out var isDedupRaw) ||
+            isDedupRaw is null)
+        {
+            return false;
+        }
+
+        return isDedupRaw switch
+        {
+            bool boolValue => boolValue,
+            string stringValue when bool.TryParse(stringValue, out var parsed) => parsed,
+            _ => false
+        };
+    }
+
+    private static double? TryGetMetadataDouble(Track track, string key)
+    {
+        if (track.Metadata == null ||
+            !track.Metadata.TryGetValue(key, out var raw) ||
+            raw is null)
+        {
+            return null;
+        }
+
+        return raw switch
+        {
+            double d => d,
+            float f => f,
+            int i => i,
+            long l => l,
+            decimal m => (double)m,
+            string s when double.TryParse(s, out var parsed) => parsed,
+            _ => null
+        };
+    }
+
+    private void LogSelectionAudit(SearchSelectionAudit audit)
+    {
+        _logger.LogInformation(
+            "[SEARCH_AUDIT] Query='{Query}' NetworkQuery='{NetworkQuery}' Candidates={CandidateCount} Winners={WinnerCount} Buffer={BufferSeconds}s",
+            audit.Query,
+            audit.NetworkQuery,
+            audit.CandidateCount,
+            audit.WinnerCount,
+            audit.BufferSeconds);
+
+        _logger.LogDebug("[SEARCH_AUDIT] Candidates {Payload}", JsonSerializer.Serialize(audit.Candidates));
+        _logger.LogDebug("[SEARCH_AUDIT] Winners {Payload}", JsonSerializer.Serialize(audit.Winners));
+
+        var summary = $"{audit.CandidateCount} candidate(s), {audit.WinnerCount} winner(s)" + (audit.WinnerCount == 0 ? " — no match" : "");
+        var fireAndForget = _diagnostics.LogSearchResolvedAsync(
+            trackHash: null, audit.Query, summary,
+            details: new { audit.NetworkQuery, audit.CandidateCount, audit.WinnerCount, audit.BufferSeconds, audit.Candidates, audit.Winners });
+    }
+    
+
+}

@@ -1,0 +1,2460 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Reactive;
+using System.Reactive.Disposables;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using System.Windows.Input;
+using Avalonia.Threading;
+using ReactiveUI;
+using SLSKDONET.Configuration;
+using SLSKDONET.Models;
+using SLSKDONET.Services;
+using SLSKDONET.Events;
+using SLSKDONET.Views;
+using Microsoft.EntityFrameworkCore;
+using SLSKDONET.Data;
+
+namespace SLSKDONET.ViewModels.Downloads;
+
+/// <summary>
+/// Phase 2.5 & 12.6: Unified Track ViewModel for Download Center and Lists.
+/// Implements "Smart Component" architecture - self-managing state via EventBus.
+/// </summary>
+public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposable
+{
+    private static readonly Regex RejectedUserRegex = new(@"^(?:Rejected|Skipped)\s+(?<user>[^:]+):\s*(?<detail>.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex BlacklistedUserRegex = new(@"^Skipping\s+peer\s+(?<user>[^\s]+)\s+\((?<detail>[^\)]+)\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex WinnerUserRegex = new(@"(?:winner:|match from|Selected\s+)(?<user>[A-Za-z0-9_\-\.]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex StructuredFieldRegex = new(@"(?<key>[a-zA-Z]+):\s*(?<value>[^|]+)", RegexOptions.Compiled);
+    private static readonly Regex FromUserRegex = new(@"from\s+(?<user>[A-Za-z0-9_\-\.]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly HashSet<string> LosslessFormats = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "flac", "wav", "aif", "aiff", "ape", "alac"
+    };
+
+    private readonly DownloadManager _downloadManager;
+    private readonly IEventBus _eventBus;
+    private readonly ArtworkCacheService _artworkCache;
+    private readonly ILibraryService _libraryService;
+    private readonly DatabaseService _databaseService;
+    private readonly AppConfig _config;
+    private readonly IDbContextFactory<AppDbContext>? _dbFactory;
+    private readonly CompositeDisposable _disposables = new();
+    private readonly Subject<Unit> _metadataRefreshRequests = new();
+    private readonly SerialDisposable _searchClockSubscription = new();
+    private bool _isSearchClockRunning;
+    private string? _discoveryReasonOverride;
+    private bool _historyRecorded;
+
+    // Core Data
+    public PlaylistTrack Model { get; }
+    
+    // New: Raw Speed for Aggregation
+    private long _downloadSpeed;
+    public long DownloadSpeed 
+    { 
+        get => _downloadSpeed; 
+        set 
+        {
+            if (_downloadSpeed != value)
+            {
+                // Update trend before setting new speed
+                var diff = value - _downloadSpeed;
+                SpeedTrend = diff > 1024 ? "↗" : (diff < -1024 ? "↘" : "→");
+                this.RaiseAndSetIfChanged(ref _downloadSpeed, value); 
+            }
+        }
+    }
+
+    private string? _peerName;
+    public string? PeerName
+    {
+        get => _peerName;
+        set => this.RaiseAndSetIfChanged(ref _peerName, value);
+    }
+    
+    // Core QoL: Speed Trend tracking
+    private string _speedTrend = "—";
+    public string SpeedTrend
+    {
+        get => _speedTrend;
+        private set => this.RaiseAndSetIfChanged(ref _speedTrend, value);
+    }
+    
+    // Phase 12.3: Selection State
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => this.RaiseAndSetIfChanged(ref _isSelected, value);
+    }
+
+    public ObservableCollection<TrackPeerResultViewModel> IncomingResults { get; } = new();
+
+    private bool _isConsoleOpen;
+    public bool IsConsoleOpen
+    {
+        get => _isConsoleOpen;
+        set => this.RaiseAndSetIfChanged(ref _isConsoleOpen, value);
+    }
+
+    private DateTime? _searchStartedAtUtc;
+    private DateTime? _searchEndedAtUtc;
+    private bool _searchUsedMp3Fallback;
+    private bool _searchFoundNothing;
+    private bool _searchFoundMatch;
+
+    private string _latestIncomingMessage = "No peer messages yet";
+    public string LatestIncomingMessage
+    {
+        get => _latestIncomingMessage;
+        private set => this.RaiseAndSetIfChanged(ref _latestIncomingMessage, value);
+    }
+
+    private string _latestIncomingStateLabel = "Idle";
+    public string LatestIncomingStateLabel
+    {
+        get => _latestIncomingStateLabel;
+        private set => this.RaiseAndSetIfChanged(ref _latestIncomingStateLabel, value);
+    }
+
+    private string _latestIncomingStateColor = "#666666";
+    public string LatestIncomingStateColor
+    {
+        get => _latestIncomingStateColor;
+        private set => this.RaiseAndSetIfChanged(ref _latestIncomingStateColor, value);
+    }
+
+    private string _latestIncomingTimeDisplay = "--:--:--";
+    public string LatestIncomingTimeDisplay
+    {
+        get => _latestIncomingTimeDisplay;
+        private set => this.RaiseAndSetIfChanged(ref _latestIncomingTimeDisplay, value);
+    }
+
+    public int IncomingResultCount => IncomingResults.Count;
+    public bool HasIncomingResults => IncomingResults.Count > 0;
+    public bool HasSearchTelemetry => _searchStartedAtUtc.HasValue || HasIncomingResults || !string.IsNullOrWhiteSpace(DetailedSearchStatus);
+    public int SearchMatchedCount => IncomingResults.Count(x => x.State == TrackPeerResultState.Matched);
+    public int SearchQueuedCount => IncomingResults.Count(x => x.State == TrackPeerResultState.Queued);
+    public int SearchFilteredCount => IncomingResults.Count(x => x.State == TrackPeerResultState.Filtered);
+    public string SearchDurationDisplay
+    {
+        get
+        {
+            if (!_searchStartedAtUtc.HasValue)
+                return "—";
+
+            var effectiveEnd = _searchEndedAtUtc ?? DateTime.UtcNow;
+            var duration = effectiveEnd - _searchStartedAtUtc.Value;
+            if (duration.TotalHours >= 1)
+                return duration.ToString(@"h\:mm\:ss");
+            if (duration.TotalMinutes >= 1)
+                return duration.ToString(@"m\:ss");
+            return $"{Math.Max(0, Math.Round(duration.TotalSeconds)):0}s";
+        }
+    }
+
+    public string SearchOutcomeLabel
+    {
+        get
+        {
+            if (_searchFoundMatch || IsCompleted || State == PlaylistTrackState.Downloading || State == PlaylistTrackState.Queued)
+                return "Match Found";
+
+            if (_searchFoundNothing)
+                return "No Results";
+
+            if (State == PlaylistTrackState.Searching)
+                return "Searching";
+
+            if (HasIncomingResults)
+                return "Evaluated";
+
+            return "Pending";
+        }
+    }
+
+    public string SearchOutcomeColor => SearchOutcomeLabel switch
+    {
+        "Match Found" => "#4CAF50",
+        "No Results" => "#F44336",
+        "Searching" => "#00BCD4",
+        "Evaluated" => "#FFB300",
+        _ => "#888888"
+    };
+
+    public string SearchPathSummary => _searchUsedMp3Fallback ? "MP3 fallback used" : "Lossless path only";
+    public int SearchMaxWindowSeconds => ComputeSearchMaxWindowSeconds();
+    public string SearchMaxWindowDisplay => $"{SearchMaxWindowSeconds}s";
+    public string SearchCountdownDisplay
+    {
+        get
+        {
+            if (!_searchStartedAtUtc.HasValue)
+                return SearchMaxWindowDisplay;
+
+            var effectiveEnd = _searchEndedAtUtc ?? DateTime.UtcNow;
+            var elapsed = effectiveEnd - _searchStartedAtUtc.Value;
+            var remaining = Math.Max(0, SearchMaxWindowSeconds - (int)Math.Floor(elapsed.TotalSeconds));
+            return $"{remaining}s";
+        }
+    }
+
+    public string SearchResultBreakdown => $"{SearchMatchedCount} matched • {SearchQueuedCount} queued • {SearchFilteredCount} filtered";
+    public string SearchKnowledgeSummary
+    {
+        get
+        {
+            var parts = new List<string>();
+
+            if (_searchStartedAtUtc.HasValue)
+                parts.Add($"runtime {SearchDurationDisplay}");
+
+            parts.Add(SearchOutcomeLabel);
+
+            if (HasIncomingResults)
+                parts.Add(SearchResultBreakdown);
+
+            parts.Add(SearchPathSummary);
+
+            return string.Join(" • ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
+        }
+    }
+
+    public string IncomingResultsSummary
+    {
+        get
+        {
+            if (!IncomingResults.Any())
+                return "Awaiting peer responses...";
+
+            var accepted = IncomingResults.Count(x => x.State == TrackPeerResultState.Matched);
+            var filtered = IncomingResults.Count(x => x.State == TrackPeerResultState.Filtered);
+            var queued = IncomingResults.Count(x => x.State == TrackPeerResultState.Queued);
+
+            var parts = new List<string>();
+            if (accepted > 0) parts.Add($"{accepted} matched");
+            if (queued > 0) parts.Add($"{queued} queued");
+            if (filtered > 0) parts.Add($"{filtered} filtered");
+
+            return parts.Count > 0 ? string.Join(" • ", parts) : "Live search updates";
+        }
+    }
+    
+    
+    private string? _crossProjectReference;
+    private bool _synergyLoaded;  // Guard: ensures at most one DB lookup per ViewModel lifetime
+
+    public string? CrossProjectReference
+    {
+        get => _crossProjectReference;
+        set {
+            this.RaiseAndSetIfChanged(ref _crossProjectReference, value);
+            this.RaisePropertyChanged(nameof(HasCrossProjectReference));
+        }
+    }
+
+    public bool HasCrossProjectReference => !string.IsNullOrEmpty(CrossProjectReference);
+
+    // Cues Support
+    private List<OrbitCue> _cues = new();
+    public IEnumerable<OrbitCue> Cues => _cues;
+    public IEnumerable<OrbitCue> OrbitCues => _cues;
+
+    public UnifiedTrackViewModel(
+        PlaylistTrack model,
+        DownloadManager downloadManager,
+        IEventBus eventBus,
+        ArtworkCacheService artworkCache,
+        ILibraryService libraryService,
+        DatabaseService databaseService,
+        AppConfig config,
+        IDbContextFactory<AppDbContext>? dbFactory = null)
+    {
+        Model = model ?? throw new ArgumentNullException(nameof(model));
+        _downloadManager = downloadManager ?? throw new ArgumentNullException(nameof(downloadManager));
+        _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        _artworkCache = artworkCache ?? throw new ArgumentNullException(nameof(artworkCache));
+        _libraryService = libraryService ?? throw new ArgumentNullException(nameof(libraryService));
+        _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
+        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _dbFactory = dbFactory;
+        _searchClockSubscription.DisposeWith(_disposables);
+
+        if (string.IsNullOrWhiteSpace(Model.TrackUniqueHash))
+        {
+            Model.TrackUniqueHash = Model.Id.ToString("N");
+        }
+
+        // Initialize State from Model
+        _state = (PlaylistTrackState)model.Status; // Best effort mapping if simple cast works, otherwise logic needed
+        // Fix: Model.Status is TrackStatus enum, State is PlaylistTrackState.
+        // We'll trust the caller (DownloadCenter) to set initial state or wait for event.
+        // But for display, we map roughly:
+        if (model.Status == TrackStatus.Downloaded) _state = PlaylistTrackState.Completed;
+        else if (model.Status == TrackStatus.Failed) _state = PlaylistTrackState.Failed;
+        else _state = PlaylistTrackState.Pending;
+
+        // Keep UI visibility state consistent with persisted soft-clear flag.
+        IsClearedFromDownloadCenter = Model.IsClearedFromDownloadCenter;
+
+        // Parse Cues
+        if (!string.IsNullOrEmpty(Model.CuePointsJson))
+        {
+            try 
+            {
+                _cues = System.Text.Json.JsonSerializer.Deserialize<List<OrbitCue>>(Model.CuePointsJson) ?? new List<OrbitCue>();
+            }
+            catch { _cues = new List<OrbitCue>(); }
+        }
+
+        // Initialize Commands
+        PlayCommand = ReactiveCommand.Create(PlayTrack, this.WhenAnyValue(x => x.IsCompleted));
+        
+        RevealFileCommand = ReactiveCommand.Create(() => 
+        {
+            if (!string.IsNullOrEmpty(Model.ResolvedFilePath))
+            {
+                 _eventBus.Publish(new RevealFileRequestEvent(Model.ResolvedFilePath));
+            }
+        }, this.WhenAnyValue(x => x.IsCompleted));
+
+        AddToProjectCommand = ReactiveCommand.Create(() => 
+        {
+            // Optimistic UI: immediately collapse the synergy badge so the user sees instant
+            // "success" feedback. The actual library addition happens via the event handler.
+            CrossProjectReference = null;
+            _eventBus.Publish(new AddToProjectRequestEvent(new[] { Model }));
+        }, this.WhenAnyValue(x => x.IsCompleted, x => x.HasCrossProjectReference, (c, s) => c || s));
+
+        OpenAuditLogCommand = ReactiveCommand.Create(() =>
+        {
+            ReactiveUI.MessageBus.Current.SendMessage(SLSKDONET.Events.OpenInspectorEvent.Create(
+                new SLSKDONET.ViewModels.Diagnostics.BlackBoxTerminalViewModel(GlobalId),
+                "Library.TrackSelection.AuditLog"));
+        });
+
+        ShowSpectralReportCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (App.Current is App app && app.Services != null)
+            {
+                var dialog = app.Services.GetService(typeof(IDialogService)) as IDialogService;
+                if (dialog != null)
+                    await dialog.ShowSpectralForensicsAsync(this);
+            }
+        }, this.WhenAnyValue(x => x.HasSpectralVerdict));
+
+        PauseCommand = ReactiveCommand.CreateFromTask(async () => 
+            await _downloadManager.PauseTrackAsync(GlobalId),
+            this.WhenAnyValue(x => x.IsActive));
+
+        ResumeCommand = ReactiveCommand.CreateFromTask(async () => 
+            await _downloadManager.ResumeTrackAsync(GlobalId),
+            this.WhenAnyValue(x => x.State, s => s == PlaylistTrackState.Paused));
+
+        CancelCommand = ReactiveCommand.Create(() => 
+            _downloadManager.CancelTrack(GlobalId),
+            this.WhenAnyValue(x => x.IsCompleted, x => x.IsFailed, (c, f) => !c && !f));
+
+        RemoveFromQueueCommand = ReactiveCommand.Create(() =>
+        {
+            _downloadManager.CancelTrack(GlobalId);
+            IsClearedFromDownloadCenter = true;
+            Model.IsClearedFromDownloadCenter = true;
+        }, this.WhenAnyValue(x => x.CanRemoveFromQueue));
+
+        RetryCommand = ReactiveCommand.CreateFromTask(async () =>
+            await _downloadManager.HardRetryTrack(GlobalId),
+            this.WhenAnyValue(x => x.IsFailed, x => x.IsStalled, (f, s) => f || s));
+
+        ForceStartCommand = ReactiveCommand.CreateFromTask(async () => 
+            await _downloadManager.ForceStartTrack(GlobalId),
+            this.WhenAnyValue(x => x.State, s => s == PlaylistTrackState.Pending || s == PlaylistTrackState.Stalled || s == PlaylistTrackState.Paused));
+            
+        ForceDownloadIgnoreGuardsCommand = ReactiveCommand.CreateFromTask(async () => 
+            await _downloadManager.ForceDownloadIgnoreGuardsAsync(GlobalId),
+            this.WhenAnyValue(x => x.IsFailed));
+            
+        // A hard retry resets the track to Pending with a clean failure/retry state, which sends it
+        // back through a fresh search. This used to publish ManualSearchRequestEvent (no subscriber)
+        // and then cancel the track, so "Search Again" only ever cancelled.
+        SearchAgainCommand = ReactiveCommand.CreateFromTask(async () =>
+            await _downloadManager.HardRetryTrack(GlobalId),
+            this.WhenAnyValue(x => x.IsFailed));
+            
+        // Subscribe to Events with Rx Scheduler for Thread Safety
+        _eventBus.GetEvent<TrackStateChangedEvent>()
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(OnStateChanged)
+            .DisposeWith(_disposables);
+
+        _eventBus.GetEvent<TrackProgressChangedEvent>()
+            .Where(e => IsSameTrackId(e.TrackGlobalId))
+            .Sample(TimeSpan.FromMilliseconds(250)) // Throttle: ~4 events/sec to prevent UI thread starvation
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(OnProgressChanged)
+            .DisposeWith(_disposables);
+
+        _eventBus.GetEvent<TrackMetadataUpdatedEvent>()
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(OnMetadataUpdated)
+            .DisposeWith(_disposables);
+
+        // A track can pick up TrackMetadataUpdatedEvent from more than one publisher in quick
+        // succession (e.g. duration-capture then spectral-scan completing back to back after a
+        // download) — each occurrence used to trigger its own DB round-trip plus ~50 unconditional
+        // RaisePropertyChanged calls. Coalesce into one refresh per burst; the DB re-fetch always
+        // reads whatever's current in the row, so only the LAST event in a burst needs to actually
+        // land. Throttle on the default (thread-pool) scheduler and marshal via
+        // Dispatcher.UIThread.Post rather than .ObserveOn(RxApp.MainThreadScheduler), matching the
+        // pattern established elsewhere this session to avoid relying on RxApp.MainThreadScheduler's
+        // own delayed-timer scheduling (see SearchViewModel's ranking-refresh debounce).
+        _metadataRefreshRequests
+            .Throttle(TimeSpan.FromMilliseconds(200))
+            .Subscribe(_ =>
+            {
+                try
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+                    {
+                        try
+                        {
+                            await RefreshMetadataFromDatabaseAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            Serilog.Log.Warning(ex, "UnifiedTrackViewModel: metadata refresh failed");
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Warning(ex, "UnifiedTrackViewModel: failed to schedule metadata refresh");
+                }
+            })
+            .DisposeWith(_disposables);
+
+        _eventBus.GetEvent<TrackQueuePositionUpdatedEvent>()
+            .Where(e => IsSameTrackId(e.TrackGlobalId))
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(e =>
+            {
+                RemoteQueuePosition = e.Position;
+                this.RaisePropertyChanged(nameof(StatusText));
+            })
+            .DisposeWith(_disposables);
+
+        // Fix: Subscribe to granular search status events for live console updates
+        _eventBus.GetEvent<TrackDetailedStatusEvent>()
+            .Where(e => IsSameTrackId(e.TrackHash))
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(OnDetailedStatus)
+            .DisposeWith(_disposables);
+            
+         // Initialize sliding window for speed
+         _lastProgressTime = DateTime.MinValue;
+
+         // Initialize Ghost Stall Timer (active UI polling for inactive downloads)
+         // Checks every second if an active download has stalled
+         _ghostStallTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, GhostStallCheck_Tick);
+         _ghostStallTimer.Start();
+         Disposable.Create(() => _ghostStallTimer.Stop()).DisposeWith(_disposables);
+
+         // Phase 0: Load artwork via Proxy
+         _artwork = new ArtworkProxy(_artworkCache, Model.AlbumArtUrl);
+         
+         FindSimilarCommand = ReactiveCommand.Create(FindSimilar);
+         FindSimilarAiCommand = ReactiveCommand.Create(FindSimilarAi);
+         FilterByVibeCommand = ReactiveCommand.Create(() => 
+         {
+             if (!string.IsNullOrEmpty(DetectedSubGenre))
+             {
+                 _eventBus.Publish(new SearchRequestedEvent(DetectedSubGenre));
+             }
+         });
+
+         ViewAllSearchResultsCommand = ReactiveCommand.Create(() => 
+         {
+             _eventBus.Publish(new SearchRequestedEvent($"{Model.Artist} {Model.Title}"));
+         });
+
+         BumpToTopCommand = ReactiveCommand.Create(() => 
+         {
+             _downloadManager.BumpTrackToTop(GlobalId);
+         }, this.WhenAnyValue(x => x.State, s => s == PlaylistTrackState.Pending || s == PlaylistTrackState.Paused || s == PlaylistTrackState.Stalled));
+
+        ViewLogCommand = ReactiveCommand.Create(() => 
+        {
+            // Phase 0.8: View Log Logic
+            var log = string.Join("\n", RejectionDetails?.Select(r => $"{r.Rank}. [{r.ShortReason}] {r.Filename} ({r.Bitrate}kbps) @{r.Username}") ?? Enumerable.Empty<string>());
+            System.Diagnostics.Debug.WriteLine($"[Diagnostic Log] {log}");
+            
+            if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                desktop.MainWindow?.Clipboard?.SetTextAsync(log);
+            }
+        }, this.WhenAnyValue(x => x.HasRejectionDetails));
+
+        CopyLogCommand = ReactiveCommand.CreateFromTask(async () => 
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                var log = string.Join("\n", RejectionDetails?.Select(r => $"{r.Rank}. [{r.ShortReason}] {r.Filename} ({r.Bitrate}kbps) @{r.Username}") ?? Enumerable.Empty<string>());
+                if (desktop.MainWindow?.Clipboard != null)
+                {
+                    await desktop.MainWindow.Clipboard.SetTextAsync(log);
+                }
+            }
+        }, this.WhenAnyValue(x => x.HasRejectionDetails));
+
+        ForceDownloadCandidateCommand = ReactiveCommand.CreateFromTask<TrackPeerResultViewModel>(async candidate =>
+        {
+            if (candidate == null || !candidate.CanForceDownload || string.IsNullOrWhiteSpace(candidate.Filename))
+                return;
+
+            await _downloadManager.ForceDownloadSpecificCandidateAsync(
+                GlobalId,
+                candidate.Username,
+                candidate.Filename,
+                candidate.BitrateKbps,
+                candidate.Format);
+        });
+
+        AcquireTrackCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            Model.AvailabilityState = TrackAvailabilityState.QueuedForDownload;
+            Model.Status = TrackStatus.Missing;
+            Model.SearchRetryCount = 0;
+            Model.NotFoundRestartCount = 0;
+            
+            try
+            {
+                await using var dbContext = _dbFactory != null
+                    ? _dbFactory.CreateDbContext()
+                    : new AppDbContext();
+                var dbTrack = await dbContext.PlaylistTracks.FirstOrDefaultAsync(t => t.Id == Model.Id);
+                if (dbTrack != null)
+                {
+                    dbTrack.AvailabilityState = TrackAvailabilityState.QueuedForDownload;
+                    dbTrack.Status = TrackStatus.Missing;
+                    dbTrack.SearchRetryCount = 0;
+                    dbTrack.NotFoundRestartCount = 0;
+                    await dbContext.SaveChangesAsync();
+                }
+                
+                var masterTrack = await dbContext.Tracks.FirstOrDefaultAsync(t => t.GlobalId == Model.TrackUniqueHash);
+                if (masterTrack != null)
+                {
+                    masterTrack.AvailabilityState = TrackAvailabilityState.QueuedForDownload;
+                    masterTrack.SearchRetryCount = 0;
+                    masterTrack.NotFoundRestartCount = 0;
+                    await dbContext.SaveChangesAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to persist manual acquire state: {ex.Message}");
+            }
+
+            _downloadManager.QueueTracks(new List<PlaylistTrack> { Model });
+            
+            this.RaisePropertyChanged(nameof(AvailabilityState));
+            this.RaisePropertyChanged(nameof(IsGhost));
+            
+            await Task.CompletedTask;
+        });
+
+        // Only run synergy check immediately if this track is already in a terminal failed state.
+        // For Pending/Downloading tracks the check fires lazily via the State setter when
+        // they first transition to Failed — avoiding a DB flood during bulk list hydration.
+        if (IsFailed) _ = CheckSynergyAsync();
+    }
+
+    private async Task CheckSynergyAsync()
+    {
+        // Guard: only one lookup per ViewModel lifetime, and only for non-completed tracks.
+        if (_synergyLoaded || IsCompleted) return;
+        if (string.IsNullOrEmpty(ArtistName) || string.IsNullOrEmpty(TrackTitle)) return;
+
+        _synergyLoaded = true; // Set before await so concurrent state changes can't double-fire
+
+        try
+        {
+            var currentProjId = Model?.PlaylistId ?? Guid.Empty;
+            var matches = await _libraryService.FindTrackInOtherProjectsAsync(ArtistName, TrackTitle, currentProjId);
+            if (matches != null && matches.Any())
+            {
+                var others = matches
+                    .Select(m => m.SourcePlaylistName)
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .Distinct()
+                    .ToList();
+
+                if (others.Any())
+                {
+                    // Marshal to UI thread — CheckSynergyAsync runs on a thread-pool thread
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        CrossProjectReference = string.Join(", ", others);
+                    });
+                }
+            }
+        }
+        catch (Exception) { /* Synergy is non-critical; swallow errors silently */ }
+    }
+    
+    // Both open the Similar Tracks panel seeded with this track — the same request the Library's
+    // "Find Similar" sends (TrackListViewModel.ExecuteFindSimilar). They used to publish the old
+    // FindSimilarRequestEvent, whose only subscriber was removed, so the button did nothing.
+    // The similarity engine already blends harmonic, rhythmic and learned (embedding) matching, so
+    // the "AI" variant has no separate path to take.
+    private void FindSimilar()
+    {
+        if (Model == null || string.IsNullOrWhiteSpace(GlobalId)) return;
+        ReactiveUI.MessageBus.Current.SendMessage(
+            new SLSKDONET.Events.FindSimilarTrackRequestEvent(GlobalId, $"{ArtistName} - {TrackTitle}"));
+    }
+
+    private void FindSimilarAi() => FindSimilar();
+
+
+
+    // IDisplayableTrack Implementation
+    public string GlobalId => !string.IsNullOrWhiteSpace(Model.TrackUniqueHash)
+        ? Model.TrackUniqueHash
+        : Model.Id.ToString("N");
+    public string ArtistName => !string.IsNullOrWhiteSpace(Model.Artist) ? Model.Artist : "Unknown Artist";
+    public string TrackTitle => !string.IsNullOrWhiteSpace(Model.Title) ? Model.Title : "Unknown Title";
+    public string AlbumName => !string.IsNullOrWhiteSpace(Model.Album) ? Model.Album : "Unknown Album";
+    public string? AlbumArtUrl => Model.AlbumArtUrl;
+
+
+    private ArtworkProxy _artwork;
+    public ArtworkProxy Artwork => _artwork;
+    
+    // Legacy support: redirects to Proxy.Image (which triggers load)
+    public Avalonia.Media.Imaging.Bitmap? ArtworkBitmap => _artwork?.Image;
+
+    private PlaylistTrackState _state;
+    public PlaylistTrackState State
+    {
+        get => _state;
+        set { 
+            if (_state != value)
+            {
+                var previousState = _state;
+                this.RaiseAndSetIfChanged(ref _state, value);
+
+                if (value == PlaylistTrackState.Searching)
+                {
+                    EnsureSearchStarted();
+                }
+                else if (previousState == PlaylistTrackState.Searching && value != PlaylistTrackState.Searching)
+                {
+                    MarkSearchEnded();
+                }
+                
+                // Core state flags
+                this.RaisePropertyChanged(nameof(StatusText));
+                this.RaisePropertyChanged(nameof(StatusColor));
+                this.RaisePropertyChanged(nameof(DetailedStatusText));
+                this.RaisePropertyChanged(nameof(IsIndeterminate));
+                this.RaisePropertyChanged(nameof(IsFailed));
+                this.RaisePropertyChanged(nameof(IsActive));
+                this.RaisePropertyChanged(nameof(IsRemoteQueued));
+                this.RaisePropertyChanged(nameof(IsWaiting));
+                this.RaisePropertyChanged(nameof(IsSearching));
+                this.RaisePropertyChanged(nameof(IsDownloading));
+                this.RaisePropertyChanged(nameof(IsPaused));
+                this.RaisePropertyChanged(nameof(IsStalled));
+                this.RaisePropertyChanged(nameof(IsCompleted));
+                this.RaisePropertyChanged(nameof(ForensicVerdict));
+                this.RaisePropertyChanged(nameof(BitrateLed));
+                this.RaisePropertyChanged(nameof(KeyLed));
+                this.RaisePropertyChanged(nameof(PeakLed));
+                this.RaisePropertyChanged(nameof(ForensicDetails));
+
+                // Action enablement
+                this.RaisePropertyChanged(nameof(CanForceStart));
+                this.RaisePropertyChanged(nameof(CanRetry));
+                this.RaisePropertyChanged(nameof(CanResume));
+                this.RaisePropertyChanged(nameof(CanBumpToTop));
+                this.RaisePropertyChanged(nameof(CanRemoveFromQueue));
+                
+                // Display properties
+                this.RaisePropertyChanged(nameof(TechnicalSummary));
+                this.RaisePropertyChanged(nameof(DownloadDurationDisplay));
+                this.RaisePropertyChanged(nameof(HasBpm));
+                this.RaisePropertyChanged(nameof(HasKey));
+                this.RaisePropertyChanged(nameof(HasGenre));
+                this.RaisePropertyChanged(nameof(IsHighRisk));
+                this.RaisePropertyChanged(nameof(MatchConfidence));
+                RaiseSearchTelemetryProperties();
+                
+                // Clear detailed status when leaving search state
+                if (value != PlaylistTrackState.Searching)
+                    DetailedSearchStatus = null;
+
+                // Persist download history once on first terminal-state transition
+                if ((IsCompleted || IsFailed) && !_historyRecorded)
+                {
+                    _historyRecorded = true;
+                    _ = FlushDownloadHistoryAsync();
+                }
+
+                // Lazy synergy check: fire once when track first reaches a failed/cancelled
+                // terminal state. This avoids the constructor-time DB flood during bulk hydration.
+                if (IsFailed && !_synergyLoaded) _ = CheckSynergyAsync();
+            }
+        }
+    }
+
+    public string StatusText => State switch
+    {
+        PlaylistTrackState.Completed => "Ready",
+        PlaylistTrackState.Downloading => $"{(int)(Progress)}%",
+        PlaylistTrackState.Searching => !string.IsNullOrEmpty(DetailedSearchStatus) 
+            ? DetailedSearchStatus 
+            : (SearchAttemptCount > 1 ? $"Searching... ({SearchAttemptCount})" : "Searching..."),
+        PlaylistTrackState.Queued => _remoteQueuePosition > 0
+            ? $"#{_remoteQueuePosition} in queue"
+            : (!string.IsNullOrEmpty(DetailedSearchStatus) ? DetailedSearchStatus : "Waiting in peer queue\u2026"),
+        PlaylistTrackState.Failed => !string.IsNullOrEmpty(FailureReason) ? FailureReason : 
+                                     (FailureEnum != DownloadFailureReason.None ? FailureEnum.ToDisplayMessage() : "Failed"),
+        PlaylistTrackState.Paused => "Paused",
+        PlaylistTrackState.Stalled => !string.IsNullOrEmpty(StalledReason) ? $"Stalled: {StalledReason}" : "Stalled (Waiting for Peer)",
+        PlaylistTrackState.WaitingForConnection => "Waiting for Connection...",
+
+        _ => State.ToString()
+    };
+    
+    // Fix: Added StatusColor property for UI binding
+    public Avalonia.Media.IBrush StatusColor => State switch
+    {
+        PlaylistTrackState.Completed => Avalonia.Media.Brushes.LimeGreen,
+        PlaylistTrackState.Failed => Avalonia.Media.Brushes.OrangeRed,
+        PlaylistTrackState.Cancelled => Avalonia.Media.Brushes.Gray,
+        PlaylistTrackState.Downloading => Avalonia.Media.Brushes.Cyan,
+        PlaylistTrackState.Queued => Avalonia.Media.Brushes.CornflowerBlue,
+        PlaylistTrackState.Searching => Avalonia.Media.Brushes.Yellow,
+        PlaylistTrackState.Stalled => Avalonia.Media.Brushes.Orange,
+        PlaylistTrackState.WaitingForConnection => Avalonia.Media.Brushes.DarkGray,
+        _ => Avalonia.Media.Brushes.LightGray
+    };
+
+    // Fix: Detailed tooltip text
+    public string DetailedStatusText => IsFailed 
+        ? $"Failed: {FailureReason ?? "Unknown Error"}\n(Click Retry to search for a new peer)" 
+        : State == PlaylistTrackState.Queued
+            ? $"Waiting in peer queue\u2026\n{DetailedSearchStatus}"
+            : StatusText;
+
+    private double _progress;
+    public double Progress
+    {
+        get => _progress;
+        set => this.RaiseAndSetIfChanged(ref _progress, value);
+    }
+
+    public bool IsIndeterminate => State == PlaylistTrackState.Searching || State == PlaylistTrackState.Queued || State == PlaylistTrackState.WaitingForConnection;
+    public bool IsFailed => State == PlaylistTrackState.Failed || State == PlaylistTrackState.Cancelled;
+    public bool IsPaused => State == PlaylistTrackState.Paused;
+    
+    // Phase 6 & 9: Refined IsActive for "Direct Active" swimlane (strictly downloading/searching/queued remotely)
+    public bool IsActive => State == PlaylistTrackState.Downloading || State == PlaylistTrackState.Searching
+        || State == PlaylistTrackState.WaitingForConnection || State == PlaylistTrackState.Queued;
+
+    /// <summary>True when the track is held in a remote peer's upload queue (not locally queued).</summary>
+    public bool IsRemoteQueued => State == PlaylistTrackState.Queued;
+
+    /// <summary>Live queue position reported by the peer. -1 = not yet reported. 0 = transfer starting.</summary>
+    private int _remoteQueuePosition = -1;
+    public int RemoteQueuePosition
+    {
+        get => _remoteQueuePosition;
+        set => this.RaiseAndSetIfChanged(ref _remoteQueuePosition, value);
+    }
+
+    // Phase 11: Specific activity flags
+    public bool IsSearching => State == PlaylistTrackState.Searching;
+    public bool IsDownloading => State == PlaylistTrackState.Downloading;
+    
+    // Phase 11.1: UI Helper flags
+    public bool CanRetry => IsFailed || State == PlaylistTrackState.Stalled;
+    public bool CanResume => State == PlaylistTrackState.Paused;
+    public bool CanForceStart => State == PlaylistTrackState.Pending || State == PlaylistTrackState.Stalled || State == PlaylistTrackState.Paused;
+    public bool CanRemoveFromQueue =>
+        !IsCompleted &&
+        !IsFailed &&
+        (State == PlaylistTrackState.Pending ||
+         State == PlaylistTrackState.Searching ||
+         State == PlaylistTrackState.Downloading ||
+         State == PlaylistTrackState.Queued ||
+         State == PlaylistTrackState.WaitingForConnection ||
+         State == PlaylistTrackState.Stalled ||
+         State == PlaylistTrackState.Paused);
+
+    // Phase 12: Priority Control
+    public bool CanBumpToTop => (State == PlaylistTrackState.Pending || State == PlaylistTrackState.Paused || State == PlaylistTrackState.Stalled) && !IsCompleted;
+
+    // Phase 9: Helper for "Waiting" swimlane (strictly queued/pending, NOT searching)
+    public bool IsWaiting => State == PlaylistTrackState.Pending || State == PlaylistTrackState.Queued;
+
+    public bool IsCompleted => State == PlaylistTrackState.Completed;
+
+    // Phase 10: Spectral audit warning
+    public bool IsTranscoded => Model.IsTranscoded;
+
+    // Phase 11.1: Restored Missing Animation Flags
+    private bool _isAnalyzing;
+    public bool IsAnalyzing
+    {
+        get => _isAnalyzing;
+        set => this.RaiseAndSetIfChanged(ref _isAnalyzing, value);
+    }
+
+    private bool _isEnriching;
+    public bool IsEnriching
+    {
+        get => _isEnriching;
+        set => this.RaiseAndSetIfChanged(ref _isEnriching, value);
+    }
+
+    public void PreservedDiagnostics(DownloadFailureReason reason, string? message, System.Collections.Generic.List<SearchAttemptLog>? attempts)
+    {
+        FailureEnum = reason;
+        FailureReason = message;
+        if (attempts != null)
+        {
+            RejectionDetails = new System.Collections.ObjectModel.ObservableCollection<RejectedResult>(
+                attempts.SelectMany(a => a.Top3RejectedResults?.Select(r => new RejectedResult { Username = r.Username, RejectionReason = r.RejectionReason }) ?? Enumerable.Empty<RejectedResult>())
+            );
+            HasRejectionDetails = RejectionDetails.Any();
+        }
+        
+        this.RaisePropertyChanged(nameof(StatusText));
+        this.RaisePropertyChanged(nameof(DetailedStatusText));
+        this.RaisePropertyChanged(nameof(SearchAttemptCount));
+    }
+
+    private string? _failureReason;
+    public string? FailureReason
+    {
+        get => _failureReason;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _failureReason, value);
+            this.RaisePropertyChanged(nameof(StatusText));
+            this.RaisePropertyChanged(nameof(DetailedStatusText));
+            this.RaisePropertyChanged(nameof(HasFailureReason));
+        }
+    }
+
+    private DownloadFailureReason _failureEnum;
+    public DownloadFailureReason FailureEnum
+    {
+        get => _failureEnum;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _failureEnum, value);
+            this.RaisePropertyChanged(nameof(FailureDisplayMessage));
+            this.RaisePropertyChanged(nameof(FailureActionSuggestion));
+        }
+    }
+
+    public string FailureDisplayMessage 
+    {
+        get
+        {
+            // Fix: If we have rejection details but no specific FailureEnum, it means the search found things but rejected them all.
+            if (_hasRejectionDetails && FailureEnum == DownloadFailureReason.None)
+            {
+                return "Search Rejected";
+            }
+            return FailureEnum.ToDisplayMessage();
+        }
+    }
+    
+    public string FailureActionSuggestion => FailureEnum.ToActionableSuggestion();
+
+    /// <summary>True when a raw failure reason string (detailed error message) is available for display.</summary>
+    public bool HasFailureReason => !string.IsNullOrEmpty(FailureReason);
+
+    // Phase 0.5: Search Diagnostics
+    private System.Collections.ObjectModel.ObservableCollection<RejectedResult>? _rejectionDetails;
+    public System.Collections.ObjectModel.ObservableCollection<RejectedResult>? RejectionDetails
+    {
+        get => _rejectionDetails;
+        set => this.RaiseAndSetIfChanged(ref _rejectionDetails, value);
+    }
+
+    private bool _hasRejectionDetails;
+    public bool HasRejectionDetails
+    {
+        get => _hasRejectionDetails;
+        set => this.RaiseAndSetIfChanged(ref _hasRejectionDetails, value);
+    }
+
+    // Phase 9: Search Diagnostics
+    public int SearchAttemptCount => RejectionDetails?.Count ?? 0;
+
+    public string RejectionSummary
+    {
+        get
+        {
+            if (RejectionDetails == null || !RejectionDetails.Any()) return "No detailed forensic data captured for this failure.";
+            
+            var groups = RejectionDetails
+                .Where(x => !string.IsNullOrEmpty(x.ShortReason))
+                .GroupBy(x => x.ShortReason)
+                .Select(g => $"{g.Count()} {g.Key}");
+            
+            return $"Rejections: {string.Join(", ", groups)}";
+        }
+    }
+
+    // Phase 10: Performance Monitoring - Total Download Duration
+    public string? DownloadDurationDisplay
+    {
+        get
+        {
+            if (Model.SearchStartedAt == null) return null;
+            
+            var end = Model.CompletedAt ?? (IsActive ? DateTime.UtcNow : (DateTime?)null);
+            if (end == null) return null;
+            
+            var duration = end.Value - Model.SearchStartedAt.Value;
+            if (duration < TimeSpan.Zero) return null;
+
+            return duration.TotalMinutes >= 1 
+                ? $"{(int)duration.TotalMinutes}m {duration.Seconds:D2}s"
+                : $"{duration.Seconds}s";
+        }
+    }
+
+    public string CompletedAtDisplay => Model.CompletedAt?.ToString("g") ?? Model.AddedAt.ToString("g");
+
+    private bool _isClearedFromDownloadCenter;
+    public bool IsClearedFromDownloadCenter
+    {
+        get => _isClearedFromDownloadCenter;
+        set => this.RaiseAndSetIfChanged(ref _isClearedFromDownloadCenter, value);
+    }
+
+    public string TechnicalSummary
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (Model.Bitrate > 0) parts.Add($"{Model.Bitrate} kbps");
+            var sr = ParsedSampleRateHz;
+            if (sr > 0) parts.Add($"{sr / 1000.0:0.0} kHz");
+            if (Model.Duration > 0) parts.Add(TimeSpan.FromSeconds(Model.Duration).ToString(@"m\:ss"));
+            
+            if (IsCompleted && Model.CompletedAt.HasValue && Model.SearchStartedAt.HasValue)
+            {
+                var diff = Model.CompletedAt.Value - Model.SearchStartedAt.Value;
+                parts.Add($"(took {diff.TotalSeconds:0}s)");
+            }
+
+            return string.Join(" • ", parts);
+        }
+    }
+
+    private int ParsedSampleRateHz
+    {
+        get
+        {
+            var details = Model.QualityDetails;
+            if (string.IsNullOrWhiteSpace(details)) return 0;
+
+            var part = details.Split('|').FirstOrDefault(p => p.EndsWith("Hz", StringComparison.OrdinalIgnoreCase));
+            if (string.IsNullOrWhiteSpace(part)) return 0;
+
+            var digits = new string(part.Where(char.IsDigit).ToArray());
+            return int.TryParse(digits, out var value) ? value : 0;
+        }
+    }
+
+    private int ParsedBitDepth
+    {
+        get
+        {
+            var details = Model.QualityDetails;
+            if (string.IsNullOrWhiteSpace(details)) return 0;
+
+            var part = details.Split('|').FirstOrDefault(p => p.EndsWith("bit", StringComparison.OrdinalIgnoreCase));
+            if (string.IsNullOrWhiteSpace(part)) return 0;
+
+            var digits = new string(part.Where(char.IsDigit).ToArray());
+            return int.TryParse(digits, out var value) ? value : 0;
+        }
+    }
+
+    public bool HasQualityPill => !string.IsNullOrWhiteSpace(QualityPillText);
+
+    public string QualityPillText
+    {
+        get
+        {
+            var format = (Model.Format ?? string.Empty).ToUpperInvariant();
+            var bitrate = Model.Bitrate ?? 0;
+            var sampleRate = ParsedSampleRateHz;
+            var bitDepth = ParsedBitDepth;
+
+            if (string.Equals(format, "FLAC", StringComparison.OrdinalIgnoreCase))
+            {
+                if (bitDepth > 0 || sampleRate > 0)
+                {
+                    var sampleKhz = sampleRate > 0 ? $"{sampleRate / 1000.0:F1}k" : "?k";
+                    var depth = bitDepth > 0 ? $"{bitDepth}b" : "?b";
+                    return $"FLAC {depth}/{sampleKhz}";
+                }
+
+                return bitrate > 0 ? $"FLAC {bitrate}kbps" : "FLAC";
+            }
+
+            if (bitrate > 0)
+            {
+                return $"{bitrate}kbps";
+            }
+
+            return string.Empty;
+        }
+    }
+
+    // ── Beta 2026: Forensic Quality Pill ─────────────────────────────────────
+    // Shown on every active download row. Driven by format, bitrate, and live speed.
+
+    /// <summary>Short badge label: "🧪 FLAC", "⚠️ FAKE", "⚡ FAST", "● MP3", etc.</summary>
+    public string ForensicBadgeText
+    {
+        get
+        {
+            if (Model.IsTranscoded) return "⚠️ FAKE";
+            var fmt = (Model.Format ?? string.Empty).ToUpperInvariant();
+            var bitrate = Model.Bitrate ?? 0;
+            if (fmt == "FLAC" && bitrate >= 400) return "🧪 FLAC";
+            if (IsDownloading && CurrentSpeedBytes > 1_048_576) return "⚡ FAST";
+            if (fmt is "MP3" or "AAC" or "OGG") return $"● {fmt}";
+            if (bitrate > 0) return $"{bitrate}kbps";
+            return string.Empty; // No data yet — badge hidden via IsDownloading guard
+        }
+    }
+
+    public string ForensicBadgeBackground
+    {
+        get
+        {
+            if (Model.IsTranscoded) return "#3C1F1F";
+            var fmt = (Model.Format ?? string.Empty).ToUpperInvariant();
+            var bitrate = Model.Bitrate ?? 0;
+            if (fmt == "FLAC" && bitrate >= 400) return "#1A3028";
+            if (IsDownloading && CurrentSpeedBytes > 1_048_576) return "#0E1D33";
+            return "#222222";
+        }
+    }
+
+    public string ForensicBadgeForeground
+    {
+        get
+        {
+            if (Model.IsTranscoded) return "#FF5252";
+            var fmt = (Model.Format ?? string.Empty).ToUpperInvariant();
+            var bitrate = Model.Bitrate ?? 0;
+            if (fmt == "FLAC" && bitrate >= 400) return "#1DB954";
+            if (IsDownloading && CurrentSpeedBytes > 1_048_576) return "#00BFFF";
+            return "#888888";
+        }
+    }
+
+    public string ForensicBadgeBorderColor
+    {
+        get
+        {
+            if (Model.IsTranscoded) return "#FF5252";
+            var fmt = (Model.Format ?? string.Empty).ToUpperInvariant();
+            var bitrate = Model.Bitrate ?? 0;
+            if (fmt == "FLAC" && bitrate >= 400) return "#1DB954";
+            if (IsDownloading && CurrentSpeedBytes > 1_048_576) return "#00BFFF";
+            return "#333333";
+        }
+    }
+
+    /// <summary>Full hover HUD: bitrate · sample rate · bit depth · format · peer · transcode flag.</summary>
+    public string ForensicBadgeHud
+    {
+        get
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            if ((Model.Bitrate ?? 0) > 0) parts.Add($"{Model.Bitrate}kbps");
+            var sr = ParsedSampleRateHz;
+            if (sr > 0) parts.Add($"{sr / 1000.0:F1}kHz");
+            var bd = ParsedBitDepth;
+            if (bd > 0) parts.Add($"{bd}-bit");
+            if (!string.IsNullOrEmpty(Model.Format)) parts.Add(Model.Format.ToUpperInvariant());
+            if (Model.IsTranscoded) parts.Add("⚠️ LIKELY TRANSCODE");
+            if (!string.IsNullOrEmpty(PeerName)) parts.Add($"Peer: {PeerName}");
+            return parts.Count > 0 ? string.Join(" • ", parts) : "Technical data pending";
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public bool IsFakeFlacWarning
+    {
+        get
+        {
+            if (!string.Equals(Model.Format, "flac", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            // Prefer the spectral-analysis result (set by PostDownloadSpectralScanService).
+            // Fall back to the naive bitrate heuristic for tracks not yet analysed.
+            if (IsCompleted)
+                return Model.IsTranscoded;
+
+            return (Model.Bitrate ?? 0) < 400;
+        }
+    }
+
+    // ── Spectral Verdict (populated post-download by PostDownloadSpectralScanService) ──
+
+    /// <summary>True when a spectral analysis result is available for this track.</summary>
+    public bool HasSpectralVerdict =>
+        IsCompleted && !string.IsNullOrEmpty(Model.QualityDetails);
+
+    /// <summary>Short verdict string for display in badge tooltips.</summary>
+    public string SpectralVerdictText
+    {
+        get
+        {
+            if (!HasSpectralVerdict) return string.Empty;
+
+            // QualityDetails is stored as "Verdict | cutoff: X kHz | confidence: Y%"
+            var parts = Model.QualityDetails!.Split('|');
+            return parts.Length > 0 ? parts[0].Trim() : Model.QualityDetails;
+        }
+    }
+
+    /// <summary>Full tooltip text shown on the spectral verdict badge.</summary>
+    public string SpectralVerdictTooltip =>
+        HasSpectralVerdict
+            ? $"Spectral Analysis: {Model.QualityDetails}"
+            : "Spectral analysis pending…";
+
+    /// <summary>
+    /// Frequency cutoff (Hz) above which a suspicious transcode is considered "high quality"
+    /// (e.g. 320 kbps MP3 cuts off near 20 kHz).  Verdicts with a cutoff above this threshold
+    /// show an amber badge; lower cutoffs show a red badge.
+    /// </summary>
+    private const int HighBitrateTranscodeCutoffHz = 19_000;
+
+    /// <summary>True when the spectral analysis indicates a high-quality (≥ 320 kbps) transcode.</summary>
+    private bool IsHighBitrateTranscode =>
+        Model.Integrity == SLSKDONET.Data.IntegrityLevel.Suspicious &&
+        Model.FrequencyCutoff >= HighBitrateTranscodeCutoffHz;
+
+    /// <summary>
+    /// Accent colour for the spectral verdict badge:
+    /// green for genuine lossless, amber for high-bitrate transcodes,
+    /// red for low/medium-bitrate transcodes.
+    /// </summary>
+    public string SpectralVerdictColor
+    {
+        get
+        {
+            if (!HasSpectralVerdict) return "#888888";
+
+            return Model.Integrity switch
+            {
+                SLSKDONET.Data.IntegrityLevel.Gold       => "#1DB954", // green — genuine lossless
+                SLSKDONET.Data.IntegrityLevel.Suspicious => IsHighBitrateTranscode
+                    ? "#FFD700"   // amber — high-bitrate transcode (≥ 320 kbps)
+                    : "#FF5252",  // red   — low/medium-bitrate transcode
+                _ => "#888888"
+            };
+        }
+    }
+
+    /// <summary>Short emoji + label shown in the spectral verdict badge.</summary>
+    public string SpectralVerdictBadgeText
+    {
+        get
+        {
+            if (!HasSpectralVerdict) return string.Empty;
+
+            return Model.Integrity switch
+            {
+                SLSKDONET.Data.IntegrityLevel.Gold       => "✅ TRUE LOSSLESS",
+                SLSKDONET.Data.IntegrityLevel.Suspicious => IsHighBitrateTranscode
+                    ? "⚠ TRANSCODE (HQ)"
+                    : "⚠ FAKE FLAC",
+                _ => string.Empty
+            };
+        }
+    }
+
+    public bool HasShieldSanitized => string.Equals(Model.SourceProvenance, "ShieldSanitized", StringComparison.OrdinalIgnoreCase);
+    public string ShieldTooltip => "Search query sanitized by ProtocolHardeningService";
+    
+    // Phase 0.6: Truth in UI - Tech Specs are Estimates until verified
+    public string TechSpecPrefix => IsCompleted ? "" : "Est. ";
+
+    // ── Track Inspector display properties ────────────────────────────────────
+
+    /// <summary>Format label for the Track Inspector header (e.g. "FLAC", "MP3").</summary>
+    public string FileFormat => (Model.Format ?? string.Empty).ToUpperInvariant();
+
+    /// <summary>Bitrate string for the Track Inspector header.</summary>
+    public string BitrateDisplay => Model.Bitrate.HasValue && Model.Bitrate > 0
+        ? $"{Model.Bitrate} kbps"
+        : "—";
+
+    /// <summary>Duration string for the Track Inspector technical metadata section.</summary>
+    public string DurationDisplay => Model.CanonicalDuration.HasValue
+        ? TimeSpan.FromMilliseconds(Model.CanonicalDuration.Value).ToString(@"mm\:ss")
+        : "—";
+
+    /// <summary>File size on disk for the Track Inspector technical metadata section.</summary>
+    public string FileSizeDisplay
+    {
+        get
+        {
+            var path = Model.ResolvedFilePath;
+            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return "—";
+            try
+            {
+                var bytes = new System.IO.FileInfo(path).Length;
+                return $"{bytes / 1024.0 / 1024.0:F1} MB";
+            }
+            catch
+            {
+                return "—";
+            }
+        }
+    }
+
+    // ── Spectral Forensics Inspector properties ───────────────────────────────
+
+    /// <summary>Rolloff steepness threshold constants — mirror the classifier logic in <see cref="AudioIntegrityService"/>.</summary>
+    private const double SteepRolloffThreshold    = 30.0; // dB/kHz: ≥ this is characteristic of lossy encoding
+    private const double ModerateRolloffThreshold = 15.0; // dB/kHz: below this is natural lossless rolloff
+
+    /// <summary>True when detailed spectral forensics data is available.</summary>
+    public bool HasSpectralDetails => HasSpectralVerdict && (
+        Model.SpectralSampleRateHz.HasValue ||
+        Model.SpectralBitDepth.HasValue ||
+        Model.SpectralRmsDbfs.HasValue);
+
+    /// <summary>Confirmed sample rate (e.g. "44.1 kHz", "48 kHz").</summary>
+    public string SpectralSampleRateDisplay => Model.SpectralSampleRateHz.HasValue
+        ? $"{Model.SpectralSampleRateHz.Value / 1000.0:F1} kHz"
+        : "—";
+
+    /// <summary>Detected spectral cutoff frequency (e.g. "20.5 kHz").</summary>
+    public string SpectralCutoffKhzDisplay => Model.FrequencyCutoff.HasValue
+        ? $"{Model.FrequencyCutoff.Value / 1000.0:F1} kHz"
+        : "—";
+
+    /// <summary>Short confidence percentage extracted from <see cref="Model.QualityDetails"/>.</summary>
+    public string SpectralConfidenceDisplay
+    {
+        get
+        {
+            var details = Model.QualityDetails;
+            if (string.IsNullOrEmpty(details)) return "—";
+            // QualityDetails format: "Verdict | cutoff: X kHz | confidence: Y%"
+            var confPart = details
+                .Split('|')
+                .FirstOrDefault(p => p.TrimStart().StartsWith("confidence:", StringComparison.OrdinalIgnoreCase));
+            return confPart != null ? confPart.Trim() : "—";
+        }
+    }
+
+    /// <summary>Bit depth string (e.g. "16-bit", "24-bit").</summary>
+    public string SpectralBitDepthDisplay => Model.SpectralBitDepth.HasValue
+        ? $"{Model.SpectralBitDepth.Value}-bit"
+        : "—";
+
+    /// <summary>Rolloff steepness at the spectral cutoff (dB/kHz).</summary>
+    public string SpectralRolloffDisplay => Model.SpectralRolloffSteepness.HasValue
+        ? $"{Model.SpectralRolloffSteepness.Value:F0} dB/kHz"
+        : "—";
+
+    /// <summary>Contextual label for the rolloff steepness reading.</summary>
+    public string SpectralRolloffLabel => Model.SpectralRolloffSteepness switch
+    {
+        >= SteepRolloffThreshold    => "steep (lossy)",
+        >= ModerateRolloffThreshold => "moderate",
+        { }                         => "natural (lossless)",
+        null                        => ""
+    };
+
+    /// <summary>Mid-band energy (1–15 kHz).</summary>
+    public string SpectralMidBandDisplay => Model.SpectralMidBandEnergy.HasValue
+        ? $"{Model.SpectralMidBandEnergy.Value:F1} dBFS"
+        : "—";
+
+    /// <summary>High-band energy (15–20 kHz).</summary>
+    public string SpectralHighBandDisplay => Model.SpectralHighBandEnergy.HasValue
+        ? $"{Model.SpectralHighBandEnergy.Value:F1} dBFS"
+        : "—";
+
+    /// <summary>Overall RMS level (perceived loudness).</summary>
+    public string SpectralRmsDisplay => Model.SpectralRmsDbfs.HasValue
+        ? $"{Model.SpectralRmsDbfs.Value:F1} dBFS"
+        : "—";
+
+    /// <summary>Crest factor — higher means more dynamic headroom.</summary>
+    public string SpectralCrestFactorDisplay => Model.SpectralCrestFactorDb.HasValue
+        ? $"{Model.SpectralCrestFactorDb.Value:F1} dB"
+        : "—";
+
+    /// <summary>Estimated noise floor.</summary>
+    public string SpectralNoiseFloorDisplay => Model.SpectralNoiseFloorDbfs.HasValue
+        ? $"{Model.SpectralNoiseFloorDbfs.Value:F1} dBFS"
+        : "—";
+
+    /// <summary>Accent colour for the crest-factor display (green = dynamic, red = squashed).</summary>
+    public string SpectralCrestFactorColor => Model.SpectralCrestFactorDb switch
+    {
+        >= 14.0 => "#1DB954", // high dynamic range — green
+        >= 8.0  => "#FFD700", // moderate — amber
+        { }     => "#FF5252", // squashed — red
+        null    => "#888888"
+    };
+
+    // ── Energy Score Badge (Tier 2.2) ─────────────────────────────────────────
+    // ManualEnergy (1-10 int) takes precedence over Spotify Energy (0-1 float).
+    private int ComputedEnergyScore => Model.ManualEnergy ?? (int)Math.Round((Model.Energy ?? 0) * 10);
+    public bool HasEnergyBadge => IsCompleted && (Model.Energy.HasValue || Model.ManualEnergy.HasValue);
+    public string EnergyBadgeText => HasEnergyBadge ? $"E{ComputedEnergyScore}" : string.Empty;
+    public string EnergyBadgeColor => ComputedEnergyScore switch
+    {
+        >= 8 => "#1DB954",  // green — high energy
+        >= 5 => "#FFD700",  // amber — mid energy
+        _    => "#7BA7BC"   // steel blue — low energy
+    };
+
+    // ── Vocal Type Badge (Tier 2.4) ───────────────────────────────────────────
+    // Shows INST badge when track is confirmed instrumental (InstrumentalProbability ≥ 0.75).
+    public bool ShowInstrumentalBadge => IsCompleted && Model.InstrumentalProbability >= 0.75;
+
+    // ── Mood Tag Badge (Tier 2.4) ─────────────────────────────────────────────
+    public bool HasMoodTag => IsCompleted && !string.IsNullOrWhiteSpace(Model.MoodTag);
+    public string MoodTagText => Model.MoodTag ?? string.Empty;
+
+    // ── BPM Drift Warning Badge (Tier 2.4) ────────────────────────────────────
+    // BpmStability < 0.70 indicates a drifting or variable tempo — risky for live mixing
+    public bool HasBpmDriftWarning => IsCompleted && Model.BpmStability.HasValue && Model.BpmStability.Value < 0.70f;
+
+    // Curation Hub Properties
+    public double IntegrityScore => Model.QualityConfidence ?? 0.0;
+    // Phase 0.6: Truth in UI
+    public bool IsSecure => IsCompleted && IntegrityScore > 0.9 && !string.IsNullOrEmpty(Model.ResolvedFilePath);
+
+    // Phase 19: Search 2.0 Tiers for Library
+    public SLSKDONET.Models.SearchTier Tier => SLSKDONET.Models.SearchTier.Gold;
+
+    public string TierBadge => string.Empty;
+
+    public Avalonia.Media.IBrush TierColor => Avalonia.Media.Brushes.Gray;
+    
+    // Legacy mapping for backward compatibility if needed, otherwise replaced by Tier
+    public string QualityIcon => string.Empty;
+    public Avalonia.Media.IBrush QualityColor => Avalonia.Media.Brushes.Gray;
+    
+    // Match & High Risk Logic
+    public double MatchConfidence => (Model.QualityConfidence ?? 0) * 100;
+    
+    public string MatchConfidenceColor => MatchConfidence switch
+    {
+        >= 90 => "#1DB954", // Spotify Green
+        >= 70 => "#FFD700", // Gold/Yellow
+        _ => "#E91E63"      // Pink/Red
+    };
+
+    public bool IsHighRisk => Model.IsFlagged && State != PlaylistTrackState.Searching && State != PlaylistTrackState.Queued && State != PlaylistTrackState.Pending;
+    public string? FlagReason => Model.FlagReason;
+
+    public string CurationIcon => Model.CurationConfidence switch
+    {
+        SLSKDONET.Data.Entities.CurationConfidence.Manual => "🛡️",
+        SLSKDONET.Data.Entities.CurationConfidence.High => "🏅",
+        SLSKDONET.Data.Entities.CurationConfidence.Medium => "🥈",
+        SLSKDONET.Data.Entities.CurationConfidence.Low => "📉",
+        _ => string.Empty
+    };
+    
+    public Avalonia.Media.IBrush CurationColor => Model.CurationConfidence switch
+    {
+        SLSKDONET.Data.Entities.CurationConfidence.Manual => Avalonia.Media.Brushes.LimeGreen,
+        SLSKDONET.Data.Entities.CurationConfidence.High => Avalonia.Media.Brushes.Gold,
+        SLSKDONET.Data.Entities.CurationConfidence.Medium => Avalonia.Media.Brushes.Silver,
+        SLSKDONET.Data.Entities.CurationConfidence.Low => Avalonia.Media.Brushes.OrangeRed,
+        _ => Avalonia.Media.Brushes.Transparent
+    };
+    
+    public string BpmDisplay => Model.BPM.HasValue ? $"{Model.BPM:0}" : "—";
+    public string KeyDisplay
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(Model.MusicalKey)) return "—";
+            
+            var camelot = Utils.KeyConverter.ToCamelot(Model.MusicalKey);
+            // Show both: "G minor (6A)" or just "6A" if already in Camelot format
+            if (camelot == Model.MusicalKey)
+                return camelot; // Already Camelot
+            
+            return $"{Model.MusicalKey} ({camelot})";
+        }
+    }
+
+    public string CamelotDisplay => !string.IsNullOrEmpty(Model.MusicalKey) ? Utils.KeyConverter.ToCamelot(Model.MusicalKey) : "—";
+    public string YearDisplay => Model.ReleaseDate.HasValue ? Model.ReleaseDate.Value.Year.ToString() : "";
+    
+    // Technical Audio Display
+    public string LoudnessDisplay => Model.Loudness.HasValue ? $"{Model.Loudness:F1} LUFS" : "—";
+    public string TruePeakDisplay => Model.TruePeak.HasValue ? $"{Model.TruePeak:F1} dBTP" : "—";
+    public string DynamicRangeDisplay => Model.DynamicRange.HasValue ? $"{Model.DynamicRange:F1} LU" : "—";
+
+    public bool IsEnriched => Model.IsEnriched;
+    public bool IsPrepared => Model.IsPrepared;
+    public string? PrimaryGenre => Model.PrimaryGenre;
+    public string? DiscoveryReason => Model.DiscoveryReason ?? _discoveryReasonOverride;
+    public string? DiscoveryBadgeText => DiscoveryReason switch
+    {
+        var reason when !string.IsNullOrWhiteSpace(reason) && reason.Contains("Fast lane", StringComparison.OrdinalIgnoreCase) => "FAST",
+        var reason when !string.IsNullOrWhiteSpace(reason) && reason.Contains("Curated", StringComparison.OrdinalIgnoreCase) => "CURATED",
+        var reason when !string.IsNullOrWhiteSpace(reason) && reason.Contains("Golden", StringComparison.OrdinalIgnoreCase) => "GOLD",
+        _ => null
+    };
+    public bool IsStalled => State == PlaylistTrackState.Stalled;
+    public string? StalledReason => Model.StalledReason;
+    public string? DetectedSubGenre => Model.DetectedSubGenre;
+    public float? SubGenreConfidence => Model.SubGenreConfidence;
+
+    // UI Layout Bools (For clean XAML)
+    public bool HasBpm => Model.BPM > 0;
+    public bool HasKey => !string.IsNullOrEmpty(Model.MusicalKey) && Model.MusicalKey != "—";
+    public bool HasGenre => !string.IsNullOrEmpty(DetectedSubGenre) || !string.IsNullOrEmpty(PrimaryGenre);
+
+    // Phase 2: In-Flight Forensics — these were permanently stuck at their constructor defaults
+    // ("Initializing Probe...", "○" x3) because nothing anywhere ever set them. Real in-flight
+    // (mid-stream) probing while bytes are still arriving would need a genuinely new pipeline;
+    // what this class already has, post-download, is real per-track signal — fake-lossless
+    // detection (IsTranscoded, from PostDownloadSpectralScanService), key-detection success
+    // (HasKey), and a real measured true-peak level (Model.TruePeak) — so these three LEDs now
+    // reflect those instead of staying permanently dark. All read "○ pending" until the track is
+    // Completed and its post-download analysis has actually run, then light up for real.
+    public string ForensicVerdict
+    {
+        get
+        {
+            if (!IsCompleted) return "Awaiting download…";
+            if (!HasSpectralVerdict) return "Analysis pending…";
+            return Model.IsTranscoded ? "⚠️ Likely transcode" : "✅ Verified";
+        }
+    }
+
+    // LED glyphs: ○ (pending/not yet known), ⚠️ (warning), ✅ (good)
+    public string BitrateLed
+    {
+        get
+        {
+            if (!IsCompleted || !HasSpectralVerdict) return "○";
+            return Model.IsTranscoded ? "⚠️" : "✅";
+        }
+    }
+
+    public string KeyLed
+    {
+        get
+        {
+            if (!IsCompleted) return "○";
+            return HasKey ? "✅" : "⚠️";
+        }
+    }
+
+    public string PeakLed
+    {
+        get
+        {
+            if (!IsCompleted || !Model.TruePeak.HasValue) return "○";
+            // Above -1.0 dBTP is tight enough headroom to risk audible clipping on playback.
+            return Model.TruePeak.Value > -1.0 ? "⚠️" : "✅";
+        }
+    }
+
+    public string ForensicDetails => $"Verdict: {ForensicVerdict}\nBIT: {BitrateLed}\nKEY: {KeyLed}\nPEAK: {PeakLed}";
+
+    // Phase 12.7: Vibe Color Mapping
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Avalonia.Media.IBrush> _vibeColorCache = new();
+    // One VM instance exists per visible track row, and VibeColor's getter re-fires on every
+    // OnMetadataUpdated — without this guard, every row with an uncached genre kicked off its own
+    // full GetStyleDefinitionsAsync DB query concurrently, on every re-render before the cache
+    // warmed. Static/shared like the cache above: only one fetch needs to be in flight at a time
+    // regardless of how many rows are asking for it.
+    private static Task? _vibeStylesLoadTask;
+    private static readonly object _vibeStylesLoadLock = new();
+
+    public Avalonia.Media.IBrush VibeColor => GetVibeColor(DetectedSubGenre);
+
+    private Avalonia.Media.IBrush GetVibeColor(string? genre)
+    {
+        if (string.IsNullOrEmpty(genre)) return Avalonia.Media.Brushes.Transparent;
+        if (_vibeColorCache.TryGetValue(genre, out var brush)) return brush;
+
+        lock (_vibeStylesLoadLock)
+        {
+            _vibeStylesLoadTask ??= Task.Run(async () =>
+            {
+                try
+                {
+                    var styles = await _libraryService.GetStyleDefinitionsAsync();
+                    foreach (var style in styles)
+                    {
+                        if (Avalonia.Media.Color.TryParse(style.ColorHex, out var color))
+                        {
+                            _vibeColorCache[style.Name] = new Avalonia.Media.SolidColorBrush(color);
+                        }
+                    }
+                }
+                finally
+                {
+                    lock (_vibeStylesLoadLock) { _vibeStylesLoadTask = null; }
+                }
+            });
+        }
+
+        // Every row currently showing Gray for an uncached genre needs its own notification once
+        // the shared fetch lands — this VM's own property-changed, chained onto the shared task
+        // rather than only the task that happened to start it.
+        _ = _vibeStylesLoadTask.ContinueWith(_ =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(VibeColor))),
+            TaskScheduler.Default);
+
+        return Avalonia.Media.Brushes.Gray;
+    }
+
+    public string PreparationStatus => IsPrepared ? "Prepared" : "Raw";
+    public Avalonia.Media.IBrush PreparationColor => IsPrepared ? Avalonia.Media.Brushes.DodgerBlue : Avalonia.Media.Brushes.Gray;
+
+    // Phase 13C: Vibe Pills
+    public record VibePill(string Icon, string Label, Avalonia.Media.IBrush Color, string Description);
+    
+    public System.Collections.Generic.IEnumerable<VibePill> VibePills
+    {
+        get
+        {
+            var pills = new System.Collections.Generic.List<VibePill>();
+            
+            // 💃 Dance Pill (High Danceability)
+            if (Model.Danceability > 0.75)
+            {
+                pills.Add(new VibePill("💃", "Dance", Avalonia.Media.Brushes.DeepPink, "High Danceability detected by AI"));
+            }
+            
+            // 🎻 Inst Pill (Instrumental)
+            if (Model.QualityConfidence > 0.8) // High spectral quality often correlates with clean instrumentals/stable phase
+            {
+                 // Actually we'll use a specific threshold based on new fields if available
+                 // For now, let's use the MoodTag if it matches
+                 if (Model.MoodTag == "Relaxed")
+                 {
+                     pills.Add(new VibePill("🎻", "Inst", Avalonia.Media.Brushes.RoyalBlue, "Instrumental / Chill Vibe"));
+                 }
+            }
+
+            // 🔥 Hard Pill (Aggressive/High Energy)
+            if (Model.Energy > 0.8 || Model.MoodTag == "Aggressive")
+            {
+                pills.Add(new VibePill("🔥", "Hard", Avalonia.Media.Brushes.OrangeRed, "High Energy / Aggressive Vibe"));
+            }
+
+            // ✨ Vibe Pill (Primary Genre/Subgenre classification)
+            if (!string.IsNullOrEmpty(DetectedSubGenre))
+            {
+                pills.Add(new VibePill("✨", DetectedSubGenre, VibeColor, $"Genre: {DetectedSubGenre} (Conf: {SubGenreConfidence:P0})"));
+            }
+            
+            return pills;
+        }
+    }
+
+    public WaveformAnalysisData WaveformData => new WaveformAnalysisData
+    {
+        PeakData = Model.WaveformData ?? Array.Empty<byte>(),
+        RmsData = Model.RmsData ?? Array.Empty<byte>(),
+        LowData = Model.LowData ?? Array.Empty<byte>(),
+        MidData = Model.MidData ?? Array.Empty<byte>(),
+        HighData = Model.HighData ?? Array.Empty<byte>(),
+        DurationSeconds = (Model.CanonicalDuration ?? 0) / 1000.0
+    };
+    
+    // Commands
+    public ICommand PlayCommand { get; }
+    public ICommand RevealFileCommand { get; }
+    public ICommand AddToProjectCommand { get; }
+    public ICommand PauseCommand { get; }
+    public ICommand ResumeCommand { get; }
+    public ICommand CancelCommand { get; }
+    public ICommand RemoveFromQueueCommand { get; }
+    public ICommand RetryCommand { get; }
+    public ICommand ForceStartCommand { get; }
+    public ICommand ForceDownloadIgnoreGuardsCommand { get; }
+    public ICommand SearchAgainCommand { get; }
+    public ICommand FilterByVibeCommand { get; }
+    public ICommand FindSimilarCommand { get; }
+    public ICommand FindSimilarAiCommand { get; }
+    public ICommand ViewAllSearchResultsCommand { get; }
+    public ICommand BumpToTopCommand { get; }
+    public ICommand ViewLogCommand { get; }
+    public ICommand CopyLogCommand { get; }
+    public ICommand ForceDownloadCandidateCommand { get; }
+    public ICommand AcquireTrackCommand { get; }
+    public ICommand OpenAuditLogCommand { get; }
+    public ICommand ShowSpectralReportCommand { get; }
+
+    public TrackAvailabilityState AvailabilityState => Model.AvailabilityState;
+    // See PlaylistTrackViewModel.IsGhost for why Status=Downloaded overrides a stale/drifted Ghost.
+    public bool IsGhost => AvailabilityState == TrackAvailabilityState.Ghost && Model.Status != TrackStatus.Downloaded;
+
+    // Internal State
+    private long _totalBytes;
+    private long _bytesReceived;
+    private double _currentSpeed;
+    private DateTime _lastProgressTime;
+    public DateTime LastActivity { get; private set; } = DateTime.UtcNow;
+
+    // Speed history ring-buffer: last 30 samples for sparkline display
+    private readonly double[] _speedHistory = new double[30];
+    private int _speedHistoryIndex;
+    /// <summary>Most-recent speed samples, oldest-first, 30 slots at ~1-2s intervals.</summary>
+    public IReadOnlyList<double> SpeedHistory => _speedHistory;
+
+    public double CurrentSpeedBytes => _currentSpeed;
+
+    public string SpeedDisplay => _currentSpeed > 1024 * 1024 
+        ? $"{_currentSpeed / 1024 / 1024:F1} MB/s" 
+        : $"{_currentSpeed / 1024:F0} KB/s";
+
+
+    // Phase 0.6: Truth in UI - Stems
+    private bool? _hasStems;
+    public bool HasStems
+    {
+        get
+        {
+            if (!IsCompleted) return false;
+            
+            if (!_hasStems.HasValue)
+            {
+                _hasStems = false;
+                _ = CheckStemsAsync();
+            }
+            return _hasStems.Value;
+        }
+    }
+    
+    private readonly DispatcherTimer _ghostStallTimer;
+
+    private void GhostStallCheck_Tick(object? sender, EventArgs e)
+    {
+        try
+        {
+            // Only care if we are supposedly downloading
+            if (State != PlaylistTrackState.Downloading) return;
+
+            // If explicitly set speed to 0 by logic
+            if (DownloadSpeed == 0)
+            {
+                 // Check how long since last activity
+                 var secondsSince = (DateTime.UtcNow - LastActivity).TotalSeconds;
+
+                 // If > 30s of silence, mark as visually stalled
+                 if (secondsSince > 30)
+                 {
+                     State = PlaylistTrackState.Stalled;
+                     // We set a custom StalledReason if none exists, to hint it's a timeout
+                     Model.StalledReason = "Connection Timeout (Ghost)";
+                     this.RaisePropertyChanged(nameof(StalledReason));
+                     this.RaisePropertyChanged(nameof(StatusText)); // Refresh text
+                 }
+            }
+            else
+            {
+                // If speed > 0, we aren't stalled.
+                // But if we haven't had progress in a while, decay speed to 0.
+                var secondsSince = (DateTime.UtcNow - LastActivity).TotalSeconds;
+                if (secondsSince > 5)
+                {
+                    DownloadSpeed = 0; // Decay speed display
+                    // Next tick will catch the stall counter if it persists
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // One timer instance per download row — a race during a fast add/remove cycle
+            // must not be allowed to crash the whole app.
+            Serilog.Log.Warning(ex, "UnifiedTrackViewModel: ghost-stall tick failed — skipping");
+        }
+    }
+    
+    private async Task CheckStemsAsync()
+    {
+         if (string.IsNullOrEmpty(Model.ResolvedFilePath)) return;
+         try {
+             var found = await Services.StemAvailabilityProbe.HasStemsAsync(Model.ResolvedFilePath);
+             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                 _hasStems = found;
+                 this.RaisePropertyChanged(nameof(HasStems));
+             });
+         } catch {}
+    }
+
+    // Event Handlers
+    private void OnStateChanged(TrackStateChangedEvent e)
+    {
+        if (!IsSameTrackId(e.TrackGlobalId)) return;
+
+        System.Diagnostics.Debug.WriteLine($"[UnifiedTrackVM] {GlobalId} State Changed: {e.State} (Error: {e.Error})");
+        State = e.State;
+        FailureReason = e.Error;
+        FailureEnum = e.FailureReason;
+
+        // Clear stale queue position when no longer in the peer's queue
+        if (e.State != PlaylistTrackState.Queued)
+            RemoteQueuePosition = -1;
+
+        // After a RESET DC, tracks have IsClearedFromDownloadCenter=true.
+        // If the engine picks them back up (Searching/Downloading/Pending), resurface them.
+        if (IsClearedFromDownloadCenter &&
+            e.State is PlaylistTrackState.Searching or PlaylistTrackState.Downloading
+                     or PlaylistTrackState.Pending or PlaylistTrackState.Queued)
+        {
+            IsClearedFromDownloadCenter = false;
+            Model.IsClearedFromDownloadCenter = false;
+        }
+
+        this.RaisePropertyChanged(nameof(AvailabilityState));
+        this.RaisePropertyChanged(nameof(IsGhost));
+        
+        // Force-100%: Bypass throttle and ensure progress bar completes
+        if (e.State == PlaylistTrackState.Completed)
+        {
+            Progress = 100;
+            _currentSpeed = 0;
+            this.RaisePropertyChanged(nameof(StatusText));
+            this.RaisePropertyChanged(nameof(SpeedDisplay));
+            this.RaisePropertyChanged(nameof(TechnicalSummary));
+            this.RaisePropertyChanged(nameof(QualityPillText));
+            this.RaisePropertyChanged(nameof(HasQualityPill));
+            this.RaisePropertyChanged(nameof(IsFakeFlacWarning));
+            this.RaisePropertyChanged(nameof(HasShieldSanitized));
+        }
+        
+        // Capture Peer Name if provided in the event or available from manager
+        if (e.State == PlaylistTrackState.Downloading)
+        {
+            PeerName = e.PeerName; // Assuming TrackStateChangedEvent now has PeerName
+        }
+        else
+        {
+            PeerName = null; // Clear peer name when not downloading
+        }
+        
+        // Phase 0.5: Populate Search Diagnostics
+        if (e.SearchLog != null && e.SearchLog.Top3RejectedResults.Any())
+        {
+             RejectionDetails = new System.Collections.ObjectModel.ObservableCollection<RejectedResult>(e.SearchLog.Top3RejectedResults);
+             HasRejectionDetails = true;
+             this.RaisePropertyChanged(nameof(SearchAttemptCount));
+             this.RaisePropertyChanged(nameof(StatusText));
+
+             foreach (var rejection in e.SearchLog.Top3RejectedResults)
+             {
+                 AppendIncomingResult(new TrackPeerResultViewModel(
+                     DateTime.Now,
+                     rejection.Username,
+                     TrackPeerResultState.Filtered,
+                     string.IsNullOrWhiteSpace(rejection.ShortReason) ? rejection.RejectionReason : rejection.ShortReason,
+                     true,
+                     rejection.Filename,
+                     rejection.Bitrate > 0 ? $"{rejection.Bitrate}kbps" : null,
+                     rejection.Bitrate > 0 ? rejection.Bitrate : null,
+                     rejection.Format));
+             }
+        }
+        else if (State == PlaylistTrackState.Pending || State == PlaylistTrackState.Searching)
+        {
+             // Clear diagnostics on retry/restart
+             RejectionDetails = null;
+             HasRejectionDetails = false;
+        }
+    }
+
+    private void OnDetailedStatus(TrackDetailedStatusEvent e)
+    {
+        // Already filtered by TrackHash in the Rx subscription (Where clause)
+        var parsed = ParseIncomingResult(e);
+
+        EnsureSearchStarted();
+        UpdateSearchTelemetry(parsed, e.Message);
+
+        var staleNoResultsAfterWinner =
+            parsed.State == TrackPeerResultState.Error &&
+            parsed.Detail.Contains("No results found on network", StringComparison.OrdinalIgnoreCase) &&
+            (State == PlaylistTrackState.Downloading ||
+             State == PlaylistTrackState.Queued ||
+             State == PlaylistTrackState.Completed ||
+             IncomingResults.Any(x =>
+                 x.State == TrackPeerResultState.Matched ||
+                 x.Detail.Contains("Transfer started", StringComparison.OrdinalIgnoreCase)));
+
+        if (staleNoResultsAfterWinner)
+        {
+            return;
+        }
+
+        AppendIncomingResult(parsed);
+
+        if (!IsConsoleOpen && (parsed.State == TrackPeerResultState.Error || parsed.State == TrackPeerResultState.Matched))
+        {
+            IsConsoleOpen = true;
+        }
+
+        if (e.Message.Contains("Fast lane", StringComparison.OrdinalIgnoreCase))
+        {
+            _discoveryReasonOverride = "⚡ Fast lane: idle peer match";
+            this.RaisePropertyChanged(nameof(DiscoveryReason));
+            this.RaisePropertyChanged(nameof(DiscoveryBadgeText));
+        }
+        else if (e.Message.Contains("Golden match", StringComparison.OrdinalIgnoreCase))
+        {
+            _discoveryReasonOverride = "🏁 Golden match";
+            this.RaisePropertyChanged(nameof(DiscoveryReason));
+            this.RaisePropertyChanged(nameof(DiscoveryBadgeText));
+        }
+
+        DetailedSearchStatus = e.Message;
+    }
+
+    private void AppendIncomingResult(TrackPeerResultViewModel entry)
+    {
+        if (IncomingResults.Count >= 150)
+        {
+            IncomingResults.RemoveAt(0);
+        }
+
+        IncomingResults.Add(entry);
+        LatestIncomingMessage = entry.Detail;
+        LatestIncomingStateLabel = entry.StateLabel;
+        LatestIncomingStateColor = entry.StateColor;
+        LatestIncomingTimeDisplay = entry.TimeDisplay;
+        this.RaisePropertyChanged(nameof(IncomingResultCount));
+        this.RaisePropertyChanged(nameof(HasIncomingResults));
+        this.RaisePropertyChanged(nameof(IncomingResultsSummary));
+        RaiseSearchTelemetryProperties();
+    }
+
+    private void EnsureSearchStarted()
+    {
+        if (_isSearchClockRunning) return;
+        _isSearchClockRunning = true;
+        _searchStartedAtUtc = DateTime.UtcNow;
+        _searchEndedAtUtc = null;
+        _searchFoundNothing = false;
+        _searchFoundMatch = false;
+
+        // Start a ticking timer to refresh the SearchCountdownDisplay property
+        var timer = Observable.Interval(TimeSpan.FromSeconds(1))
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(_ => 
+            {
+                this.RaisePropertyChanged(nameof(SearchCountdownDisplay));
+                this.RaisePropertyChanged(nameof(SearchDurationDisplay));
+                this.RaisePropertyChanged(nameof(SearchKnowledgeSummary));
+            });
+            
+        _searchClockSubscription.Disposable = timer;
+        
+        RaiseSearchTelemetryProperties();
+    }
+
+    private void MarkSearchEnded()
+    {
+        if (!_searchStartedAtUtc.HasValue)
+            return;
+
+        _searchEndedAtUtc ??= DateTime.UtcNow;
+        StopSearchClock();
+        RaiseSearchTelemetryProperties();
+    }
+
+    private void StartSearchClock()
+    {
+        if (_isSearchClockRunning)
+            return;
+
+        _isSearchClockRunning = true;
+        _searchClockSubscription.Disposable = Observable
+            .Interval(TimeSpan.FromSeconds(1), RxApp.MainThreadScheduler)
+            .Subscribe(_ => RaiseSearchTelemetryProperties());
+    }
+
+    private void StopSearchClock()
+    {
+        _isSearchClockRunning = false;
+        _searchClockSubscription.Disposable = null;
+    }
+
+    private int ComputeSearchMaxWindowSeconds()
+    {
+        var minDefault = Math.Max(5, _config.MinSearchDurationSeconds);
+        if (_searchUsedMp3Fallback)
+            return minDefault;
+
+        var effectiveFormats = !string.IsNullOrWhiteSpace(Model.PreferredFormats)
+            ? Model.PreferredFormats!
+            : string.Join(',', _config.PreferredFormats ?? new List<string>());
+
+        var formatTokens = effectiveFormats
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var hasLossless = formatTokens.Any(x => LosslessFormats.Contains(x));
+        var hasMp3 = formatTokens.Any(x => string.Equals(x, "mp3", StringComparison.OrdinalIgnoreCase));
+        if (hasLossless && !hasMp3)
+        {
+            return Math.Max(minDefault, Math.Max(20, _config.MinLosslessSearchDurationSeconds));
+        }
+
+        return minDefault;
+    }
+
+    private void UpdateSearchTelemetry(TrackPeerResultViewModel entry, string? rawMessage)
+    {
+        var message = rawMessage ?? entry.Detail;
+
+        if (entry.State == TrackPeerResultState.Matched)
+        {
+            _searchFoundMatch = true;
+        }
+
+        if (entry.State == TrackPeerResultState.Filtered || entry.State == TrackPeerResultState.Queued)
+        {
+        }
+
+        if (message.Contains("MP3 fallback", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("MP3 lane", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("MP3 Mode", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("forceMp3", StringComparison.OrdinalIgnoreCase))
+        {
+            _searchUsedMp3Fallback = true;
+        }
+
+        if (message.Contains("No results found on network", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Not found on network", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!_searchFoundMatch)
+            {
+                _searchFoundNothing = true;
+            }
+
+            MarkSearchEnded();
+        }
+
+        if (message.Contains("Transfer started", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("winner", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Golden match", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Selected", StringComparison.OrdinalIgnoreCase))
+        {
+            _searchFoundMatch = true;
+            _searchFoundNothing = false;
+            MarkSearchEnded();
+        }
+
+        if (message.Contains("Search timed out", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("timed out", StringComparison.OrdinalIgnoreCase))
+        {
+            MarkSearchEnded();
+        }
+
+        RaiseSearchTelemetryProperties();
+    }
+
+    private void RaiseSearchTelemetryProperties()
+    {
+        this.RaisePropertyChanged(nameof(HasSearchTelemetry));
+        this.RaisePropertyChanged(nameof(SearchMatchedCount));
+        this.RaisePropertyChanged(nameof(SearchQueuedCount));
+        this.RaisePropertyChanged(nameof(SearchFilteredCount));
+        this.RaisePropertyChanged(nameof(SearchDurationDisplay));
+        this.RaisePropertyChanged(nameof(SearchOutcomeLabel));
+        this.RaisePropertyChanged(nameof(SearchOutcomeColor));
+        this.RaisePropertyChanged(nameof(SearchPathSummary));
+        this.RaisePropertyChanged(nameof(SearchMaxWindowSeconds));
+        this.RaisePropertyChanged(nameof(SearchMaxWindowDisplay));
+        this.RaisePropertyChanged(nameof(SearchCountdownDisplay));
+        this.RaisePropertyChanged(nameof(SearchResultBreakdown));
+        this.RaisePropertyChanged(nameof(SearchKnowledgeSummary));
+    }
+
+    private async Task FlushDownloadHistoryAsync()
+    {
+        try
+        {
+            // Extract details from the last Matched event (the winner)
+            var matchedEntry = IncomingResults.LastOrDefault(x => x.State == TrackPeerResultState.Matched);
+
+            var entity = new Data.Entities.DownloadHistoryEntity
+            {
+                TrackHash      = GlobalId,
+                Artist         = Model.Artist ?? string.Empty,
+                Title          = Model.Title ?? string.Empty,
+                ProjectId      = Model.PlaylistId != Guid.Empty ? Model.PlaylistId.ToString("N") : null,
+                SearchAttemptCount = SearchAttemptCount,
+                SearchStartedAt    = _searchStartedAtUtc,
+                SearchEndedAt      = _searchEndedAtUtc,
+                SearchOutcome      = SearchOutcomeLabel,
+                UsedMp3Fallback    = _searchUsedMp3Fallback,
+                MatchedCount       = SearchMatchedCount,
+                QueuedCount        = SearchQueuedCount,
+                FilteredCount      = SearchFilteredCount,
+                PeerUsername       = matchedEntry?.Username ?? PeerName,
+                DownloadedFilename = matchedEntry?.Filename,
+                DownloadedFormat   = matchedEntry?.Format,
+                DownloadedBitrateKbps = matchedEntry?.BitrateKbps,
+                FinalState         = IsCompleted ? "Completed" : "Failed",
+                RecordedAt         = DateTime.UtcNow,
+            };
+
+            await _databaseService.RecordDownloadHistoryAsync(entity).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DownloadHistory] Failed to persist history for {GlobalId}: {ex.Message}");
+        }
+    }
+
+    private static TrackPeerResultViewModel ParseIncomingResult(TrackDetailedStatusEvent e)
+    {
+        var message = e.Message?.Trim() ?? string.Empty;
+        var user = string.Empty;
+        var detail = message;
+        var state = e.IsError ? TrackPeerResultState.Error : TrackPeerResultState.Update;
+        string? filename = null;
+        string? speed = null;
+        int? bitrateKbps = null;
+        string? format = null;
+
+        var structured = StructuredFieldRegex.Matches(message);
+        if (structured.Count > 0)
+        {
+            foreach (Match match in structured)
+            {
+                var key = match.Groups["key"].Value.Trim().ToLowerInvariant();
+                var value = match.Groups["value"].Value.Trim();
+                if (string.IsNullOrWhiteSpace(value))
+                    continue;
+
+                switch (key)
+                {
+                    case "user":
+                        user = value;
+                        break;
+                    case "file":
+                        filename = value;
+                        break;
+                    case "speed":
+                        speed = value;
+                        break;
+                    case "bitrate":
+                        if (int.TryParse(value.Replace("kbps", "", StringComparison.OrdinalIgnoreCase).Trim(), out var parsedBitrate))
+                        {
+                            bitrateKbps = parsedBitrate;
+                        }
+                        break;
+                    case "format":
+                        format = value;
+                        break;
+                }
+            }
+        }
+
+        var rejectedMatch = RejectedUserRegex.Match(message);
+        if (rejectedMatch.Success)
+        {
+            user = rejectedMatch.Groups["user"].Value.Trim();
+            detail = rejectedMatch.Groups["detail"].Value.Trim();
+            state = TrackPeerResultState.Filtered;
+        }
+        else
+        {
+            var blacklistedMatch = BlacklistedUserRegex.Match(message);
+            if (blacklistedMatch.Success)
+            {
+                user = blacklistedMatch.Groups["user"].Value.Trim();
+                detail = blacklistedMatch.Groups["detail"].Value.Trim();
+                state = TrackPeerResultState.Filtered;
+            }
+            else if (message.Contains("winner", StringComparison.OrdinalIgnoreCase) ||
+                     message.Contains("Golden match", StringComparison.OrdinalIgnoreCase) ||
+                     message.Contains("Selected", StringComparison.OrdinalIgnoreCase) ||
+                     message.Contains("high-confidence match", StringComparison.OrdinalIgnoreCase))
+            {
+                var winnerMatch = WinnerUserRegex.Match(message);
+                if (winnerMatch.Success)
+                {
+                    user = winnerMatch.Groups["user"].Value.Trim().Trim('\'', 's');
+                }
+
+                state = TrackPeerResultState.Matched;
+            }
+            else if (message.Contains("Transfer started", StringComparison.OrdinalIgnoreCase))
+            {
+                state = TrackPeerResultState.Matched;
+            }
+            else if (message.Contains("queue", StringComparison.OrdinalIgnoreCase) ||
+                     message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+                     message.Contains("fallback", StringComparison.OrdinalIgnoreCase) ||
+                     message.Contains("resuming", StringComparison.OrdinalIgnoreCase))
+            {
+                state = TrackPeerResultState.Queued;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(user))
+        {
+            var fromUserMatch = FromUserRegex.Match(message);
+            if (fromUserMatch.Success)
+            {
+                user = fromUserMatch.Groups["user"].Value.Trim();
+            }
+        }
+
+        return new TrackPeerResultViewModel(DateTime.Now, user, state, detail, e.IsError, filename, speed, bitrateKbps, format);
+    }
+
+    private bool IsSameTrackId(string? candidateTrackId)
+    {
+        if (string.IsNullOrWhiteSpace(candidateTrackId))
+            return false;
+
+        var candidate = candidateTrackId.Trim();
+        var global = GlobalId?.Trim();
+
+        if (!string.IsNullOrWhiteSpace(global) &&
+            string.Equals(candidate, global, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var idN = Model.Id.ToString("N");
+        var idD = Model.Id.ToString("D");
+        return string.Equals(candidate, idN, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(candidate, idD, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string? _detailedSearchStatus;
+    /// <summary>
+    /// Granular search progress message from the discovery service.
+    /// Shows live updates like "🔎 Started Dirty search..." or "Rejected @user: Duration mismatch".
+    /// Cleared automatically when the track leaves the Searching state.
+    /// </summary>
+    public string? DetailedSearchStatus
+    {
+        get => _detailedSearchStatus;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _detailedSearchStatus, value);
+            // Also refresh StatusText since it may incorporate this
+            this.RaisePropertyChanged(nameof(StatusText));
+            this.RaisePropertyChanged(nameof(DiscoveryReason));
+            this.RaisePropertyChanged(nameof(DiscoveryBadgeText));
+        }
+    }
+
+    private void OnProgressChanged(TrackProgressChangedEvent e)
+    {
+        if (!IsSameTrackId(e.TrackGlobalId)) return;
+        
+        // Auto-heal ghost stall if improved
+        if (State == PlaylistTrackState.Stalled)
+        {
+            State = PlaylistTrackState.Downloading;
+            Model.StalledReason = null; // Clear reason
+            this.RaisePropertyChanged(nameof(StalledReason));
+        }
+        
+         // Update all data + raise all properties (safe: only fires ~4x/sec via .Sample())
+         Progress = e.Progress;
+         _totalBytes = e.TotalBytes;
+         
+         // Speed Calc
+         var now = DateTime.UtcNow;
+         if (_lastProgressTime != DateTime.MinValue)
+         {
+             var seconds = (now - _lastProgressTime).TotalSeconds;
+             if (seconds > 0)
+             {
+                 var bytesDiff = e.BytesReceived - _bytesReceived;
+                 if (bytesDiff > 0)
+                 {
+                     var instantSpeed = bytesDiff / seconds;
+                     _currentSpeed = (_currentSpeed * 0.7) + (instantSpeed * 0.3);
+                     // Push into sparkline ring-buffer
+                     _speedHistory[_speedHistoryIndex % 30] = _currentSpeed;
+                     _speedHistoryIndex++;
+                 }
+             }
+         }
+         _bytesReceived = e.BytesReceived;
+         _lastProgressTime = now;
+         LastActivity = now;
+         
+         // Raise all display properties (safe at 4Hz via .Sample())
+         this.RaisePropertyChanged(nameof(StatusText));
+         this.RaisePropertyChanged(nameof(TechnicalSummary));
+         this.RaisePropertyChanged(nameof(SpeedDisplay));
+         this.RaisePropertyChanged(nameof(CurrentSpeedBytes));
+         this.RaisePropertyChanged(nameof(SpeedHistory));
+    }
+
+    private void OnMetadataUpdated(TrackMetadataUpdatedEvent e)
+    {
+        if (!IsSameTrackId(e.TrackGlobalId)) return;
+        // The actual DB re-fetch + property-changed raising runs debounced — see the
+        // _metadataRefreshRequests subscription wired up in the constructor.
+        _metadataRefreshRequests.OnNext(Unit.Default);
+    }
+
+    private async Task RefreshMetadataFromDatabaseAsync()
+    {
+        // Reload from DB to ensure Model has new IDs (SpotifyAlbumId etc.)
+        {
+            var updatedTrack = await _libraryService.GetPlaylistTrackByHashAsync(Model.PlaylistId, GlobalId);
+
+            if (updatedTrack != null)
+            {
+                // Sync important fields back to Model instance
+                Model.Artist = updatedTrack.Artist;
+                Model.Title = updatedTrack.Title;
+                Model.Album = updatedTrack.Album;
+                Model.AlbumArtUrl = updatedTrack.AlbumArtUrl;
+                Model.SpotifyAlbumId = updatedTrack.SpotifyAlbumId;
+                Model.SpotifyTrackId = updatedTrack.SpotifyTrackId;
+                Model.SpotifyArtistId = updatedTrack.SpotifyArtistId;
+                Model.BPM = updatedTrack.BPM;
+                Model.MusicalKey = updatedTrack.MusicalKey;
+                Model.Bitrate = updatedTrack.Bitrate;
+                Model.Format = updatedTrack.Format;
+                Model.IsEnriched = updatedTrack.IsEnriched;
+                Model.Energy = updatedTrack.Energy;
+                Model.Danceability = updatedTrack.Danceability;
+                Model.Valence = updatedTrack.Valence;
+                Model.Genres = updatedTrack.Genres;
+                Model.Popularity = updatedTrack.Popularity;
+                Model.IsPrepared = updatedTrack.IsPrepared;
+                Model.PrimaryGenre = updatedTrack.PrimaryGenre;
+                Model.CuePointsJson = updatedTrack.CuePointsJson;
+                Model.MoodTag = updatedTrack.MoodTag;
+                Model.DetectedSubGenre = updatedTrack.DetectedSubGenre;
+                Model.SubGenreConfidence = updatedTrack.SubGenreConfidence;
+                
+                // Sync Waveform bands
+                Model.LowData = updatedTrack.LowData;
+                Model.MidData = updatedTrack.MidData;
+                Model.HighData = updatedTrack.HighData;
+                Model.WaveformData = updatedTrack.WaveformData;
+                Model.RmsData = updatedTrack.RmsData;
+                Model.CanonicalDuration = updatedTrack.CanonicalDuration;
+                
+                // Technical Audio
+                Model.Loudness = updatedTrack.Loudness;
+                Model.TruePeak = updatedTrack.TruePeak;
+                Model.DynamicRange = updatedTrack.DynamicRange;
+                Model.FrequencyCutoff = updatedTrack.FrequencyCutoff;
+                Model.QualityConfidence = updatedTrack.QualityConfidence;
+                Model.SpectralHash = updatedTrack.SpectralHash;
+                Model.IsTrustworthy = updatedTrack.IsTrustworthy;
+                Model.Integrity = updatedTrack.Integrity;
+                Model.QualityDetails = updatedTrack.QualityDetails;
+                Model.SourceProvenance = updatedTrack.SourceProvenance;
+                
+                // Spectral verdict (set by PostDownloadSpectralScanService)
+                Model.IsTranscoded = updatedTrack.IsTranscoded;
+                Model.SpectralVerdictText = updatedTrack.SpectralVerdictText;
+
+                // Extended spectral forensics
+                Model.SpectralSampleRateHz    = updatedTrack.SpectralSampleRateHz;
+                Model.SpectralBitDepth        = updatedTrack.SpectralBitDepth;
+                Model.SpectralRolloffSteepness = updatedTrack.SpectralRolloffSteepness;
+                Model.SpectralMidBandEnergy   = updatedTrack.SpectralMidBandEnergy;
+                Model.SpectralHighBandEnergy  = updatedTrack.SpectralHighBandEnergy;
+                Model.SpectralRmsDbfs         = updatedTrack.SpectralRmsDbfs;
+                Model.SpectralCrestFactorDb   = updatedTrack.SpectralCrestFactorDb;
+                Model.SpectralNoiseFloorDbfs  = updatedTrack.SpectralNoiseFloorDbfs;
+                
+                this.RaisePropertyChanged(nameof(ArtistName));
+                this.RaisePropertyChanged(nameof(TrackTitle));
+                this.RaisePropertyChanged(nameof(AlbumName));
+                this.RaisePropertyChanged(nameof(AlbumArtUrl));
+                this.RaisePropertyChanged(nameof(BpmDisplay));
+                this.RaisePropertyChanged(nameof(KeyDisplay));
+                this.RaisePropertyChanged(nameof(CamelotDisplay));
+                this.RaisePropertyChanged(nameof(LoudnessDisplay));
+                this.RaisePropertyChanged(nameof(TruePeakDisplay));
+                this.RaisePropertyChanged(nameof(DynamicRangeDisplay));
+                this.RaisePropertyChanged(nameof(IntegrityScore));
+                this.RaisePropertyChanged(nameof(TechnicalSummary));
+                this.RaisePropertyChanged(nameof(IsSecure));
+                this.RaisePropertyChanged(nameof(QualityIcon));
+                this.RaisePropertyChanged(nameof(QualityColor));
+                this.RaisePropertyChanged(nameof(QualityPillText));
+                this.RaisePropertyChanged(nameof(HasQualityPill));
+                this.RaisePropertyChanged(nameof(IsFakeFlacWarning));
+                this.RaisePropertyChanged(nameof(HasShieldSanitized));
+                this.RaisePropertyChanged(nameof(IsTranscoded));
+                this.RaisePropertyChanged(nameof(HasSpectralVerdict));
+                this.RaisePropertyChanged(nameof(SpectralVerdictText));
+                this.RaisePropertyChanged(nameof(SpectralVerdictTooltip));
+                this.RaisePropertyChanged(nameof(SpectralVerdictColor));
+                this.RaisePropertyChanged(nameof(SpectralVerdictBadgeText));
+                this.RaisePropertyChanged(nameof(ForensicBadgeText));
+                this.RaisePropertyChanged(nameof(ForensicVerdict));
+                this.RaisePropertyChanged(nameof(BitrateLed));
+                this.RaisePropertyChanged(nameof(KeyLed));
+                this.RaisePropertyChanged(nameof(PeakLed));
+                this.RaisePropertyChanged(nameof(ForensicDetails));
+                this.RaisePropertyChanged(nameof(HasKey));
+                // Spectral Inspector properties
+                this.RaisePropertyChanged(nameof(HasSpectralDetails));
+                this.RaisePropertyChanged(nameof(SpectralSampleRateDisplay));
+                this.RaisePropertyChanged(nameof(SpectralCutoffKhzDisplay));
+                this.RaisePropertyChanged(nameof(SpectralBitDepthDisplay));
+                this.RaisePropertyChanged(nameof(SpectralRolloffDisplay));
+                this.RaisePropertyChanged(nameof(SpectralRolloffLabel));
+                this.RaisePropertyChanged(nameof(SpectralMidBandDisplay));
+                this.RaisePropertyChanged(nameof(SpectralHighBandDisplay));
+                this.RaisePropertyChanged(nameof(SpectralRmsDisplay));
+                this.RaisePropertyChanged(nameof(SpectralCrestFactorDisplay));
+                this.RaisePropertyChanged(nameof(SpectralCrestFactorColor));
+                this.RaisePropertyChanged(nameof(SpectralNoiseFloorDisplay));
+                this.RaisePropertyChanged(nameof(SpectralConfidenceDisplay));
+                this.RaisePropertyChanged(nameof(FileFormat));
+                this.RaisePropertyChanged(nameof(BitrateDisplay));
+                this.RaisePropertyChanged(nameof(DurationDisplay));
+                this.RaisePropertyChanged(nameof(FileSizeDisplay));
+                this.RaisePropertyChanged(nameof(IsPrepared));
+                this.RaisePropertyChanged(nameof(PreparationStatus));
+                this.RaisePropertyChanged(nameof(PreparationColor));
+                this.RaisePropertyChanged(nameof(PrimaryGenre));
+                this.RaisePropertyChanged(nameof(DetectedSubGenre));
+                this.RaisePropertyChanged(nameof(VibeColor));
+                this.RaisePropertyChanged(nameof(SubGenreConfidence));
+                this.RaisePropertyChanged(nameof(VibePills));
+                
+                // Curation & Trust
+                this.RaisePropertyChanged(nameof(CurationConfidence));
+                this.RaisePropertyChanged(nameof(CurationIcon));
+                this.RaisePropertyChanged(nameof(CurationColor));
+                this.RaisePropertyChanged(nameof(ProvenanceTooltip));
+                this.RaisePropertyChanged(nameof(DiscoveryReason));
+                this.RaisePropertyChanged(nameof(DiscoveryBadgeText));
+
+                // Audio features
+                this.RaisePropertyChanged(nameof(IsEnriched));
+                this.RaisePropertyChanged(nameof(WaveformData));
+                
+                // Update Artwork Proxy
+                _artwork = new ArtworkProxy(_artworkCache, Model.AlbumArtUrl);
+                this.RaisePropertyChanged(nameof(Artwork));
+                this.RaisePropertyChanged(nameof(ArtworkBitmap));
+            }
+        }
+    }
+
+    private void PlayTrack()
+    {
+        // Construct a lightweight VM payload for the player
+        // The Player expects a PlaylistTrackViewModel, ensuring it has the Model
+        var payload = new PlaylistTrackViewModel(Model);
+        
+        // Publish event
+        _eventBus.Publish(new PlayTrackRequestEvent(payload));
+    }
+    
+    // Phase 11.5: Library Trust Badges
+    public SLSKDONET.Data.Entities.CurationConfidence CurationConfidence => Model.CurationConfidence;
+    public string ProvenanceTooltip => $"Confidence: {CurationConfidence}\nSource: {Model.Source}";
+
+    public void Dispose()
+    {
+        _disposables.Dispose();
+        // Artwork is a proxy, cache manages bitmap disposal
+    }
+}
+
+public enum TrackPeerResultState
+{
+    Update,
+    Filtered,
+    Queued,
+    Matched,
+    Error
+}
+
+public sealed class TrackPeerResultViewModel
+{
+    public TrackPeerResultViewModel(DateTime timestamp, string? username, TrackPeerResultState state, string detail, bool isError = false, string? filename = null, string? speed = null, int? bitrateKbps = null, string? format = null)
+    {
+        Timestamp = timestamp;
+        Username = string.IsNullOrWhiteSpace(username) ? "(system)" : username;
+        State = state;
+        Detail = detail;
+        IsError = isError;
+        Filename = filename;
+        Speed = speed;
+        BitrateKbps = bitrateKbps;
+        Format = format;
+    }
+
+    public DateTime Timestamp { get; }
+    public string Username { get; }
+    public TrackPeerResultState State { get; }
+    public string Detail { get; }
+    public bool IsError { get; }
+    public string? Filename { get; }
+    public string? Speed { get; }
+    public int? BitrateKbps { get; }
+    public string? Format { get; }
+    public string TimeDisplay => Timestamp.ToString("HH:mm:ss");
+    public bool CanForceDownload => !string.IsNullOrWhiteSpace(Filename) && !string.Equals(Username, "(system)", StringComparison.OrdinalIgnoreCase);
+    public string ForceDownloadTooltip => CanForceDownload
+        ? "Force download this exact peer/file (ignores quality guards)"
+        : "Force download unavailable for this row";
+    public string StateLabel => State switch
+    {
+        TrackPeerResultState.Filtered => "Filtered",
+        TrackPeerResultState.Queued => "Queued",
+        TrackPeerResultState.Matched => "Matched",
+        TrackPeerResultState.Error => "Error",
+        _ => "Update"
+    };
+
+    public string StateColor => State switch
+    {
+        TrackPeerResultState.Filtered => "#9E9E9E",
+        TrackPeerResultState.Queued => "#FFB300",
+        TrackPeerResultState.Matched => "#4CAF50",
+        TrackPeerResultState.Error => "#F44336",
+        _ => "#4EC9B0"
+    };
+}

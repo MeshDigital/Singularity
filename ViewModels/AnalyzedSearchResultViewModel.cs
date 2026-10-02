@@ -1,0 +1,196 @@
+using System;
+using System.ComponentModel;
+using System.IO;
+using Avalonia.Media;
+using Soulseek;
+using ReactiveUI;
+using SLSKDONET.Services;
+
+namespace SLSKDONET.ViewModels
+{
+    public class AnalyzedSearchResultViewModel : ReactiveObject
+    {
+        private readonly SearchResult _result;
+        private bool _isFilteredOut;
+        private string? _filteredOutReason;
+        public Models.SearchTier Tier { get; } // Phase 19
+
+
+
+        public SearchResult RawResult => _result;
+
+        // Base Properties
+        public string Filename => Path.GetFileName(_result.Filename);
+        public string FullPath => _result.Filename;
+
+        // Clean Metadata (Phase 19.5: UI Refinement)
+        public string ArtistName => !string.IsNullOrWhiteSpace(_result.Model.Artist) ? _result.Model.Artist : "Unknown Artist";
+        public string TrackTitle => !string.IsNullOrWhiteSpace(_result.Model.Title) ? _result.Model.Title : Path.GetFileNameWithoutExtension(_result.Filename);
+        public string DisplayName => $"{ArtistName} - {TrackTitle}";
+
+        public long Size => _result.Size;
+        public int BitRate => _result.Bitrate;
+        public int? Length => _result.Length;
+        public string User => _result.Username;
+        public int UploadSpeed => _result.UploadSpeed;
+        public string UploadSpeedDisplay => UploadSpeed > 0 ? $"{(double)UploadSpeed / 1024.0:F1}MB/s" : "Slow";
+        public int QueueLength => _result.QueueLength;
+        public int? SampleRate => _result.SampleRate;
+        public int? BitDepth => _result.BitDepth;
+        
+        public string SampleRateDisplay => SampleRate.HasValue ? $"{(double)SampleRate.Value / 1000.0:F1}kHz" : "";
+        public string BitDepthDisplay => BitDepth.HasValue ? $"{BitDepth.Value}-bit" : "";
+        public string AudioQualityDisplay => string.Join(" / ", new[] { BitDepthDisplay, SampleRateDisplay }.Where(s => !string.IsNullOrEmpty(s)));
+
+        public bool SlotFree => _result.SlotFree;
+        
+        // Phase 19: Sonic Match Reason
+        public string? MatchReason => _result.PreferredReason;
+        public bool HasMatchReason => _result.HasPreferredReason;
+        
+        // Formatted Values
+        public string DisplayLength => Length.HasValue ? TimeSpan.FromSeconds(Length.Value).ToString(@"mm\:ss") : "--:--";
+        public string DisplaySize => $"{Size / 1024.0 / 1024.0:F1} MB";
+        
+        // Search 2.0 Forensic Properties
+        public int TrustScore { get; }
+        public string ForensicAssessment { get; }
+        public bool IsGoldenMatch { get; }
+        public bool IsFake { get; }
+        public bool IsSuspicious => IsFake;
+        public bool IsSuspiciousLossless => false;
+        public string SuspiciousLosslessReason => string.Empty;
+        
+        public double MatchConfidence => Math.Clamp(_result.CurrentRank, 0, 100);
+        
+        public string MatchConfidenceColor => MatchConfidence switch
+        {
+            >= 90 => "#1DB954", // Green
+            >= 70 => "#FFD700", // Yellow/Gold
+            _ => "#E91E63"      // Red
+        };
+
+        public bool IsFilteredOut
+        {
+            get => _isFilteredOut;
+            private set => this.RaiseAndSetIfChanged(ref _isFilteredOut, value);
+        }
+
+        public string? FilteredOutReason
+        {
+            get => _filteredOutReason;
+            private set => this.RaiseAndSetIfChanged(ref _filteredOutReason, value);
+        }
+
+        public bool HasFilteredOutReason => !string.IsNullOrWhiteSpace(FilteredOutReason);
+
+        public bool IsHighRisk => _result.Model.IsFlagged;
+        public bool ShowHighRiskBadge => IsHighRisk && !IsSuspiciousLossless;
+        public string? FlagReason => _result.Model.FlagReason;
+
+        public IBrush ItemBackground
+        {
+            get
+            {
+                if (IsFake) return Brushes.Transparent; // Will look slightly dimmed due to text color
+                if (IsGoldenMatch) return new SolidColorBrush(Color.Parse("#1A201A")); // Very subtle green tint
+                return Brushes.Transparent;
+            }
+        }
+        
+        public IBrush ForegroundColor
+        {
+            get
+            {
+                if (IsFake) return new SolidColorBrush(Color.Parse("#666666")); // Dimmed
+                if (IsGoldenMatch) return Brushes.White;
+                return new SolidColorBrush(Color.Parse("#DDDDDD"));
+            }
+        }
+
+        public string TrustColor
+        {
+            get
+            {
+                if (TrustScore >= 90) return "#1DB954"; // Green
+                if (TrustScore >= 70) return "#2196F3"; // Blue
+                if (TrustScore >= 50) return "#FFC107"; // Amber
+                return "#F44336"; // Red
+            }
+        }
+        
+        // Trust Bar Visualization (Width 0-100)
+        public double TrustBarWidth => TrustScore;
+
+        // Opacity for Ghosting (The Bouncer Phase 14A)
+        public double Opacity => IsFilteredOut ? 0.45 : IsFake ? 0.3 : 1.0;
+
+        // Download state forwarded from RawResult
+        public bool HasDownloadStatus => !string.IsNullOrEmpty(_result.StatusIcon);
+        public string DownloadStatusIcon => _result.StatusIcon;
+        public string DownloadStatusText => _result.Status switch
+        {
+            Models.TrackStatus.Pending    => "Queued for download",
+            Models.TrackStatus.Downloaded => "Downloaded",
+            Models.TrackStatus.Failed     => "Download failed",
+            Models.TrackStatus.Skipped    => "Skipped",
+            Models.TrackStatus.OnHold     => "On hold",
+            _                             => ""
+        };
+
+        public AnalyzedSearchResultViewModel(SearchResult result)
+        {
+            _result = result;
+            _result.PropertyChanged += OnRawResultPropertyChanged;
+
+            // Calculate Metrics
+            TrustScore = 100;
+            var forensicAssessment = "Standard";
+            IsGoldenMatch = false;
+            
+            // Phase 14A: The Bouncer Integration
+            // Combine existing forensic checks with new SafetyFilter flags
+            IsFake = result.Model.IsFlagged;
+            
+            if (result.Model.IsFlagged)
+            {
+                forensicAssessment = result.Model.FlagReason ?? "Flagged by Bouncer";
+            }
+
+            ForensicAssessment = forensicAssessment;
+            
+            // Sync with base SearchResult for Filter & Badge logic
+            // Sync with base SearchResult for Filter & Badge logic
+            if (IsFake) _result.IntegrityStatus = "Suspect";
+            else if (IsGoldenMatch) _result.IntegrityStatus = "Verified";
+            else _result.IntegrityStatus = "";
+            
+            // Phase 19: Search 2.0 Tier Calculation
+            Tier = 0; // Simplified
+        }
+
+        public string TierBadge => string.Empty;
+
+        public string TierDescription => "Standard Track";
+
+        public IBrush TierColor => Brushes.Gray;
+
+        private void OnRawResultPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is nameof(SearchResult.Status) or nameof(SearchResult.StatusIcon))
+            {
+                this.RaisePropertyChanged(nameof(HasDownloadStatus));
+                this.RaisePropertyChanged(nameof(DownloadStatusIcon));
+                this.RaisePropertyChanged(nameof(DownloadStatusText));
+            }
+        }
+
+        public void SetFilterVisibility(bool isFilteredOut, string? reason)
+        {
+            IsFilteredOut = isFilteredOut;
+            FilteredOutReason = reason;
+            this.RaisePropertyChanged(nameof(HasFilteredOutReason));
+            this.RaisePropertyChanged(nameof(Opacity));
+        }
+    }
+}

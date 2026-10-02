@@ -1,0 +1,1283 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Configuration;
+using SLSKDONET.Models;
+using SLSKDONET.Services.Ranking;
+using SLSKDONET.ViewModels;
+
+namespace SLSKDONET.Services;
+
+/// <summary>
+/// "The Seeker"
+/// Responsible for finding the best available download link for a given track.
+/// Encapsulates search Orchestration and Quality Selection logic.
+/// </summary>
+public class DownloadDiscoveryService
+{
+    private int _activeDiscoveryLanes;
+    private int _currentLaneLimit;
+    private DateTime _nextLaneTuneAtUtc = DateTime.MinValue;
+
+    private readonly ILogger<DownloadDiscoveryService> _logger;
+    private readonly SearchOrchestrationService _searchOrchestrator;
+    private readonly SearchResultMatcher _matcher;
+    private readonly AppConfig _config;
+    private readonly IEventBus _eventBus;
+    private readonly ISafetyFilterService _safetyFilter;
+    private readonly Import.AutoCleanerService _autoCleaner;
+    private readonly Network.ProtocolHardeningService _hardeningService;
+    private readonly PeerReliabilityService _peerReliability;
+    private readonly INetworkHealthService _healthService;
+    private readonly SLSKDONET.Services.Diagnostics.ITrackAuditLogger _auditLogger;
+    private readonly DatabaseService _databaseService;
+
+    public DownloadDiscoveryService(
+        ILogger<DownloadDiscoveryService> logger,
+        SearchOrchestrationService searchOrchestrator,
+        SearchResultMatcher matcher,
+        AppConfig config,
+        IEventBus eventBus,
+        ISafetyFilterService safetyFilter,
+        Import.AutoCleanerService autoCleaner,
+        Network.ProtocolHardeningService hardeningService,
+        PeerReliabilityService peerReliability,
+        INetworkHealthService healthService,
+        SLSKDONET.Services.Diagnostics.ITrackAuditLogger auditLogger,
+        DatabaseService databaseService)
+    {
+        _logger = logger;
+        _searchOrchestrator = searchOrchestrator;
+        _matcher = matcher;
+        _config = config;
+        _eventBus = eventBus;
+        _safetyFilter = safetyFilter;
+        _autoCleaner = autoCleaner;
+        _hardeningService = hardeningService;
+        _peerReliability = peerReliability;
+        _healthService = healthService;
+        _auditLogger = auditLogger;
+        _databaseService = databaseService;
+
+        var minLane = Math.Clamp(_config.MinAdaptiveSearchLanes, 1, 8);
+        var maxLane = Math.Clamp(_config.MaxAdaptiveSearchLanes, minLane, 8);
+        _currentLaneLimit = Math.Clamp(_config.MaxDiscoveryLanes, minLane, maxLane);
+        _logger.LogInformation("Discovery lane limiter initialized with {LaneCount} lanes (adaptive={Adaptive}).", _currentLaneLimit, _config.EnableAdaptiveLanes);
+        _eventBus.Publish(new AdaptiveLaneStatusEvent(_currentLaneLimit, 0, _config.EnableAdaptiveLanes ? "Adaptive tuning enabled" : "Adaptive tuning disabled"));
+    }
+
+    public record DiscoveryResult(Track? BestMatch, SearchAttemptLog? Log, Track? RunnerUpMatch = null)
+    {
+        public int Bitrate => BestMatch?.Bitrate ?? 0;
+    }
+
+    public sealed class DiscoveryConnectionUnavailableException : Exception
+    {
+        public DiscoveryConnectionUnavailableException(string message) : base(message)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Searches for a track and returns the single best match based on user preferences.
+    /// Phase T.1: Refactored to accept PlaylistTrack model (decoupled from UI).
+    /// Phase 12: Updated to use streaming search logic.
+    /// Phase 3B: Added support for peer blacklisting (Health Monitor).
+    /// 
+    /// WHY "THE SEEKER":
+    /// This service encapsulates the "find the best file" intelligence:
+    /// 1. Constructs optimal search query ("Artist Title" vs "Artist - Title [Remix]")
+    /// 2. Applies user preferences (formats, bitrate minimums)
+    /// 3. Ranks results using forensic metadata validation
+    /// 4. Returns SINGLE best match (not 50 options - paralysis of choice)
+    /// 
+    /// PHILOSOPHY:
+    /// "Smart defaults, user overrides" - respect per-track overrides (PreferredFormats)
+    /// "Trust but verify" - use forensics to filter fakes before presenting to user
+    /// </summary>
+    public async Task<DiscoveryResult> FindBestMatchAsync(PlaylistTrack track, CancellationToken ct, HashSet<string>? blacklistedUsers = null, string? correlationId = null)
+    {
+        var operationCorrelationId = string.IsNullOrWhiteSpace(correlationId)
+            ? Guid.NewGuid().ToString("N")
+            : correlationId;
+
+        await AcquireDiscoveryLaneAsync(ct);
+        try
+        {
+        if (string.IsNullOrWhiteSpace(track.TrackUniqueHash))
+        {
+            track.TrackUniqueHash = track.Id.ToString("N");
+        }
+        var trackHash = track.TrackUniqueHash;
+        _auditLogger.Log(trackHash, $"[Search] Initiating discovery flow for track: {track.Artist} - {track.Title} | Correlation ID: {operationCorrelationId}");
+
+        // Social: a peer who already successfully delivered this exact track before is a proven
+        // source — look this up once per discovery call (not per-candidate) and use it as a
+        // ranking bonus in EvaluatePendingCandidatesAsync below.
+        string? knownGoodPeer = null;
+        try
+        {
+            knownGoodPeer = await _databaseService.GetLastSuccessfulPeerForTrackAsync(trackHash);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to look up known-good peer for track {TrackHash}", trackHash);
+        }
+
+        // Fast path: a peer with a proven track record on this exact file is worth a quick,
+        // targeted SearchScope.User probe before paying for the full tiered network cascade.
+        // Any miss (offline, no longer sharing it, low-confidence match) falls through unchanged.
+        if (!string.IsNullOrWhiteSpace(knownGoodPeer))
+        {
+            var targetedResult = await TryTargetedKnownGoodPeerSearchAsync(track, knownGoodPeer!, ct);
+            if (targetedResult?.BestMatch != null)
+            {
+                _auditLogger.Log(trackHash, $"[Search] SUCCESS (Targeted): Known-good-peer match found without full network search. Peer: {targetedResult.BestMatch.Username} | Score: {targetedResult.BestMatch.CurrentRank:F1}/100 | File: {targetedResult.BestMatch.Filename}");
+                return targetedResult;
+            }
+        }
+
+        // Global discovery timeout: if all tiers combined take > 90s, abort cleanly. Not every peer
+        // is on the same continent — a query needs real time to propagate and for a distant/slower
+        // peer to respond before this cascade gives up and calls it "not found". Previously 45s
+        // (itself reduced from an original 120s for perceived slowness), which left barely enough
+        // room for all 3 tiers to each get a fair search window; confirmed live via a same-day
+        // failure scan that several "Aggressive" tier searches were being cut off by this cap
+        // before they'd had time to hear back from the network at all.
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(90));
+        var timedCt = timeoutCts.Token;
+
+        var tiers = _autoCleaner.Clean($"{track.Artist} - {track.Title}");
+        var log = new SearchAttemptLog { CorrelationId = operationCorrelationId };
+        var allowMp3Fallback = IsMp3FallbackAllowed(track);
+        var globalSeenCandidates = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+        
+        // Phase 3D: Integrated Fallback - try lossless tiers first, then a single MP3 fallback if needed
+        var queryTiers = new[] { tiers.Dirty, tiers.Smart, tiers.Aggressive };
+        var tierNames = new[] { "Dirty", "Smart", "Aggressive" };
+
+        try
+        {
+            // Pass 1: Gold Standard (Lossless)
+            for (int i = 0; i < queryTiers.Length; i++)
+            {
+                var query = queryTiers[i];
+                if (string.IsNullOrEmpty(query)) continue;
+
+                // Phase 26: Protocol Hardening - Double Sanitization
+                var hardenedQuery = _hardeningService.NormalizeSearchQuery(query);
+                if (hardenedQuery == null) continue;
+
+                if (!string.Equals(hardenedQuery, query, StringComparison.Ordinal))
+                {
+                    track.SourceProvenance = "ShieldSanitized";
+                }
+
+                // Hyper-Drive: Hedged Search
+                // Run first FLAC lane and a delayed MP3 hedge in parallel.
+                // Winner is whichever produces an acceptable match first.
+                if (i == 0 && _config.EnableHedgedSearch && allowMp3Fallback && track.Status != TrackStatus.OnHold)
+                {
+                    var flacLog = new SearchAttemptLog();
+                    var hedgeLog = new SearchAttemptLog();
+
+                    // Pre-harden the hedge query through the Shield before any network use.
+                    var hedgeRawQuery = tiers.Smart;
+                    var hardenedHedgeQuery = _hardeningService.NormalizeSearchQuery(hedgeRawQuery);
+
+                    using var hedgeCts = CancellationTokenSource.CreateLinkedTokenSource(timedCt);
+                    var flacTask = PerformSearchTierAsync(track, hardenedQuery, tierNames[i], timedCt, blacklistedUsers, flacLog, operationCorrelationId, globalSeenCandidates, forceMp3: false, knownGoodPeer: knownGoodPeer);
+                    var hedgeTask = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await Task.Delay(TimeSpan.FromSeconds(Math.Max(3, _config.HedgedSearchDelaySeconds)), hedgeCts.Token);
+                            _eventBus.Publish(new Events.TrackDetailedStatusEvent(track.TrackUniqueHash, "⚡ Hedge activated: launching MP3 lane in parallel.", false, operationCorrelationId));
+                            if (hardenedHedgeQuery == null)
+                            {
+                                // Banned phrase in hedge query — skip rather than abort the whole search
+                                _logger.LogWarning("[MP3-Hedge] Shield blocked hedge query for {Title} — skipping hedge.", track.Title);
+                                return new DiscoveryResult(null, hedgeLog);
+                            }
+                            _logger.LogInformation("[TIER MP3-Hedge] MP3 search: '{Query}' for {Title}", hardenedHedgeQuery, track.Title);
+                            return await PerformSearchTierAsync(track, hardenedHedgeQuery, "MP3-Hedge", hedgeCts.Token, blacklistedUsers, hedgeLog, operationCorrelationId, globalSeenCandidates, forceMp3: true, knownGoodPeer: knownGoodPeer);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            return new DiscoveryResult(null, hedgeLog);
+                        }
+                    }, hedgeCts.Token);
+
+                    var flacResult = await flacTask;
+                    var hedgeResult = await hedgeTask;
+
+                    MergeAttemptLog(log, flacLog);
+                    MergeAttemptLog(log, hedgeLog);
+
+                    var hedgedWinner = SelectPreferredResult(flacResult, hedgeResult);
+                    if (hedgedWinner.BestMatch != null)
+                    {
+                        _auditLogger.Log(trackHash, $"[Search] SUCCESS (Hedged): Found best match. Peer: {hedgedWinner.BestMatch.Username} | Score: {hedgedWinner.BestMatch.CurrentRank:F1}/100 | Format: {hedgedWinner.BestMatch.Format} | Bitrate: {hedgedWinner.BestMatch.Bitrate}kbps | File: {hedgedWinner.BestMatch.Filename}");
+                        return hedgedWinner;
+                    }
+
+                    if (timedCt.IsCancellationRequested) break;
+                    continue;
+                }
+
+                _logger.LogInformation("Discovery Tier {Tier} (Lossless) for: {Query}", tierNames[i], hardenedQuery);
+                var result = await PerformSearchTierAsync(track, hardenedQuery, tierNames[i], timedCt, blacklistedUsers, log, operationCorrelationId, globalSeenCandidates, forceMp3: false, knownGoodPeer: knownGoodPeer);
+
+                if (result.BestMatch != null)
+                {
+                    _auditLogger.Log(trackHash, $"[Search] SUCCESS: Found best match in tier {tierNames[i]}. Peer: {result.BestMatch.Username} | Score: {result.BestMatch.CurrentRank:F1}/100 | Format: {result.BestMatch.Format} | Bitrate: {result.BestMatch.Bitrate}kbps | File: {result.BestMatch.Filename}");
+                    return result;
+                }
+                if (timedCt.IsCancellationRequested) break;
+                
+                // PERFORMANCE Optimization: If FIRST tier (Dirty) finds absolutely ZERO results, 
+                // and it's a very specific query, we might want to skip directly to MP3 if configured.
+                // But for "Pure", we'll stick to the plan: pivot after lossless fails.
+            }
+
+            // Phase 3D: High-Efficiency Fallback
+            // If we found NOTHING in FLAC and we are not already strictly searching for MP3 (OnHold),
+            // perform one last "Safety Tier" with MP3 within the same discovery session.
+            if (allowMp3Fallback && track.Status != TrackStatus.OnHold && !timedCt.IsCancellationRequested)
+            {
+                _logger.LogInformation("🥈 Lossless discovery yielded no matches. Triggering integrated MP3 Fallback Pass for: {Title}", track.Title);
+                _eventBus.Publish(new Events.TrackDetailedStatusEvent(track.TrackUniqueHash, "🥈 Lossless tiers failed. Trying MP3 fallback...", false, operationCorrelationId));
+
+                // Use the Aggressive tier for the MP3 fallback so it tries a different query vector
+                // than the Smart MP3 hedge that already ran alongside the Dirty FLAC search.
+                var fallbackRawQuery = tiers.Aggressive;
+                var hardenedFallbackQuery = _hardeningService.NormalizeSearchQuery(fallbackRawQuery);
+                if (hardenedFallbackQuery == null)
+                {
+                    _logger.LogWarning("[MP3-Fallback] Shield blocked fallback query for {Title} — skipping fallback.", track.Title);
+                }
+                else
+                {
+                    _logger.LogInformation("[TIER MP3-Fallback] MP3 search: '{Query}' for {Title}", hardenedFallbackQuery, track.Title);
+                    var fallbackResult = await PerformSearchTierAsync(track, hardenedFallbackQuery, "MP3-Fallback", timedCt, blacklistedUsers, log, operationCorrelationId, globalSeenCandidates, forceMp3: true, knownGoodPeer: knownGoodPeer);
+                    if (fallbackResult.BestMatch != null)
+                    {
+                        _logger.LogInformation("✅ MP3 Fallback SUCCESS for {Title}.", track.Title);
+                        _auditLogger.Log(trackHash, $"[Search] SUCCESS (Fallback): Found best match in MP3 fallback. Peer: {fallbackResult.BestMatch.Username} | Score: {fallbackResult.BestMatch.CurrentRank:F1}/100 | Format: {fallbackResult.BestMatch.Format} | Bitrate: {fallbackResult.BestMatch.Bitrate}kbps | File: {fallbackResult.BestMatch.Filename}");
+                        return fallbackResult;
+                    }
+                }
+            }
+            else if (!allowMp3Fallback && !timedCt.IsCancellationRequested)
+            {
+                _logger.LogInformation("🛡️ MP3 fallback disabled by active profile for {Title}; staying in lossless-only discovery.", track.Title);
+                _eventBus.Publish(new Events.TrackDetailedStatusEvent(track.TrackUniqueHash, "🛡️ MP3 fallback disabled by active profile. Staying lossless-only.", false, operationCorrelationId));
+            }
+        }
+        catch (DiscoveryConnectionUnavailableException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            _logger.LogWarning("⏱️ Discovery TIMEOUT for {Title}.", track.Title);
+            _eventBus.Publish(new Events.TrackDetailedStatusEvent(track.TrackUniqueHash, "⏱️ Search timed out.", false, operationCorrelationId));
+            log.TimedOut = true;
+        }
+
+        _auditLogger.Log(trackHash, $"[Search] FAILURE: No suitable candidate found after searching all available tiers." + (log.TimedOut ? " (Search timed out)" : ""), isError: true);
+        return new DiscoveryResult(null, log);
+        }
+        finally
+        {
+            ReleaseDiscoveryLane();
+        }
+    }
+
+    private async Task<DiscoveryResult?> TryTargetedKnownGoodPeerSearchAsync(PlaylistTrack track, string knownGoodPeer, CancellationToken ct)
+    {
+        try
+        {
+            var query = _hardeningService.NormalizeSearchQuery($"{track.Artist} {track.Title}".Trim());
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return null;
+            }
+
+            var formatsList = !string.IsNullOrEmpty(track.PreferredFormats)
+                ? track.PreferredFormats.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList()
+                : _config.PreferredFormats?.ToList() ?? new List<string> { "flac" };
+            if (!formatsList.Any())
+            {
+                formatsList.Add("flac");
+            }
+
+            var minBitrate = track.MinBitrateOverride ?? _config.PreferredMinBitrate;
+            var candidates = await _searchOrchestrator.SearchUserForTrackAsync(
+                knownGoodPeer, query, formatsList, (minBitrate, null), timeoutMs: 6000, ct);
+
+            if (candidates.Count == 0)
+            {
+                return null;
+            }
+
+            var targetMetadata = new InputParsers.TargetMetadata(
+                track.Artist,
+                track.Title,
+                track.Album,
+                track.CanonicalDuration.HasValue ? Math.Max(0, track.CanonicalDuration.Value / 1000) : null);
+            var allowLossy = formatsList.Contains("mp3", StringComparer.OrdinalIgnoreCase);
+
+            Track? best = null;
+            double bestFitScore = 0;
+            foreach (var candidate in candidates)
+            {
+                _safetyFilter.EvaluateSafety(candidate, query, allowLossy, _config.SearchPolicy);
+                if (candidate.IsFlagged)
+                {
+                    continue;
+                }
+
+                var fitScore = SearchCandidateFitScorer.CalculateScore(candidate, targetMetadata, formatsList, minBitrate, _config.SearchLengthToleranceSeconds);
+                if (best == null || fitScore > bestFitScore)
+                {
+                    best = candidate;
+                    bestFitScore = fitScore;
+                }
+            }
+
+            // High confidence bar: this is a shortcut around the full cascade, so only take it
+            // when the fit is strong. Anything softer falls through to the normal tiered search.
+            if (best == null || bestFitScore < 75)
+            {
+                return null;
+            }
+
+            var reliability = _peerReliability.GetReliabilityScore(best.Username);
+            best.CurrentRank = SearchCandidateRankingPolicy.CalculateFinalScore(
+                matchScore: 90,
+                fitScore: bestFitScore,
+                reliability: reliability,
+                queueLength: Math.Max(0, best.QueueLength),
+                hasFreeUploadSlot: best.HasFreeUploadSlot,
+                isKnownGoodPeerForTrack: true);
+            best.MatchReason = "Known-good-peer targeted search (SearchScope.User)";
+
+            return new DiscoveryResult(best, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Targeted known-good-peer search failed for {TrackHash}; falling back to full discovery.", track.TrackUniqueHash);
+            return null;
+        }
+    }
+
+    private async Task AcquireDiscoveryLaneAsync(CancellationToken ct)
+    {
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            TuneLaneLimitIfNeeded();
+
+            var laneLimit = Volatile.Read(ref _currentLaneLimit);
+            var active = Interlocked.Increment(ref _activeDiscoveryLanes);
+            if (active <= laneLimit)
+            {
+                _eventBus.Publish(new AdaptiveLaneStatusEvent(laneLimit, active, "Lane acquired"));
+                return;
+            }
+
+            Interlocked.Decrement(ref _activeDiscoveryLanes);
+            await Task.Delay(75, ct);
+        }
+    }
+
+    private void ReleaseDiscoveryLane()
+    {
+        var remaining = Interlocked.Decrement(ref _activeDiscoveryLanes);
+        if (remaining < 0)
+        {
+            Interlocked.Exchange(ref _activeDiscoveryLanes, 0);
+            remaining = 0;
+        }
+
+        _eventBus.Publish(new AdaptiveLaneStatusEvent(Volatile.Read(ref _currentLaneLimit), remaining, "Lane released"));
+    }
+
+    private void TuneLaneLimitIfNeeded()
+    {
+        if (!_config.EnableAdaptiveLanes)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        if (now < _nextLaneTuneAtUtc)
+        {
+            return;
+        }
+
+        _nextLaneTuneAtUtc = now.AddSeconds(10);
+
+        var signal = _healthService.GetCurrentHealth();
+        var counters = _healthService.GetReliabilityCounters();
+        var current = Volatile.Read(ref _currentLaneLimit);
+        var next = AdaptiveLaneTuner.ComputeNextLaneLimit(_config, signal, counters, current);
+
+        if (next != current)
+        {
+            Volatile.Write(ref _currentLaneLimit, next);
+            var reason = BuildAdaptiveReason(signal, counters);
+            _logger.LogInformation(
+                "Adaptive discovery lanes tuned {Previous}->{Next} (Healthy={Healthy}, Throttle={Throttle}, Ban={Ban}, Timeouts={Timeouts}, Kicks={Kicks})",
+                current,
+                next,
+                signal.IsHealthy,
+                signal.ThrottleStatus,
+                signal.BanStatus,
+                signal.RecentTimeoutCount,
+                counters.KickedEventCount);
+            _eventBus.Publish(new AdaptiveLaneStatusEvent(next, Volatile.Read(ref _activeDiscoveryLanes), reason));
+        }
+    }
+
+    private static string BuildAdaptiveReason(NetworkHealthSignal signal, NetworkReliabilityCounters counters)
+    {
+        if (!signal.IsConnected)
+            return "Disconnected; reducing lanes";
+
+        if (signal.BanStatus != BanStatus.None || counters.KickedEventCount > 0)
+            return "Kick/ban risk detected; reducing lanes";
+
+        if (signal.ThrottleStatus == ThrottleStatus.Confirmed)
+            return "Confirmed throttle; reducing lanes";
+
+        if (signal.ThrottleStatus == ThrottleStatus.Suspected)
+            return "Suspected throttle; lowering pressure";
+
+        if (signal.IsHealthy)
+            return "Healthy network; increasing lanes";
+
+        return "Network degraded; tuning lanes conservatively";
+    }
+
+    private async Task<DiscoveryResult> PerformSearchTierAsync(PlaylistTrack track, string query, string tierName, CancellationToken ct, HashSet<string>? blacklistedUsers, SearchAttemptLog log, string correlationId, ConcurrentDictionary<string, byte> globalSeenCandidates, bool forceMp3 = false, string? knownGoodPeer = null)
+    {
+        void PublishStatus(string message, bool isError = false)
+            => _eventBus.Publish(new Events.TrackDetailedStatusEvent(track.TrackUniqueHash, message, isError, correlationId));
+
+        // Beta 2026: Per-tier CTS — cancels the underlying search stream the moment a
+        // golden match is found, freeing the lane for the next playlist track immediately.
+        using var tierCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        try
+        {
+            if (!_searchOrchestrator.IsConnected)
+            {
+                // Connection check inside tier as well (redundant but safe)
+                if (!await WaitForConnectionAsync(ct))
+                {
+                    throw new DiscoveryConnectionUnavailableException("Soulseek connection unavailable during discovery tier.");
+                }
+            }
+            var allowMp3Fallback = IsMp3FallbackAllowed(track);
+            // 1. Configure preferences (Respect per-track overrides)
+            // Phase 21: FLAC-First Policy. If OnHold OR forceMp3, we ONLY want MP3.
+            List<string> formatsList;
+            if ((track.Status == TrackStatus.OnHold || forceMp3) && allowMp3Fallback)
+            {
+                formatsList = new List<string> { "mp3" };
+                _logger.LogInformation("🛠️ MP3 Mode: Searching strictly for MP3 fallback for {Title} (Reason: {Reason})", 
+                    track.Title, forceMp3 ? "Integrated Fallback" : "OnHold Status");
+            }
+            else
+            {
+                // Strict Gold Standard: Lossless only
+                formatsList = !string.IsNullOrEmpty(track.PreferredFormats)
+                    ? track.PreferredFormats.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList()
+                    : _config.PreferredFormats ?? new List<string> { "flac" };
+                
+                // If it's not OnHold, we strictly want FLAC or other lossless formats.
+                // We remove MP3 to prevent early fallback.
+                if (formatsList.Contains("mp3"))
+                {
+                    _logger.LogInformation("🧠 BRAIN: Removing MP3 from search tiers to enforce Gold Standard (FLAC) for {Title}.", track.Title);
+                    formatsList.Remove("mp3");
+                }
+                
+                // Ensure flac is first if not specified otherwise
+                if (!formatsList.Contains("flac"))
+                {
+                    formatsList.Insert(0, "flac");
+                }
+                
+                // Check if any formats remain. If not, default to flac.
+                if (!formatsList.Any())
+                {
+                    formatsList.Add("flac");
+                }
+
+                if ((track.Status == TrackStatus.OnHold || forceMp3) && !allowMp3Fallback)
+                {
+                    _logger.LogInformation("🛡️ Ignoring MP3 lane request for {Title} because active formats do not allow mp3.", track.Title);
+                }
+            }
+            
+            var preferredFormats = string.Join(",", formatsList.Distinct());
+            var minBitrate = track.MinBitrateOverride ?? _config.PreferredMinBitrate;
+            var useFastLane = forceMp3 ||
+                              track.Status == TrackStatus.OnHold ||
+                              track.Priority >= 10 ||
+                              (_config.SearchPolicy?.PreferSpeedOverQuality ?? false);
+
+            var formatSource = !string.IsNullOrWhiteSpace(track.PreferredFormats)
+                ? "track-override"
+                : "config-default";
+
+            _logger.LogInformation(
+                "[DISCOVERY FILTER] {Artist} - {Title}: formats={Formats} (source={Source}), minBitrate={MinBitrate}, forceMp3={ForceMp3}, status={Status}",
+                track.Artist,
+                track.Title,
+                preferredFormats,
+                formatSource,
+                minBitrate,
+                forceMp3,
+                track.Status);
+            
+            // Network-side quality gate for lossless lanes: raise the floor to 320 kbps so the
+            // Soulseek protocol rejects obvious low-quality garbage at the source.
+            // The previous hard floor of 701 kbps was too aggressive — it rejected legitimate
+            // 16-bit/44.1 kHz FLAC files that report 500–700 kbps. The app-level transcode
+            // guard (Bitrate < 400 kbps → rejected) is the real anti-transcode safeguard.
+            if (!forceMp3 && formatsList.Contains("flac", StringComparer.OrdinalIgnoreCase))
+            {
+                minBitrate = Math.Max(minBitrate, 320);
+            }
+
+            // null = no upper limit. Explicit 0 was previously used but printed as "320-0" in logs,
+            // making it look like a misconfigured range. Using null is semantically correct and
+            // produces "320-∞" in the search-started log instead.
+            int maxBitrate = forceMp3 ? 320 : 0; // 320 caps MP3 hedge/fallback; 0 = unlimited for FLAC lanes
+
+            // 2. Perform Search via Orchestrator
+            // Use streaming, but since we need the 'best' match from the entire set,
+            // we probably need to wait a bit or collect a decent buffer.
+            // "The Seeker" fundamentally wants the BEST match, which implies seeing most options.
+            // However, since results are ranked on-the-fly, if we trust the ranking, we might find good chunks.
+            // But 'OverallScore' is relative? No, it's absolute calculation in ResultSorter now.
+            
+            var trackHash = track.TrackUniqueHash; // Alias used throughout for audit logger calls
+            var allTracks = new List<Track>();
+            var searchStartTime = DateTime.UtcNow;
+            Track? bestSilverMatch = null;
+            double bestSilverScore = 0;
+            Track? runnerUpSilverMatch = null;
+            double runnerUpSilverScore = 0;
+            var pendingCandidates = new List<Track>(8);
+            // Speculative trigger: fire only after enough time to collect a meaningful candidate set.
+            // Old clamp (3–8 s) was too aggressive — accept a silver score after just 3 s is too soon.
+            // Aligned to the brain buffer floor: half of SearchTimeout is a reasonable speculative window.
+            var minSearchDurationSeconds = Math.Clamp(_config.MinSearchDurationSeconds / 2, 6, 15);
+            var matchOptions = forceMp3
+                ? SearchResultMatcher.MatchOptions.LossyFallback(Math.Max(0, _config.SearchLengthToleranceSeconds))
+                : SearchResultMatcher.MatchOptions.StrictLossless(Math.Max(0, _config.SearchLengthToleranceSeconds));
+            var targetMetadata = new InputParsers.TargetMetadata(
+                track.Artist,
+                track.Title,
+                track.Album,
+                track.CanonicalDuration.HasValue ? Math.Max(0, track.CanonicalDuration.Value / 1000) : null);
+
+            void UpdateTopSilverCandidates(Track candidate, double score)
+            {
+                if (bestSilverMatch == null || score > bestSilverScore)
+                {
+                    runnerUpSilverMatch = bestSilverMatch;
+                    runnerUpSilverScore = bestSilverScore;
+                    bestSilverMatch = candidate;
+                    bestSilverScore = score;
+                    return;
+                }
+
+                if (runnerUpSilverMatch == null || score > runnerUpSilverScore)
+                {
+                    runnerUpSilverMatch = candidate;
+                    runnerUpSilverScore = score;
+                }
+            }
+
+            async Task<DiscoveryResult?> EvaluatePendingCandidatesAsync()
+            {
+                if (!pendingCandidates.Any())
+                {
+                    return null;
+                }
+
+                var batch = pendingCandidates.ToList();
+                pendingCandidates.Clear();
+
+                // CalculateMatchResult is cheap, bounded, purely synchronous scoring (format/
+                // duration checks, string similarity on short artist/title strings) — spinning up
+                // one Task.Run per candidate in an 8-ish item batch added real thread-pool queuing
+                // overhead (worse under heavy concurrent search load, many tracks doing this same
+                // pattern at once) for work that finishes faster than the scheduling itself.
+                ct.ThrowIfCancellationRequested();
+                var scoredBatch = batch.Select(candidate =>
+                {
+                    var localResult = _matcher.CalculateMatchResult(track, candidate, matchOptions);
+                    return (Candidate: candidate, Result: localResult, Score: localResult.Score);
+                }).ToArray();
+
+                foreach (var scored in scoredBatch.OrderByDescending(x => x.Score))
+                {
+                    var searchTrack = scored.Candidate;
+                    var matchResult = scored.Result;
+                    var reliability = _peerReliability.GetReliabilityScore(searchTrack.Username);
+                    var queueLength = Math.Max(0, searchTrack.QueueLength);
+                    var fitScore = SearchCandidateFitScorer.CalculateScore(
+                        searchTrack,
+                        targetMetadata,
+                        formatsList,
+                        minBitrate,
+                        _config.SearchLengthToleranceSeconds);
+                    var score = SearchCandidateRankingPolicy.CalculateFinalScore(
+                        scored.Score,
+                        fitScore,
+                        reliability,
+                        queueLength,
+                        hasFreeUploadSlot: searchTrack.HasFreeUploadSlot,
+                        isKnownGoodPeerForTrack: knownGoodPeer != null &&
+                            string.Equals(searchTrack.Username, knownGoodPeer, StringComparison.OrdinalIgnoreCase));
+                    EnsureBlendTelemetryMetadata(searchTrack, scored.Score, fitScore, reliability, score);
+
+                    searchTrack.ScoreBreakdown = BuildCompositeScoreBreakdown(
+                        matchResult.ScoreBreakdown,
+                        scored.Score,
+                        fitScore,
+                        reliability,
+                        queueLength,
+                        score);
+                    searchTrack.CurrentRank = score;
+                    searchTrack.MatchReason = BuildDiscoveryReason(searchTrack, matchResult.ScoreBreakdown, useFastLane, queueLength);
+
+                    var isGoldenCriteria = !forceMp3 &&
+                                           string.Equals(searchTrack.Format, "flac", StringComparison.OrdinalIgnoreCase) &&
+                                           searchTrack.Bitrate > 700 &&
+                                           score >= 85;
+
+                    // Workstation 2026: first-past-the-post quality gate.
+                    // As soon as a verified FLAC 500kbps+ candidate appears, we stop this lane early.
+                    if (isGoldenCriteria)
+                    {
+                        _logger.LogInformation("🏁 GOLDEN CRITERIA hit ({Score}/100): {File} [{Bitrate}kbps {Format}] - ending tier early.",
+                            score, searchTrack.Filename, searchTrack.Bitrate, searchTrack.Format);
+                        _auditLogger.LogSearchCandidate(trackHash, searchTrack.Username, searchTrack.Bitrate, searchTrack.Format, "ACCEPTED", $"Golden match early exit (Score: {score:F1}/100) | File: {searchTrack.Filename} | Breakdown: {searchTrack.ScoreBreakdown}");
+
+                        PublishStatus($"🏁 Golden match: {searchTrack.Username} ({searchTrack.Bitrate}kbps FLAC).");
+
+                        if (_config.EnableGoldenEarlyExit)
+                        {
+                            // Optional fast path. Disabled by default to preserve full stream coverage.
+                            tierCts.Cancel();
+                            return new DiscoveryResult(searchTrack, log, runnerUpSilverMatch);
+                        }
+                    }
+
+                    var fastLaneWinner = useFastLane &&
+                                         queueLength <= ScoringConstants.Availability.FastLaneMaxQueue &&
+                                         (searchTrack.HasFreeUploadSlot || queueLength == 0) &&
+                                         score >= ScoringConstants.Availability.FastLaneMinMatchScore &&
+                                         (string.Equals(searchTrack.Format, "flac", StringComparison.OrdinalIgnoreCase) ||
+                                          searchTrack.Bitrate >= Math.Max(minBitrate, ScoringConstants.Availability.FastLaneMinBitrate));
+
+                    if (fastLaneWinner)
+                    {
+                        _logger.LogInformation(
+                            "⚡ FAST LANE: Accepting idle-peer winner ({Score}/100): {File} [{Bitrate}kbps {Format}] queue={QueueLength}",
+                            score,
+                            searchTrack.Filename,
+                            searchTrack.Bitrate,
+                            searchTrack.Format,
+                            queueLength);
+                        _auditLogger.LogSearchCandidate(trackHash, searchTrack.Username, searchTrack.Bitrate, searchTrack.Format, "ACCEPTED", $"Fast lane idle-peer winner (Score: {score:F1}/100, Queue: {queueLength}) | File: {searchTrack.Filename} | Breakdown: {searchTrack.ScoreBreakdown}");
+
+                        PublishStatus($"⚡ Fast lane winner: {searchTrack.Username} ({searchTrack.Bitrate}kbps, queue {queueLength}).");
+
+                        if (_config.EnableFastLaneEarlyExit)
+                        {
+                            tierCts.Cancel();
+                            return new DiscoveryResult(searchTrack, log, runnerUpSilverMatch);
+                        }
+                    }
+
+                    if (score > 95)
+                    {
+                        _logger.LogInformation("🚀 QUICK STRIKE: Found high-confidence match ({Score}/100) early! Skipping rest of search. File: {File}",
+                            score, searchTrack.Filename);
+                        _auditLogger.LogSearchCandidate(trackHash, searchTrack.Username, searchTrack.Bitrate, searchTrack.Format, "ACCEPTED", $"Quick strike early exit (Score: {score:F1}/100) | File: {searchTrack.Filename} | Breakdown: {searchTrack.ScoreBreakdown}");
+
+                        PublishStatus($"🚀 Found high-confidence match from {searchTrack.Username} ({score:F0}/100)");
+
+                        if (_config.EnableQuickStrikeEarlyExit)
+                        {
+                            return new DiscoveryResult(searchTrack, log, runnerUpSilverMatch);
+                        }
+                    }
+
+                    if (score > 85) // Raised threshold from 70 to 85 — avoid marginal matches
+                    {
+                        UpdateTopSilverCandidates(searchTrack, score);
+                    }
+                    else
+                    {
+                        if (allTracks.Count < 100)
+                        {
+                            if (matchResult.ShortReason?.StartsWith("Duration") == true) log.RejectedByQuality++;
+                            else if (matchResult.ShortReason?.Contains("Low Score") == true) log.RejectedByQuality++;
+                        }
+                    }
+
+                    if (score < 40 && allTracks.Count < 30)
+                    {
+                        PublishStatus($"Rejected {searchTrack.Username}: {matchResult.ShortReason}", true);
+                    }
+
+                    allTracks.Add(searchTrack);
+                    // ScoreBreakdown is the actual per-component math (Duration/Artist/Title/
+                    // Format/Bitrate/Context points, then the Match/Fit/Reliability/Queue blend
+                    // that produces the final score above) — MatchReason alone is just a short
+                    // human summary of it, not enough to tell whether a given score is a scoring
+                    // bug or a genuinely weak/wrong candidate without this.
+                    _auditLogger.LogSearchCandidate(trackHash, searchTrack.Username, searchTrack.Bitrate, searchTrack.Format, "EVALUATED", $"Score: {score:F1}/100, Queue: {queueLength} | File: {searchTrack.Filename} | Reason: {searchTrack.MatchReason} | Breakdown: {searchTrack.ScoreBreakdown}");
+                }
+
+                return null;
+            }
+
+            _logger.LogInformation("[TIER {TierName}] {Mode} lane starting — query: '{Query}' | formats: {Formats} | bitrate: {MinBitrate}-{MaxBitrate}",
+                tierName,
+                forceMp3 ? "MP3" : "FLAC",
+                query,
+                preferredFormats,
+                minBitrate,
+                maxBitrate == 0 ? "∞" : maxBitrate.ToString());
+            _auditLogger.Log(trackHash, $"[Search] Starting search tier '{tierName}' | Mode: {(forceMp3 ? "MP3" : "FLAC")} | Query: '{query}' | Formats: {preferredFormats} | Bitrate: {minBitrate}-{maxBitrate}");
+
+            if (useFastLane)
+            {
+                _logger.LogInformation("[TIER {TierName}] Fast lane active for {Title} (priority {Priority}, status {Status}, forceMp3={ForceMp3})",
+                    tierName,
+                    track.Title,
+                    track.Priority,
+                    track.Status,
+                    forceMp3);
+                PublishStatus("⚡ Fast lane active: preferring idle peers that meet minimum quality.");
+            }
+
+            // Consume the stream
+            await foreach (Track searchTrack in _searchOrchestrator.SearchAsync(
+                track,
+                query,
+                preferredFormats,
+                minBitrate,
+                maxBitrate,
+                isAlbumSearch: false,
+                fastClearance: useFastLane,
+                cancellationToken: tierCts.Token))  // Beta 2026: use tierCts so golden hit cancels stream
+            {
+                log.ResultsCount++;
+
+                // Phase 3B: Peer Blacklisting
+                if (blacklistedUsers != null && 
+                    !string.IsNullOrEmpty(searchTrack.Username) && 
+                    blacklistedUsers.Contains(searchTrack.Username))
+                {
+                    log.RejectedByBlacklist++;
+                    PublishStatus($"Skipping peer {searchTrack.Username} (Blacklisted)", true);
+                    _auditLogger.LogSearchCandidate(trackHash, searchTrack.Username, searchTrack.Bitrate, searchTrack.Format, "REJECTED", $"User is blacklisted. Filename: {searchTrack.Filename}");
+                    // Phase 6: Security audit trail
+                    _eventBus.Publish(new SecurityAuditEvent(
+                        Category: SecurityAuditCategory.Blacklist,
+                        Severity: SecurityAuditSeverity.Block,
+                        Summary: $"Blocked peer: {searchTrack.Username}",
+                        Detail: $"Peer is on the blacklist. File: {searchTrack.Filename}",
+                        AssociatedHash: track.TrackUniqueHash));
+                    continue;
+                }
+
+                // De-duplicate candidates across all lanes (lossless, hedge, and fallback)
+                // within one discovery operation so ranking is based on unique network options.
+                var globalCandidateKey = BuildGlobalCandidateKey(searchTrack);
+                if (!globalSeenCandidates.TryAdd(globalCandidateKey, 0))
+                {
+                    _auditLogger.LogSearchCandidate(trackHash, searchTrack.Username, searchTrack.Bitrate, searchTrack.Format, "IGNORED", $"Duplicate candidate. Filename: {searchTrack.Filename}");
+                    continue;
+                }
+
+                // Phase 14: Forensic Gatekeeping (The Bouncer)
+                // Audit Trail: Log why we rejected this candidate
+                var targetDurationSeconds = track.CanonicalDuration.HasValue ? track.CanonicalDuration.Value / 1000 : (int?)null;
+                var safety = _safetyFilter.EvaluateCandidate(searchTrack, query, targetDurationSeconds, allowLossy: forceMp3, policy: _config.SearchPolicy);
+                
+                // Track entity usually has Length in seconds. PlaylistTrack has CanonicalDuration (ms) or Duration (ms). 
+                // Let's check what PlaylistTrack has. It has 'Duration' (Timespan?) or 'CanonicalDuration'.
+                // Checking previous context or assuming standard int duration.
+                // PlaylistTrack likely has 'CanonicalDuration' (int? ms).
+                // Let's check strict validation below.
+                
+                if (!safety.IsSafe && !track.IgnoreSafetyGuards)
+                {
+                    log.RejectedByForensics++;
+                    // Log the rejection to the persistent audit trail
+                    PublishStatus($"Rejected {searchTrack.Username}: {safety.Reason}", true);
+                    _auditLogger.LogSearchCandidate(trackHash, searchTrack.Username, searchTrack.Bitrate, searchTrack.Format, "REJECTED", $"{safety.Reason} ({safety.TechnicalDetails}) | Filename: {searchTrack.Filename}");
+                    // Phase 6: Security audit trail
+                    _eventBus.Publish(new SecurityAuditEvent(
+                        Category: SecurityAuditCategory.Gate,
+                        Severity: SecurityAuditSeverity.Block,
+                        Summary: $"Gate blocked: {safety.Reason}",
+                        Detail: $"Peer: {searchTrack.Username} | {safety.TechnicalDetails ?? $"Bitrate: {searchTrack.Bitrate}kbps"}",
+                        AssociatedHash: track.TrackUniqueHash));
+                    continue;
+                }
+
+                if (!forceMp3 && !track.IgnoreSafetyGuards && (searchTrack.Format == "flac" && searchTrack.Bitrate < 400))
+                {
+                    log.RejectedByForensics++;
+                    var suspiciousReason = "Suspicious FLAC transcode detected (Low bitrate).";
+                    PublishStatus($"Skipped {searchTrack.Username}: {suspiciousReason}", true);
+                    _auditLogger.LogSearchCandidate(trackHash, searchTrack.Username, searchTrack.Bitrate, searchTrack.Format, "REJECTED", $"{suspiciousReason} | Bitrate: {searchTrack.Bitrate}kbps | Filename: {searchTrack.Filename}");
+                    // Phase 6: Security audit trail
+                    _eventBus.Publish(new SecurityAuditEvent(
+                        Category: SecurityAuditCategory.ForensicLab,
+                        Severity: SecurityAuditSeverity.Block,
+                        Summary: $"Fake FLAC blocked: {suspiciousReason}",
+                        Detail: $"Peer: {searchTrack.Username} | {searchTrack.Bitrate}kbps | {searchTrack.Filename}",
+                        AssociatedHash: track.TrackUniqueHash));
+                    continue;
+                }
+
+                _peerReliability.RecordSearchCandidate(searchTrack.Username);
+
+                pendingCandidates.Add(searchTrack);
+
+                // Aggressive Bulk Matching: score candidates in parallel by batch.
+                if (pendingCandidates.Count >= 8)
+                {
+                    var quickResult = await EvaluatePendingCandidatesAsync();
+                    if (quickResult != null) return quickResult;
+                }
+
+                // Check speculative timeout (configured min search duration)
+                if ((DateTime.UtcNow - searchStartTime).TotalSeconds > minSearchDurationSeconds)
+                {
+                    var flushResult = await EvaluatePendingCandidatesAsync();
+                    if (flushResult != null) return flushResult;
+
+                    if (_config.EnableSpeculativeEarlyAccept && bestSilverMatch != null)
+                    {
+                        _logger.LogInformation("🥈 SPECULATIVE TRIGGER: {WindowSeconds}s window reached with match ({Score}/100). Starting download. File: {File}",
+                            minSearchDurationSeconds, bestSilverScore, bestSilverMatch.Filename);
+
+                        PublishStatus($"⏳ {minSearchDurationSeconds}s window reached. Processing silver match from {bestSilverMatch.Username}");
+                        return new DiscoveryResult(bestSilverMatch, log, runnerUpSilverMatch);
+                    }
+                }
+            }
+
+            var finalBatchResult = await EvaluatePendingCandidatesAsync();
+            if (finalBatchResult != null) return finalBatchResult;
+
+            if (!allTracks.Any())
+            {
+                // Previously logged with zero explanation — these counters are already computed
+                // on `log` (rejections applied before a candidate ever reaches allTracks), just
+                // never included here. Distinguishes "network returned literally nothing" from
+                // "candidates arrived but were filtered out before scoring."
+                _logger.LogWarning(
+                    "No results found for {Query} (rejected before scoring: {Quality} quality, {Format} format, {Blacklist} blacklisted, {Forensics} forensics)",
+                    query, log.RejectedByQuality, log.RejectedByFormat, log.RejectedByBlacklist, log.RejectedByForensics);
+                PublishStatus("❌ No results found on network for this query.", true);
+                return new DiscoveryResult(null, log);
+            }
+
+// 3. Select Best Match — TieredTrackComparer: tier-first, then blend score.
+            // TieredTrackComparer only ranks by audio quality/availability/sonic fit — it has no
+            // idea whether a candidate is even the right song. Every evaluated candidate lands in
+            // `allTracks` regardless of its textual match score, so without this filter a
+            // high-bitrate file for the WRONG version (e.g. the Original Mix landing on a search
+            // for "Song (Some Remix)") could out-rank a lower-bitrate correct match, or simply win
+            // by being the only candidate available at ranking time — silently downloading and
+            // labeling the wrong track as if it were the one requested. Only candidates that
+            // cleared SearchResultMatcher's own acceptance bar (score >= 70, see
+            // SearchResultMatcher.FindBestMatch) are eligible for the quality-tier ranking; if
+            // none did, fall through to the relaxation ladder below instead of guessing.
+            var policy   = _config.SearchPolicy ?? SearchPolicy.QualityFirst();
+            var comparer = new TieredTrackComparer(policy, new Track { BPM = null });
+            var textuallyAcceptable = allTracks.Where(IsAcceptableTextualMatch).ToList();
+            var rankedCandidates = textuallyAcceptable
+                .OrderBy(t => t, comparer)
+                .ToList();
+
+            var bestMatch = rankedCandidates.FirstOrDefault();
+            var runnerUpMatch = rankedCandidates.Skip(1).FirstOrDefault();
+            
+            // Phase 14: Decision Matrix Logging (Full Transparency)
+            if (allTracks.Any())
+            {
+                _logger.LogInformation("🧠 BRAIN: Matcher considered {Count} candidates. Query: {Query}", allTracks.Count, query);
+            }
+
+            if (bestMatch != null)
+            {
+                _logger.LogInformation("🧠 BRAIN: Unified Matcher selected: {Filename}", bestMatch.Filename);
+                PublishStatus($"🧠 Selected {bestMatch.Username}'s file");
+                return new DiscoveryResult(bestMatch, log, runnerUpMatch);
+            }
+
+            // No candidate cleared the textual-match gate, even though some may have looked
+            // "acceptable" in their earlier EVALUATED log entry — that entry shows the *blended*
+            // score (quality/reliability/queue bonuses included), which can land well above 70
+            // even when the *raw* textual match score behind IsAcceptableTextualMatch is 0 (e.g.
+            // the peer didn't report a duration, costing 40 of ~113 possible raw points). Without
+            // this, the audit trail ends at a misleadingly good-looking EVALUATED line followed by
+            // an unexplained overall failure — this makes the real reason visible.
+            if (allTracks.Any())
+            {
+                foreach (var excluded in allTracks.Where(t => !IsAcceptableTextualMatch(t)))
+                {
+                    var rawMatchScore = excluded.Metadata != null
+                        && excluded.Metadata.TryGetValue("BlendMatchScore", out var raw)
+                        && raw is double rawScore
+                            ? rawScore.ToString("F1")
+                            : "unknown";
+                    _auditLogger.LogSearchCandidate(trackHash, excluded.Username, excluded.Bitrate, excluded.Format, "EXCLUDED",
+                        $"Textual match score too low ({rawMatchScore}/100, needs >=70 — treated as a different song/version, not just lower quality) | File: {excluded.Filename} | Breakdown: {excluded.ScoreBreakdown}");
+                }
+            }
+
+            // 4. Adaptive Relaxation Strategy (Phase 2.0) - WITH TIMEOUT
+            // Phase 21 Hardening: If we are in regular FLAC mode, we DON'T relax to MP3 automatically.
+            // Relaxation only happens if specifically allowed or if we are already in MP3-fallback mode (OnHold).
+            if (_config.EnableRelaxationStrategy && allTracks.Any())
+            {
+                if (track.Status != TrackStatus.OnHold && formatsList.Contains("flac") && !formatsList.Contains("mp3"))
+                {
+                     _logger.LogInformation("🧠 BRAIN: FLAC-only tier {Tier} failed — no relaxation. Will escalate to MP3 after 9 FLAC attempts.", tierName);
+                     PublishStatus($"🎵 No FLAC found in {tierName} tier — MP3 fallback queues after 9 attempts.");
+                     return new DiscoveryResult(null, log);
+                }
+
+                _logger.LogInformation("🧠 BRAIN: Strict match failed. Waiting {Timeout}s before relaxation...", 
+                    _config.RelaxationTimeoutSeconds);
+                
+                // Wait for the configured timeout before relaxing criteria
+                await Task.Delay(TimeSpan.FromSeconds(_config.RelaxationTimeoutSeconds), ct);
+                
+                _logger.LogInformation("🧠 BRAIN: Timeout reached. Starting relaxation strategy...");
+                
+                // Relaxation Tier 1: Lower bitrate floor (e.g. 320 -> 256)
+                if (minBitrate > 256)
+                {
+                    _logger.LogInformation("🧠 BRAIN: Relaxation Tier 1: Lowering bitrate floor to 256kbps");
+                    var relaxedTracks = allTracks.Where(t => t.Bitrate >= 256).ToList();
+                    bestMatch = _matcher.FindBestMatch(track, relaxedTracks, matchOptions).BestMatch;
+                    if (bestMatch != null)
+                    {
+                        _logger.LogInformation("🧠 BRAIN: Tier 1 match found: {Filename}", bestMatch.Filename);
+                        return new DiscoveryResult(bestMatch, log);
+                    }
+                }
+
+                // Relaxation Tier 2: Accept any quality (highest available) — but still only among
+                // candidates that are genuinely the requested song/version. Never widen this to
+                // "any candidate regardless of match" — that's what silently substitutes the
+                // Original Mix for a specifically-requested remix when the real match hasn't
+                // streamed back yet; better to report no match here and let the normal
+                // retry/next-tier machinery try again than to download and mislabel the wrong file.
+                _logger.LogInformation("🧠 BRAIN: Relaxation Tier 2: Accepting highest available quality (still match-filtered)");
+                bestMatch = allTracks.Where(IsAcceptableTextualMatch).OrderByDescending(t => t.Bitrate).FirstOrDefault();
+                
+                if (bestMatch != null)
+                {
+                    _logger.LogInformation("🧠 BRAIN: Tier 2 fallback: {Filename} ({Bitrate}kbps)", 
+                        bestMatch.Filename, bestMatch.Bitrate);
+                    return new DiscoveryResult(bestMatch, log);
+                }
+            }
+
+            _logger.LogWarning("🧠 BRAIN: No suitable match found for query tier. {Summary}", log.GetSummary());
+            PublishStatus($"❌ No acceptable match found in {tierName} tier.", true);
+            return new DiscoveryResult(null, log);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Outer cancellation — propagate to caller
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            // Tier-internal cancellation (golden criteria hit tierCts.Cancel() already returned the match).
+            // If we somehow end up here it's due to enumerator cleanup; return clean empty result.
+            return new DiscoveryResult(null, log);
+        }
+        catch (DiscoveryConnectionUnavailableException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Search tier failed for {Query}", query);
+            return new DiscoveryResult(null, log);
+        }
+    }
+
+    private bool IsMp3FallbackAllowed(PlaylistTrack track)
+    {
+        // EnableMp3Fallback is the primary gate: when true, MP3 fallback/hedge are always allowed
+        // regardless of which lossless formats are listed in PreferredFormats.
+        // This prevents a config like ["flac","wav"] from silently disabling MP3 recovery entirely.
+        if (_config.EnableMp3Fallback)
+            return true;
+
+        // Legacy path: if "mp3" is explicitly listed in PreferredFormats, honour it.
+        var formats = _config.PreferredFormats ?? new List<string>();
+        return formats.Any(f => string.Equals(f?.Trim(), "mp3", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static DiscoveryResult SelectPreferredResult(DiscoveryResult first, DiscoveryResult second)
+    {
+        if (first.BestMatch == null) return second;
+        if (second.BestMatch == null) return first;
+
+        var a = first.BestMatch;
+        var b = second.BestMatch;
+
+        var aLossless = IsLosslessFormat(a.Format);
+        var bLossless = IsLosslessFormat(b.Format);
+
+        if (aLossless != bLossless)
+            return aLossless ? first : second;
+
+        if (a.CurrentRank != b.CurrentRank)
+            return a.CurrentRank > b.CurrentRank ? first : second;
+
+        if (a.Bitrate != b.Bitrate)
+            return a.Bitrate >= b.Bitrate ? first : second;
+
+        return first;
+    }
+
+    private static string BuildGlobalCandidateKey(Track track)
+    {
+        if (!string.IsNullOrWhiteSpace(track.UniqueHash))
+            return $"hash:{track.UniqueHash}";
+
+        var user = track.Username ?? string.Empty;
+        var file = track.Filename ?? string.Empty;
+        var size = track.Size?.ToString() ?? string.Empty;
+        var bitrate = track.Bitrate.ToString();
+        var format = track.Format ?? string.Empty;
+        return $"fallback:{user}|{file}|{size}|{bitrate}|{format}";
+    }
+
+    private static bool IsLosslessFormat(string? format)
+    {
+        if (string.IsNullOrWhiteSpace(format))
+            return false;
+
+        return format.Equals("flac", StringComparison.OrdinalIgnoreCase) ||
+               format.Equals("wav", StringComparison.OrdinalIgnoreCase) ||
+               format.Equals("aif", StringComparison.OrdinalIgnoreCase) ||
+               format.Equals("aiff", StringComparison.OrdinalIgnoreCase) ||
+               format.Equals("ape", StringComparison.OrdinalIgnoreCase) ||
+               format.Equals("alac", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? BuildDiscoveryReason(Track track, string? scoreBreakdown, bool useFastLane, int queueLength)
+    {
+        if (useFastLane && queueLength == 0)
+            return "⚡ Fast lane: idle peer match";
+
+        var compactReason = SearchBlendReasonFormatter.BuildCompactReason(track.Metadata);
+        if (!string.IsNullOrWhiteSpace(compactReason))
+            return compactReason;
+
+        if (string.IsNullOrWhiteSpace(scoreBreakdown))
+            return null;
+
+        if (scoreBreakdown.Contains("Context:", StringComparison.OrdinalIgnoreCase))
+            return "🗂 Curated release context";
+
+        return null;
+    }
+
+    private static string BuildCompositeScoreBreakdown(
+        string? matcherBreakdown,
+        double matchScore,
+        double fitScore,
+        double reliability,
+        int queueLength,
+        double finalScore)
+    {
+        var prefix = string.IsNullOrWhiteSpace(matcherBreakdown)
+            ? string.Empty
+            : $"{matcherBreakdown}; ";
+
+        return $"{prefix}Blend: Match={matchScore:F1}, Fit={fitScore:F1}, Rel={reliability:F2}, Queue={queueLength}, Final={finalScore:F1}";
+    }
+
+    private static void EnsureBlendTelemetryMetadata(Track track, double matchScore, double fitScore, double reliability, double finalScore)
+    {
+        track.Metadata ??= new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        track.Metadata["BlendMatchScore"] = matchScore;
+        track.Metadata["BlendFitScore"] = fitScore;
+        track.Metadata["BlendReliability"] = reliability;
+        track.Metadata["BlendFinalScore"] = finalScore;
+    }
+
+    /// <summary>
+    /// Whether a candidate's raw SearchResultMatcher score (artist/title/duration/format fit —
+    /// see "BlendMatchScore" set by <see cref="EnsureBlendTelemetryMetadata"/>) clears the same
+    /// acceptance bar <see cref="SearchResultMatcher.FindBestMatch"/> uses internally (70/100).
+    /// Candidates below this are a different song/version, not just a lower-quality copy of the
+    /// right one — quality-tier ranking (<see cref="TieredTrackComparer"/>) must never be allowed
+    /// to pick a "better" file among those, since being higher bitrate doesn't make it correct.
+    /// </summary>
+    private static bool IsAcceptableTextualMatch(Track candidate)
+    {
+        return candidate.Metadata != null
+            && candidate.Metadata.TryGetValue("BlendMatchScore", out var raw)
+            && raw is double score
+            && score >= 70;
+    }
+
+    private async Task<bool> WaitForConnectionAsync(CancellationToken ct)
+    {
+        var timeoutMs = _config.ConnectTimeout > 0
+            ? Math.Max(10_000, _config.ConnectTimeout)
+            : 60_000;
+
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        waitCts.CancelAfter(timeoutMs);
+
+        _logger.LogInformation(
+            "Waiting for Soulseek connection readiness before continuing discovery tier (timeout={TimeoutSeconds}s)...",
+            timeoutMs / 1000);
+
+        var waitStart = DateTime.UtcNow;
+        var nextProgressLogAtSeconds = 2;
+
+        try
+        {
+            while (!_searchOrchestrator.IsLoggedIn)
+            {
+                waitCts.Token.ThrowIfCancellationRequested();
+                await Task.Delay(500, waitCts.Token);
+
+                var waitedSeconds = (int)(DateTime.UtcNow - waitStart).TotalSeconds;
+                if (waitedSeconds >= nextProgressLogAtSeconds)
+                {
+                    _logger.LogDebug(
+                        "Still waiting for Soulseek connection... ({Waited}s elapsed of {Timeout}s)",
+                        waitedSeconds,
+                        timeoutMs / 1000);
+                    nextProgressLogAtSeconds += 2;
+                }
+            }
+
+            return true;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogWarning(
+                "Timeout waiting for Soulseek login (LoggedIn state) after {Seconds}s; discovery will be retried as a transient connectivity issue.",
+                timeoutMs / 1000);
+            return false;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    private static void MergeAttemptLog(SearchAttemptLog target, SearchAttemptLog source)
+    {
+        target.ResultsCount += source.ResultsCount;
+        target.RejectedByQuality += source.RejectedByQuality;
+        target.RejectedByFormat += source.RejectedByFormat;
+        target.RejectedByBlacklist += source.RejectedByBlacklist;
+        target.RejectedByForensics += source.RejectedByForensics;
+        target.TimedOut = target.TimedOut || source.TimedOut;
+
+        if (source.Top3RejectedResults.Any())
+        {
+            target.Top3RejectedResults.AddRange(source.Top3RejectedResults);
+            target.Top3RejectedResults = target.Top3RejectedResults
+                .OrderByDescending(x => x.SearchScore)
+                .Take(3)
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Performs discovery and automatically handles queueing or upgrade evaluation.
+    /// </summary>
+    public async Task DiscoverAndQueueTrackAsync(PlaylistTrack track, CancellationToken ct = default, HashSet<string>? blacklistedUsers = null)
+    {
+        var correlationId = Guid.NewGuid().ToString("N");
+        // Step T.1: Pass model directly
+        var result = await FindBestMatchAsync(track, ct, blacklistedUsers, correlationId);
+        var bestMatch = result.BestMatch;
+        if (bestMatch == null) return;
+
+        // Determine if this is an upgrade search based on whether the track already has a file
+        bool isUpgrade = !string.IsNullOrEmpty(track.ResolvedFilePath);
+
+        if (isUpgrade)
+        {
+            // "Upgrade Scout" master toggle in Settings — previously this whole branch ran
+            // unconditionally regardless of the flag, so background upgrade-searching was always
+            // active even though the toggle (default OFF) told the user it wasn't.
+            if (!_config.UpgradeScoutEnabled)
+            {
+                return;
+            }
+
+            int currentBitrate = track.Bitrate ?? 0;
+            int newBitrate = bestMatch.Bitrate;
+
+            // "Upgrade everything below this bitrate" — tracks already at/above the configured
+            // floor aren't upgrade candidates at all, regardless of gain. Was never read anywhere.
+            if (currentBitrate >= _config.UpgradeMinBitrateThreshold)
+            {
+                return;
+            }
+
+            // Upgrade Logic: Better bitrate AND minimum gain achieved
+            if (newBitrate > currentBitrate && (newBitrate - currentBitrate) >= _config.UpgradeMinGainKbps)
+            {
+                _logger.LogInformation("Upgrade Found: {Artist} - {Title} ({New} vs {Old} kbps)", 
+                    track.Artist, track.Title, newBitrate, currentBitrate);
+
+                if (_config.UpgradeAutoQueueEnabled)
+                {
+                    _eventBus.Publish(new AutoDownloadUpgradeEvent(track.TrackUniqueHash, bestMatch, correlationId));
+                }
+                else
+                {
+                    _eventBus.Publish(new UpgradeAvailableEvent(track.TrackUniqueHash, bestMatch, correlationId));
+                }
+            }
+        }
+        else
+        {
+            // Standard missing track discovery - auto download is assumed here for automation flows
+            _eventBus.Publish(new AutoDownloadTrackEvent(track.TrackUniqueHash, bestMatch, correlationId));
+        }
+    }
+}

@@ -1,0 +1,867 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.IO;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Models;
+using SLSKDONET.Services;
+using SLSKDONET.Views;
+using SLSKDONET.Events;
+
+namespace SLSKDONET.ViewModels.Library;
+
+/// <summary>
+/// Manages track-level operations like play, pause, resume, cancel, retry, etc.
+/// Handles download operations and playback integration.
+/// </summary>
+public class TrackOperationsViewModel : INotifyPropertyChanged, IDisposable
+{
+    private bool _isDisposed;
+    private EventHandler<bool>? _healthChangedHandler;
+
+    private readonly ILogger<TrackOperationsViewModel> _logger;
+    private readonly DownloadManager _downloadManager;
+    private MainViewModel? _mainViewModel; // Injected post-construction
+    private readonly PlayerViewModel _playerViewModel;
+    private readonly IFileInteractionService _fileInteractionService;
+    private readonly Services.IO.IFileWriteService _fileWriteService; // Phase 11.6 Physical Duplication
+    private readonly LibraryService _libraryService; // Phase 11.6 Physical Duplication
+    private readonly NativeDependencyHealthService _dependencyHealthService; // Phase 10.5
+    private readonly IBulkOperationCoordinator _bulkCoordinator; // Phase 10.5
+    private readonly IEventBus _eventBus; // Phase 11.6 Notification
+    private readonly IDialogService _dialogService;
+    private readonly CueForgeViewModel _cueForgeViewModel;
+    private readonly INotificationService _notificationService;
+    private readonly AnalyzeTrackStructureJob? _cueStructureJob;
+    private readonly Services.Repositories.ITrackRepository _trackRepository;
+    private readonly Services.Integrations.Serato.SeratoCueExportService? _seratoExport;
+    private readonly Services.AudioAnalysis.CueDetrCueService? _cueDetrCues;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    // Commands
+    public System.Windows.Input.ICommand PlayTrackCommand { get; }
+    public System.Windows.Input.ICommand HardRetryCommand { get; }
+    public System.Windows.Input.ICommand PauseCommand { get; }
+    public System.Windows.Input.ICommand ResumeCommand { get; }
+    public System.Windows.Input.ICommand CancelCommand { get; }
+    public System.Windows.Input.ICommand DownloadAlbumCommand { get; }
+    public System.Windows.Input.ICommand RemoveTrackCommand { get; }
+    public System.Windows.Input.ICommand CloneTrackCommand { get; } // Phase 11.6: Physical Clone
+    public System.Windows.Input.ICommand AddToProjectCommand { get; }
+    public System.Windows.Input.ICommand RetryOfflineTracksCommand { get; }
+    public System.Windows.Input.ICommand OpenFolderCommand { get; }
+    public System.Windows.Input.ICommand AddToQueueCommand { get; }
+    public System.Windows.Input.ICommand AddSelectedToQueueCommand { get; }
+    public System.Windows.Input.ICommand AnalyseTrackCommand { get; }
+    public System.Windows.Input.ICommand OpenAuditLogCommand { get; }
+    public System.Windows.Input.ICommand OpenInCueForgeCommand { get; }
+    public System.Windows.Input.ICommand SetColorTagCommand { get; }
+    public System.Windows.Input.ICommand RegenerateCuesCommand { get; }
+    public System.Windows.Input.ICommand RefreshBpmFromTagsCommand { get; }
+    /// <summary>Parameter "keep" (default) or "replace" — see <see cref="Services.Integrations.Serato.SeratoWriteMode"/>.</summary>
+    public System.Windows.Input.ICommand WriteSeratoCuesCommand { get; }
+    /// <summary>Parameter "compare" (ORBIT + CUE-DETR side by side) or "ai" (CUE-DETR only).</summary>
+    public System.Windows.Input.ICommand GenerateCuesWithAiCommand { get; }
+
+    // Phase 10.5: Dependency Warning Property
+    public bool AreDependenciesHealthy => _dependencyHealthService.IsHealthy;
+    public string DependencyWarningMessage => AreDependenciesHealthy ? string.Empty : "⚠️ CORE TOOLS MISSING: Analysis Disabled";
+
+    public TrackOperationsViewModel(
+        ILogger<TrackOperationsViewModel> logger,
+        DownloadManager downloadManager,
+        PlayerViewModel playerViewModel,
+        IFileInteractionService fileInteractionService,
+        Services.IO.IFileWriteService fileWriteService,
+        LibraryService libraryService,
+        NativeDependencyHealthService dependencyHealthService,
+        IBulkOperationCoordinator bulkCoordinator,
+        IEventBus eventBus,
+        IDialogService dialogService,
+        CueForgeViewModel cueForgeViewModel,
+        INotificationService notificationService,
+        Services.Repositories.ITrackRepository trackRepository,
+        AnalyzeTrackStructureJob? cueStructureJob = null,
+        Services.Integrations.Serato.SeratoCueExportService? seratoExport = null,
+        Services.AudioAnalysis.CueDetrCueService? cueDetrCues = null)
+    {
+        _logger = logger;
+        _downloadManager = downloadManager;
+        _playerViewModel = playerViewModel;
+        _fileInteractionService = fileInteractionService;
+        _fileWriteService = fileWriteService;
+        _libraryService = libraryService;
+        _dependencyHealthService = dependencyHealthService;
+        _bulkCoordinator = bulkCoordinator;
+        _eventBus = eventBus;
+        _dialogService = dialogService;
+        _cueForgeViewModel = cueForgeViewModel;
+        _notificationService = notificationService;
+        _trackRepository = trackRepository;
+        _cueStructureJob = cueStructureJob;
+        _seratoExport = seratoExport;
+        _cueDetrCues = cueDetrCues;
+
+        // Subscribe to dynamic health updates
+        _healthChangedHandler = (s, healthy) =>
+        {
+             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+             {
+                 OnPropertyChanged(nameof(AreDependenciesHealthy));
+                 OnPropertyChanged(nameof(DependencyWarningMessage));
+             });
+        };
+        _dependencyHealthService.HealthChanged += _healthChangedHandler;
+
+
+        // Initialize commands
+        PlayTrackCommand = new RelayCommand<PlaylistTrackViewModel>(ExecutePlayTrack);
+        HardRetryCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteHardRetry);
+        PauseCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecutePause);
+        ResumeCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteResume);
+        CancelCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteCancel);
+        DownloadAlbumCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteDownloadAlbum);
+        RemoveTrackCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteRemoveTrack);
+        CloneTrackCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteCloneTrack); // Phase 11.6
+        AddToProjectCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteAddToProject);
+        RetryOfflineTracksCommand = new AsyncRelayCommand(ExecuteRetryOfflineTracks);
+        OpenFolderCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteOpenFolder);
+        AddToQueueCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteAddToQueue);
+        AddSelectedToQueueCommand = new RelayCommand(ExecuteAddSelectedToQueue);
+        AnalyseTrackCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteAnalyseTrack);
+        RegenerateCuesCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteRegenerateCues);
+        RefreshBpmFromTagsCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteRefreshBpmFromTags);
+        OpenAuditLogCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteOpenAuditLog);
+        OpenInCueForgeCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteOpenInCueForge);
+        SetColorTagCommand = new RelayCommand<string>(ExecuteSetColorTag);
+        WriteSeratoCuesCommand = new AsyncRelayCommand<string>(ExecuteWriteSeratoCues);
+        GenerateCuesWithAiCommand = new AsyncRelayCommand<string>(ExecuteGenerateCuesWithAi);
+    }
+
+    /// <summary>
+    /// Regenerates the selected tracks' auto cues with CUE-DETR in the loop, so its opinion can be
+    /// judged on the waveform: "compare" keeps ORBIT's cues (marked ✓AI where CUE-DETR agrees) and
+    /// adds CUE-DETR's other points as cyan "AI" cues; "ai" shows CUE-DETR's points alone. The model
+    /// runs once per track (~10 s) and is cached, so switching back and forth is instant after that.
+    /// "Regenerate Cues → ORBIT analysis" restores the normal cues. Hand-placed cues are kept.
+    /// </summary>
+    private async Task ExecuteGenerateCuesWithAi(string? modeText)
+    {
+        if (_cueDetrCues == null) return;
+        if (!_cueDetrCues.IsModelAvailable)
+        {
+            _notificationService.Show("CUE-DETR", "The CUE-DETR model (Tools/Essentia/models/cue-detr.onnx) isn't installed.", Views.NotificationType.Warning);
+            return;
+        }
+        var mode = modeText == "ai" ? Engine.Analysis.CueDetr.CueSourceMode.AiOnly : Engine.Analysis.CueDetr.CueSourceMode.Compare;
+        var selected = LibraryViewModel?.Tracks.SelectedTracks?.ToList() ?? [];
+        var targets = selected.Count > 0
+            ? selected
+            : LibraryViewModel?.Tracks.LeadSelectedTrack is { } lead ? new List<PlaylistTrackViewModel> { lead } : new List<PlaylistTrackViewModel>();
+        if (targets.Count == 0) return;
+        if (targets.Count > 3)
+            _notificationService.Show("CUE-DETR",
+                $"Running CUE-DETR on {targets.Count} tracks — about {Math.Ceiling(targets.Count * 13 / 60.0)} min the first time (results are cached).",
+                Views.NotificationType.Information);
+
+        int done = 0, cues = 0, agreed = 0, ai = 0;
+        var problems = new List<string>();
+        async Task<bool> RunOne(PlaylistTrackViewModel t, System.Threading.CancellationToken ct)
+        {
+            var hash = t.Model?.TrackUniqueHash;
+            if (string.IsNullOrEmpty(hash)) { lock (problems) problems.Add($"{t.Title}: no track id"); return false; }
+            var r = await _cueDetrCues.RegenerateAsync(hash, t.Model?.ResolvedFilePath, mode, ct);
+            if (!r.Success) { lock (problems) problems.Add($"{t.Title}: {r.Error}"); return false; }
+            System.Threading.Interlocked.Increment(ref done);
+            System.Threading.Interlocked.Add(ref cues, r.CueCount);
+            System.Threading.Interlocked.Add(ref agreed, r.Agreed);
+            System.Threading.Interlocked.Add(ref ai, r.AiPoints);
+            return true;
+        }
+
+        if (targets.Count == 1) await RunOne(targets[0], default);
+        else
+        {
+            if (_bulkCoordinator.IsRunning) return;
+            await _bulkCoordinator.RunOperationAsync(targets, RunOne, mode == Engine.Analysis.CueDetr.CueSourceMode.AiOnly ? "CUE-DETR Cues" : "Compare Cues (ORBIT + CUE-DETR)");
+        }
+
+        string summary = mode == Engine.Analysis.CueDetr.CueSourceMode.AiOnly
+            ? $"{done} track(s): {cues} CUE-DETR cue(s), shown in cyan as \"AI n\"."
+            : $"{done} track(s): {agreed} ORBIT cue(s) marked ✓AI where CUE-DETR agrees; CUE-DETR's other points added as cyan \"AI\" cues ({ai} AI points in total).";
+        if (problems.Count > 0) summary += $" Skipped {problems.Count}: {string.Join("; ", problems.Take(3))}";
+        _notificationService.Show("CUE-DETR", summary, problems.Count == 0 ? Views.NotificationType.Success : Views.NotificationType.Warning);
+    }
+
+    /// <summary>
+    /// Writes the selected tracks' cues into their files as Serato Markers2 (Serato DJ and Mixxx
+    /// read them straight from the file). "keep" leaves cues already set in Serato alone and uses
+    /// free slots; "replace" swaps all of the file's cues/loops for ORBIT's after a confirmation.
+    /// </summary>
+    private async Task ExecuteWriteSeratoCues(string? modeText)
+    {
+        if (_seratoExport == null) return;
+        var mode = modeText == "replace" ? Services.Integrations.Serato.SeratoWriteMode.Replace : Services.Integrations.Serato.SeratoWriteMode.KeepExisting;
+        var selected = LibraryViewModel?.Tracks.SelectedTracks?.ToList() ?? [];
+        var targets = selected.Count > 0
+            ? selected
+            : LibraryViewModel?.Tracks.LeadSelectedTrack is { } lead ? new List<PlaylistTrackViewModel> { lead } : new List<PlaylistTrackViewModel>();
+        if (targets.Count == 0) return;
+
+        if (mode == Services.Integrations.Serato.SeratoWriteMode.Replace && !await _dialogService.ConfirmAsync(
+                "Replace Serato cues",
+                $"Replace all hot cues and saved loops in {targets.Count} file(s) with ORBIT's cues? Cues you set in Serato for these tracks will be lost. Track colour and BPM lock are kept.",
+                "Replace", "Cancel"))
+            return;
+
+        int cues = 0, files = 0;
+        var problems = new List<string>();
+        async Task<bool> WriteOne(PlaylistTrackViewModel t, System.Threading.CancellationToken ct)
+        {
+            var path = t.Model?.ResolvedFilePath;
+            var hash = t.Model?.TrackUniqueHash;
+            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(hash)) { problems.Add($"{t.Title}: no file"); return false; }
+            var result = await _seratoExport.WriteAsync(path, hash, mode, ct);
+            if (!result.Success) { problems.Add($"{t.Title}: {result.Error}"); return false; }
+            System.Threading.Interlocked.Add(ref cues, result.CuesWritten + result.LoopsWritten);
+            System.Threading.Interlocked.Increment(ref files);
+            return true;
+        }
+
+        if (targets.Count == 1) await WriteOne(targets[0], default);
+        else
+        {
+            if (_bulkCoordinator.IsRunning) return;
+            await _bulkCoordinator.RunOperationAsync(targets, WriteOne, "Write Serato Cues");
+        }
+
+        var message = $"Wrote {cues} cue(s) to {files} file(s)." + (problems.Count > 0 ? $" Skipped {problems.Count}: {string.Join("; ", problems.Take(3))}" : "");
+        _notificationService.Show("Serato cues", message, problems.Count == 0 ? Views.NotificationType.Success : Views.NotificationType.Warning);
+    }
+
+    public void SetMainViewModel(MainViewModel mainViewModel)
+    {
+        _mainViewModel = mainViewModel;
+    }
+
+    private async Task ExecuteCloneTrack(PlaylistTrackViewModel? vm)
+    {
+        if (vm?.Model == null || string.IsNullOrEmpty(vm.Model.ResolvedFilePath)) return;
+
+        try 
+        {
+            var sourcePath = vm.Model.ResolvedFilePath;
+            var directory = System.IO.Path.GetDirectoryName(sourcePath);
+            var fileName = System.IO.Path.GetFileNameWithoutExtension(sourcePath);
+            var extension = System.IO.Path.GetExtension(sourcePath);
+            
+            if (string.IsNullOrEmpty(directory)) return;
+
+            // 1. Generate descriptive new name
+            var newPath = System.IO.Path.Combine(directory, $"{fileName} (Clone){extension}");
+            int counter = 1;
+            while (System.IO.File.Exists(newPath))
+            {
+                newPath = System.IO.Path.Combine(directory, $"{fileName} (Clone {++counter}){extension}");
+            }
+
+            _logger.LogInformation("Cloning track '{Title}' to '{Path}'", vm.Title, newPath);
+
+            // 2. Physical Atomic Copy
+            var copySuccess = await _fileWriteService.CopyFileAtomicAsync(sourcePath, newPath);
+            if (!copySuccess) throw new System.IO.IOException("Failed to duplicate file on disk.");
+
+            // 3. Register in Engine
+            var clone = await _libraryService.CreatePhysicalCloneAsync(vm.Model, newPath);
+
+            _logger.LogInformation("Clone successful. New Track ID: {Id}", clone.Id);
+
+            // 4. Trigger UI Refresh
+            _eventBus.Publish(new TrackAddedEvent(clone, PlaylistTrackState.Completed));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Clone operation failed");
+        }
+    }
+
+    private async Task ExecuteAddToProject(PlaylistTrackViewModel? track)
+    {
+        if (track == null || track.Model == null) return;
+        
+        var selectedTracks = LibraryViewModel?.Tracks.SelectedTracks;
+        var toAdd = new System.Collections.Generic.List<PlaylistTrack>();
+
+        if (selectedTracks != null && selectedTracks.Contains(track))
+        {
+            toAdd.AddRange(selectedTracks.Select(t => t.Model));
+            
+            // Loop through selected tracks to update metadata if needed
+            // The original intent seemed to be updating the track being operated on.
+            // When adding to project, we might want to refresh metadata?
+            // Or maybe this was just a snippet inserted for testing?
+            // Assuming we update the prompt track for now as per the snippet location.
+            // But since we are inside a bulk block, maybe strictly 'track' is enough?
+            // The snippet was:
+            var result = track.Model; 
+            if (result != null)
+            {
+                await _libraryService.UpdatePlaylistTrackAsync(result);
+            }
+        }
+        else
+        {
+            toAdd.Add(track.Model);
+            var result = track.Model; 
+            if (result != null)
+            {
+                await _libraryService.UpdatePlaylistTrackAsync(result);
+            }
+        }
+
+        _logger.LogInformation("Requesting Add To Project for {Count} tracks", toAdd.Count);
+        _eventBus.Publish(new AddToProjectRequestEvent(toAdd));
+    }
+
+    private LibraryViewModel? LibraryViewModel => _mainViewModel?.LibraryViewModel;
+
+    /// <summary>
+    /// Applies a colour tag (Rekordbox-style hex, or null to clear) to every currently
+    /// selected track, falling back to the lead-selected track when nothing is multi-selected.
+    /// </summary>
+    private void ExecuteSetColorTag(string? colorHex)
+    {
+        // XAML CommandParameter can't carry a literal null, so "Clear" swatches pass "" instead.
+        if (colorHex == string.Empty) colorHex = null;
+
+        var selected = LibraryViewModel?.Tracks.SelectedTracks?.ToList();
+        var targets = selected != null && selected.Count > 0
+            ? selected
+            : LibraryViewModel?.Tracks.LeadSelectedTrack is { } lead
+                ? new System.Collections.Generic.List<PlaylistTrackViewModel> { lead }
+                : new System.Collections.Generic.List<PlaylistTrackViewModel>();
+
+        if (targets.Count == 0) return;
+
+        foreach (var track in targets)
+        {
+            track.ColorTag = colorHex;
+        }
+
+        _logger.LogInformation("Set colour tag '{Colour}' on {Count} track(s)", colorHex ?? "(none)", targets.Count);
+    }
+
+    private void ExecutePlayTrack(PlaylistTrackViewModel? track)
+    {
+        track ??= LibraryViewModel?.Tracks.LeadSelectedTrack;
+        if (track == null) return;
+
+        var filePath = track.Model?.ResolvedFilePath;
+        if (string.IsNullOrEmpty(filePath))
+        {
+            _logger.LogWarning("Cannot play track - no resolved file path");
+            return;
+        }
+
+        if (!System.IO.File.Exists(filePath))
+        {
+            _logger.LogWarning("Cannot play track - file does not exist: {Path}", filePath);
+            return;
+        }
+
+        _logger.LogInformation("Playing track: {Artist} - {Title}", track.Artist, track.Title);
+
+        // Mix on: play this track and keep mixing through the rest of the playlist from here,
+        // instead of playing it on its own.
+        if (LibraryViewModel?.Tracks.IsMixModeEnabled == true && track.Model is { PlaylistId: var playlistId } model && playlistId != Guid.Empty)
+        {
+            _ = PlayPlaylistFromTrackAsync(playlistId, model.Id, track);
+            return;
+        }
+
+        // Clear queue and add this track
+        _playerViewModel.ClearQueue();
+        _playerViewModel.AddToQueue(track);
+    }
+
+    /// <summary>Queues the playlist (downloaded tracks, playlist order) and starts at
+    /// <paramref name="startTrackId"/>, with Mix on — the same request the playlist Play button
+    /// sends, so every following pair crossfades with its saved transition.</summary>
+    private async Task PlayPlaylistFromTrackAsync(Guid playlistId, Guid startTrackId, PlaylistTrackViewModel fallback)
+    {
+        try
+        {
+            var tracks = await _libraryService.LoadPlaylistTracksAsync(playlistId);
+            var playable = tracks.Where(t => !string.IsNullOrEmpty(t.ResolvedFilePath)).ToList();
+            if (playable.Any(t => t.Id == startTrackId))
+            {
+                _eventBus.Publish(new PlayAlbumRequestEvent(playable, MixModeEnabled: true, StartTrackId: startTrackId));
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Couldn't queue the playlist for mix playback; playing the track on its own");
+        }
+
+        _playerViewModel.ClearQueue();
+        _playerViewModel.AddToQueue(fallback);
+    }
+
+    private void ExecuteAddToQueue(PlaylistTrackViewModel? track)
+    {
+        if (track == null)
+        {
+            ExecuteAddSelectedToQueue();
+            return;
+        }
+
+        var selectedTracks = LibraryViewModel?.Tracks.SelectedTracks?.ToList() ?? [];
+        var shouldQueueSelection = selectedTracks.Count > 1 && selectedTracks.Contains(track);
+        var tracksToQueue = shouldQueueSelection ? selectedTracks : new System.Collections.Generic.List<PlaylistTrackViewModel> { track };
+
+        int added = 0;
+        foreach (var candidate in tracksToQueue)
+        {
+            _playerViewModel.AddToQueue(candidate);
+            added++;
+        }
+
+        _logger.LogInformation("Queued {Count} track(s) into player queue from Library", added);
+    }
+
+    private void ExecuteAddSelectedToQueue()
+    {
+        var selected = LibraryViewModel?.Tracks.SelectedTracks?.ToList() ?? [];
+        if (!selected.Any())
+        {
+            return;
+        }
+
+        int added = 0;
+        foreach (var track in selected)
+        {
+            _playerViewModel.AddToQueue(track);
+            added++;
+        }
+
+        _logger.LogInformation("Queued {Count} selected track(s) into player queue from Library", added);
+    }
+
+    private void ExecuteAnalyseTrack(PlaylistTrackViewModel? track)
+    {
+        track ??= LibraryViewModel?.Tracks.LeadSelectedTrack;
+        if (track == null) return;
+        _eventBus.Publish(new Models.TrackAnalysisRequestedEvent(track.GlobalId));
+        _logger.LogInformation("Analysis queued for track: {Title}", track.Title);
+    }
+
+    /// <summary>
+    /// Re-maps cue points from this track's (or, if multiple rows are selected, every selected
+    /// track's) already-persisted analysis data — no full re-analysis. The fast path for picking
+    /// up a CueGenerationService logic change without re-decoding audio; see
+    /// AnalyzeTrackStructureJob.RegenerateCuesOnlyAsync. Tracks that have never been fully
+    /// analysed are skipped (nothing to re-map cues from) and counted separately.
+    /// </summary>
+    private async Task ExecuteRegenerateCues(PlaylistTrackViewModel? track)
+    {
+        if (_cueStructureJob == null) return;
+
+        var selectedTracks = LibraryViewModel?.Tracks.SelectedTracks?.ToList() ?? [];
+        var operateOnSelection = track != null && selectedTracks.Count > 1 && selectedTracks.Contains(track);
+        var targets = operateOnSelection
+            ? selectedTracks
+            : (track ?? LibraryViewModel?.Tracks.LeadSelectedTrack) is { } single
+                ? new List<PlaylistTrackViewModel> { single }
+                : new List<PlaylistTrackViewModel>();
+
+        if (targets.Count == 0) return;
+
+        if (targets.Count == 1)
+        {
+            var ok = await _cueStructureJob.RegenerateCuesOnlyAsync(targets[0].GlobalId);
+            _notificationService.Show("Regenerate Cues",
+                ok ? $"Regenerated cues for '{targets[0].Title}'." : $"'{targets[0].Title}' hasn't been analysed yet — nothing to regenerate from.",
+                ok ? Views.NotificationType.Success : Views.NotificationType.Warning);
+            return;
+        }
+
+        if (_bulkCoordinator.IsRunning) return;
+        await _bulkCoordinator.RunOperationAsync(
+            targets,
+            (t, ct) => _cueStructureJob.RegenerateCuesOnlyAsync(t.GlobalId, ct),
+            "Regenerate Cues");
+    }
+
+    /// <summary>
+    /// Re-reads each track's file-embedded BPM tag (TagLib BeatsPerMinute) and, when present and
+    /// plausible, stores it as TagBPM and (unless the track has a manual override) the primary
+    /// BPM — the backfill path for tracks imported before file-tag BPM was trusted over Essentia.
+    /// See LibraryFolderScannerService.CreateLibraryEntry for the same read at fresh import, and
+    /// TrackRepository.UpdateTagBpmAsync/DatabaseService.SyncDenormalizedFeaturesAsync for why this
+    /// sticks across future re-analysis. Tracks with no BPM tag on the file are skipped and counted
+    /// separately (mirrors ExecuteRegenerateCues's "nothing to do" handling above).
+    /// </summary>
+    private async Task ExecuteRefreshBpmFromTags(PlaylistTrackViewModel? track)
+    {
+        var selectedTracks = LibraryViewModel?.Tracks.SelectedTracks?.ToList() ?? [];
+        var operateOnSelection = track != null && selectedTracks.Count > 1 && selectedTracks.Contains(track);
+        var targets = operateOnSelection
+            ? selectedTracks
+            : (track ?? LibraryViewModel?.Tracks.LeadSelectedTrack) is { } single
+                ? new List<PlaylistTrackViewModel> { single }
+                : new List<PlaylistTrackViewModel>();
+
+        if (targets.Count == 0) return;
+
+        if (targets.Count == 1)
+        {
+            var ok = await TryRefreshBpmFromTagAsync(targets[0]);
+            _notificationService.Show("Refresh BPM from Tags",
+                ok ? $"Updated BPM for '{targets[0].Title}' from its file tag." : $"'{targets[0].Title}' has no BPM tag on file — nothing to update.",
+                ok ? Views.NotificationType.Success : Views.NotificationType.Warning);
+            return;
+        }
+
+        if (_bulkCoordinator.IsRunning) return;
+        await _bulkCoordinator.RunOperationAsync(
+            targets,
+            (t, ct) => TryRefreshBpmFromTagAsync(t),
+            "Refresh BPM from Tags");
+    }
+
+    private async Task<bool> TryRefreshBpmFromTagAsync(PlaylistTrackViewModel track)
+    {
+        var filePath = track.Model?.ResolvedFilePath;
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return false;
+
+        try
+        {
+            using var file = TagLib.File.Create(filePath);
+            var rawTagBpm = file.Tag.BeatsPerMinute; // uint — same bound as LibraryFolderScannerService.CreateLibraryEntry
+            if (rawTagBpm is < 60 or > 220) return false;
+
+            await _trackRepository.UpdateTagBpmAsync(track.GlobalId, rawTagBpm);
+            _eventBus.Publish(new Models.TrackMetadataUpdatedEvent(track.GlobalId));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Refresh BPM from tags failed for {Title}", track.Title);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Reported directly by the user: clicking "Hard Retry" on a bad-content track (e.g. a
+    /// download that completed but is only 30 seconds long) did nothing visible — no error, no
+    /// confirmation, nothing. Two stacked causes: (1) no notification was ever shown for either
+    /// outcome, and (2) DownloadManager.HardRetryTrack only resets in-memory state for a track
+    /// it's still actively tracking — a track that already reached "Downloaded" has long since
+    /// left that working set, so the method silently had nothing to do.
+    /// </summary>
+    private async Task ExecuteHardRetry(PlaylistTrackViewModel? track)
+    {
+        track ??= LibraryViewModel?.Tracks.LeadSelectedTrack;
+        if (track == null) return;
+
+        _logger.LogInformation("Hard retry for track: {Title}", track.Title);
+
+        try
+        {
+            var retriedActiveDownload = await _downloadManager.HardRetryTrack(track.GlobalId);
+
+            if (!retriedActiveDownload)
+            {
+                // Not an active/recent download — re-queue from scratch instead, mirroring
+                // LibraryViewModel.Commands.ExecuteForceRedownloadAsync's reset-and-requeue recipe
+                // for a single track. Deleting the existing file matters: without it, the
+                // "file already on disk" dedup fast-path would just see the bad file and skip
+                // redownloading it again.
+                _downloadManager.CancelTrack(track.GlobalId);
+
+                if (!string.IsNullOrEmpty(track.Model.ResolvedFilePath) && File.Exists(track.Model.ResolvedFilePath))
+                {
+                    try
+                    {
+                        File.Delete(track.Model.ResolvedFilePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Could not delete existing file during hard retry for {Title}", track.Title);
+                    }
+                }
+
+                track.Model.ResolvedFilePath = string.Empty;
+                track.Model.Priority = 0;
+                track.Model.Status = TrackStatus.Missing;
+                track.Model.IsClearedFromDownloadCenter = false;
+
+                await _libraryService.SavePlaylistTracksAsync(new List<PlaylistTrack> { track.Model });
+                await Task.Delay(100);
+                _downloadManager.QueueTracks(new List<PlaylistTrack> { track.Model });
+            }
+
+            _notificationService.Show("Hard Retry", $"Re-downloading '{track.Title}' from scratch.", NotificationType.Success);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Hard retry failed for track: {Title}", track.Title);
+            _notificationService.Show("Hard Retry Failed", ex.Message, NotificationType.Error);
+        }
+    }
+
+    private async Task ExecutePause(PlaylistTrackViewModel? track)
+    {
+        if (track == null) return;
+        _logger.LogInformation("Pausing track: {Title}", track.Title);
+        await _downloadManager.PauseTrackAsync(track.GlobalId);
+    }
+
+    private async Task ExecuteResume(PlaylistTrackViewModel? track)
+    {
+        if (track == null) return;
+        _logger.LogInformation("Resuming track: {Title}", track.Title);
+        await _downloadManager.ResumeTrackAsync(track.GlobalId);
+    }
+
+    private void ExecuteCancel(PlaylistTrackViewModel? track)
+    {
+        if (track == null) return;
+        _logger.LogInformation("Cancelling track: {Title}", track.Title);
+        _downloadManager.CancelTrack(track.GlobalId);
+    }
+
+    private async Task ExecuteDownloadAlbum(PlaylistTrackViewModel? track)
+    {
+        track ??= LibraryViewModel?.Tracks.LeadSelectedTrack;
+        if (track == null) return;
+
+        var album = track.Album?.Trim();
+        if (string.IsNullOrWhiteSpace(album))
+        {
+            _logger.LogWarning("Download album skipped: selected track has no album metadata");
+            _eventBus.Publish(new NotificationEvent("Download Album", "Track has no album metadata.", NotificationType.Warning));
+            return;
+        }
+
+        var sameAlbumTracks = (LibraryViewModel?.Tracks.CurrentProjectTracks ?? [])
+            .Where(t => t.Model != null
+                && string.Equals(t.Album?.Trim(), album, StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(t.Model.ResolvedFilePath))
+            .ToList();
+
+        if (sameAlbumTracks.Count == 0 && _mainViewModel != null)
+        {
+            sameAlbumTracks = _mainViewModel.AllGlobalTracks
+                .Where(t => t.Model != null
+                    && string.Equals(t.Album?.Trim(), album, StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrWhiteSpace(t.Model.ResolvedFilePath))
+                .ToList();
+        }
+
+        if (sameAlbumTracks.Count == 0)
+        {
+            _logger.LogWarning("Download album found no tracks for album: {Album}", album);
+            _eventBus.Publish(new NotificationEvent("Download Album", $"No tracks found for album \"{album}\".", NotificationType.Warning));
+            return;
+        }
+
+        var queueBatch = sameAlbumTracks
+            .Select(t => t.Model)
+            .Where(m => m != null)
+            .GroupBy(m => m.TrackUniqueHash)
+            .Select(g => g.First())
+            .ToList();
+
+        foreach (var candidate in queueBatch)
+        {
+            candidate.Priority = 0;
+        }
+
+        _downloadManager.QueueTracks(queueBatch);
+
+        _logger.LogInformation(
+            "Queued {Count} track(s) for album download: {Artist} - {Album}",
+            queueBatch.Count,
+            track.Artist,
+            album);
+
+        await Task.CompletedTask;
+    }
+
+    private async Task ExecuteRemoveTrack(PlaylistTrackViewModel? track)
+    {
+        track ??= LibraryViewModel?.Tracks.LeadSelectedTrack;
+        if (track == null) return;
+
+        var label = string.IsNullOrWhiteSpace(track.Title) ? track.GlobalId : $"{track.ArtistName} - {track.TrackTitle}";
+
+        // "Remove from playlist" only makes sense when a specific playlist is actually in
+        // view — in All Tracks there's no single playlist to scope the removal to.
+        var selectedProject = LibraryViewModel?.SelectedProject;
+        var canRemoveFromPlaylist = selectedProject is { Id: var pid } && pid != Guid.Empty;
+
+        var choice = await _dialogService.ShowRemoveTrackChoiceAsync(label, canRemoveFromPlaylist, selectedProject?.SourceTitle);
+
+        switch (choice)
+        {
+            case Views.Avalonia.Controls.RemoveTrackChoice.RemoveFromPlaylist:
+                try
+                {
+                    _logger.LogInformation("Removing track {Title} from playlist {Playlist} only", track.Title, selectedProject!.SourceTitle);
+                    await _libraryService.RemoveTracksFromPlaylistAsync(selectedProject.Id, new List<Guid> { track.Model.Id });
+                    _logger.LogInformation("Track removed from playlist");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to remove track from playlist");
+                    _eventBus.Publish(new NotificationEvent("Remove Track", "Failed to remove track from playlist.", NotificationType.Error));
+                }
+                break;
+
+            case Views.Avalonia.Controls.RemoveTrackChoice.DeletePermanently:
+                try
+                {
+                    _logger.LogInformation("Deleting track from disk and history: {Title}", track.Title);
+                    // Must happen first and finish (synchronous, not fire-and-forget) — NAudio
+                    // keeps the file open for as long as it's the loaded/playing track, so
+                    // deleting before this releases the handle fails silently.
+                    _playerViewModel.StopIfCurrentTrack(track.GlobalId);
+                    await _downloadManager.DeleteTrackFromDiskAndHistoryAsync(track.GlobalId);
+                    _logger.LogInformation("Track deleted successfully");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to delete track");
+                    _eventBus.Publish(new NotificationEvent("Remove Track", "Failed to delete track.", NotificationType.Error));
+                }
+                break;
+
+            case Views.Avalonia.Controls.RemoveTrackChoice.Cancel:
+            default:
+                break;
+        }
+    }
+
+    private async Task ExecuteRetryOfflineTracks()
+    {
+        try
+        {
+            _logger.LogInformation("Retrying all offline tracks");
+            
+            if (_mainViewModel == null) return;
+            
+            var offlineTracks = _mainViewModel.AllGlobalTracks
+                .Where(t => t.State == PlaylistTrackState.Failed)
+                .ToList();
+
+            _logger.LogInformation("Found {Count} failed tracks to retry", offlineTracks.Count);
+
+            foreach (var track in offlineTracks)
+            {
+                await _downloadManager.HardRetryTrack(track.GlobalId);
+                await Task.Delay(100); // Small delay to avoid overwhelming the system
+            }
+
+            _logger.LogInformation("Retry offline tracks completed");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retry offline tracks");
+        }
+    }
+
+    private void ExecuteOpenFolder(PlaylistTrackViewModel? track)
+    {
+        track ??= LibraryViewModel?.Tracks.LeadSelectedTrack;
+        if (track == null) return;
+
+        var filePath = track.Model?.ResolvedFilePath;
+        if (string.IsNullOrEmpty(filePath))
+        {
+            _logger.LogWarning("Cannot open folder - no resolved file path");
+            _eventBus.Publish(new NotificationEvent("Open Folder", "Track has no local file path.", NotificationType.Warning));
+            return;
+        }
+
+        try
+        {
+            var directory = System.IO.Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(directory) && System.IO.Directory.Exists(directory))
+            {
+                // Open folder in file explorer
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = directory,
+                    UseShellExecute = true,
+                    Verb = "open"
+                });
+                _logger.LogInformation("Opened folder: {Directory}", directory);
+            }
+            else
+            {
+                _logger.LogWarning("Directory does not exist: {Directory}", directory);
+                _eventBus.Publish(new NotificationEvent("Open Folder", "Folder not found on disk.", NotificationType.Warning));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to open folder");
+            _eventBus.Publish(new NotificationEvent("Open Folder", "Could not open folder.", NotificationType.Error));
+        }
+    }
+
+
+    private void ExecuteOpenAuditLog(PlaylistTrackViewModel? track)
+    {
+        track ??= LibraryViewModel?.Tracks.LeadSelectedTrack;
+        if (track == null) return;
+
+        var trackHash = string.IsNullOrWhiteSpace(track.Model?.TrackUniqueHash)
+            ? track.Model?.Id.ToString("N")
+            : track.Model?.TrackUniqueHash;
+
+        if (string.IsNullOrEmpty(trackHash)) return;
+
+        ReactiveUI.MessageBus.Current.SendMessage(SLSKDONET.Events.OpenInspectorEvent.Create(
+            new SLSKDONET.ViewModels.Diagnostics.BlackBoxTerminalViewModel(trackHash), 
+            "Library.TrackSelection.AuditLog"));
+    }
+
+    private async Task ExecuteOpenInCueForge(PlaylistTrackViewModel? track)
+    {
+        track ??= LibraryViewModel?.Tracks.LeadSelectedTrack;
+        if (track == null) return;
+
+        var hash = string.IsNullOrWhiteSpace(track.Model?.TrackUniqueHash)
+            ? track.Model?.Id.ToString("N")
+            : track.Model?.TrackUniqueHash;
+        if (string.IsNullOrEmpty(hash)) return;
+
+        // Sync browser sidebar to the playlist that contains this track
+        _cueForgeViewModel.SetPlaylistContext(LibraryViewModel?.SelectedProject);
+
+        await _cueForgeViewModel.LoadTrackAsync(hash, track.Title, track.Artist);
+        _eventBus.Publish(new Models.NavigateToPageEvent("CueForge"));
+    }
+
+    public void Dispose()
+    {
+        if (_isDisposed) return;
+        if (_healthChangedHandler != null)
+        {
+            _dependencyHealthService.HealthChanged -= _healthChangedHandler;
+        }
+        _isDisposed = true;
+    }
+
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+}
