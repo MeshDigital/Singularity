@@ -10,6 +10,9 @@ namespace Singularity.Tools.ChartBench;
 /// <param name="Coverage">Share of reference sung time overlapped by generated notes.</param>
 /// <param name="PitchClass">Time-weighted share of overlaps where both sing the same note name (octave ignored, as UltraStar scores).</param>
 /// <param name="PitchWithinSemitone">As <paramref name="PitchClass"/>, allowing one semitone.</param>
+/// <param name="Transposition">The whole-chart shift (semitones, -5..+6) that best fits the reference. Non-zero means
+/// the reference is in another key than the recording (some human charts are), not that the melody is wrong.</param>
+/// <param name="PitchClassTransposed"><paramref name="PitchClass"/> after applying <paramref name="Transposition"/>.</param>
 public sealed record ChartComparison(
     int ReferenceNotes,
     int GeneratedNotes,
@@ -19,7 +22,9 @@ public sealed record ChartComparison(
     double MedianOnsetErrorMs,
     double Coverage,
     double PitchClass,
-    double PitchWithinSemitone)
+    double PitchWithinSemitone,
+    int Transposition,
+    double PitchClassTransposed)
 {
     private readonly record struct TimedNote(double StartMs, double EndMs, int Tone);
 
@@ -38,6 +43,7 @@ public sealed record ChartComparison(
         var hits = errors.Where(d => Math.Abs(d) <= 150).Order().ToArray();
 
         double refTime = r.Sum(n => n.EndMs - n.StartMs), overlapTime = 0, samePc = 0, nearPc = 0;
+        var byShift = new double[12]; // overlap time per pitch-class difference (generated - reference)
         foreach (var n in r)
         {
             foreach (var m in g)
@@ -46,18 +52,22 @@ public sealed record ChartComparison(
                 if (o <= 0) continue;
                 overlapTime += o;
                 int d = ((m.Tone - n.Tone) % 12 + 12) % 12;
+                byShift[d] += o;
                 if (d > 6) d -= 12;
                 if (d == 0) samePc += o;
                 if (Math.Abs(d) <= 1) nearPc += o;
             }
         }
+        int bestShift = Array.IndexOf(byShift, byShift.Max());
 
         return new ChartComparison(
             r.Count, gAll.Count, Recall(50), Recall(100), precision,
             hits.Length > 0 ? hits[hits.Length / 2] : double.NaN,
             refTime > 0 ? Math.Min(1, overlapTime / refTime) : 0,
             overlapTime > 0 ? samePc / overlapTime : 0,
-            overlapTime > 0 ? nearPc / overlapTime : 0);
+            overlapTime > 0 ? nearPc / overlapTime : 0,
+            bestShift > 6 ? bestShift - 12 : bestShift,
+            overlapTime > 0 ? byShift[bestShift] / overlapTime : 0);
     }
 
     private static List<TimedNote> Notes(UltraStarSong song, bool includeFreestyle) =>

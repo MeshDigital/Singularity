@@ -104,7 +104,8 @@ foreach (var folder in group)
 
         var c = ChartComparison.Compare(reference, generated);
         rows.Add((name, lyricsLabel, offset, c, null, sw.Elapsed.TotalSeconds));
-        Console.WriteLine($"{c.Recall100,4:P0} recall {c.Precision100,4:P0} prec {c.PitchClass,4:P0} pitch {c.Coverage,4:P0} cover  {sw.Elapsed.TotalSeconds,5:0}s  {name}  [{lyricsLabel}]");
+        var key = c.Transposition == 0 ? "" : $" (ref transposed {c.Transposition:+0;-0}: {c.PitchClassTransposed:P0})";
+        Console.WriteLine($"{c.Recall100,4:P0} recall {c.Precision100,4:P0} prec {c.PitchClass,4:P0} pitch {c.Coverage,4:P0} cover  {sw.Elapsed.TotalSeconds,5:0}s  {name}  [{lyricsLabel}]{key}");
     }
     catch (Exception ex) when (ex is not OperationCanceledException and not InferenceWorkerException)
     {
@@ -126,16 +127,17 @@ if (ok.Count > 0)
     Console.WriteLine();
     Console.WriteLine($"{ok.Count} songs (median): recall@100ms {Median(c => c.Recall100):P0}, recall@50ms {Median(c => c.Recall50):P0}, " +
                       $"precision@100ms {Median(c => c.Precision100):P0}, coverage {Median(c => c.Coverage):P0}, " +
-                      $"pitch class {Median(c => c.PitchClass):P0}, within a semitone {Median(c => c.PitchWithinSemitone):P0}, " +
+                      $"pitch class {Median(c => c.PitchClass):P0} (key-corrected {Median(c => c.PitchClassTransposed):P0}; {ok.Count(c => c.Transposition != 0)} references in another key), " +
+                      $"within a semitone {Median(c => c.PitchWithinSemitone):P0}, " +
                       $"onset error {Median(c => c.MedianOnsetErrorMs):+0;-0} ms; failed {rows.Count - ok.Count}");
 }
 
-var csv = new StringBuilder("song,lyrics,lrc_offset,ref_notes,gen_notes,recall50,recall100,precision100,onset_err_ms,coverage,pitch_class,pitch_semitone,seconds,error\n");
+var csv = new StringBuilder("song,lyrics,lrc_offset,ref_notes,gen_notes,recall50,recall100,precision100,onset_err_ms,coverage,pitch_class,pitch_semitone,transposition,pitch_class_transposed,seconds,error\n");
 foreach (var (song, kind, offset, c, error, seconds) in rows)
 {
     string F(double x) => double.IsNaN(x) ? "" : x.ToString("0.###", CultureInfo.InvariantCulture);
     csv.Append(Quote(song)).Append(',').Append(kind).Append(',').Append(Quote(offset ?? "")).Append(',');
-    csv.Append(c is null ? ",,,,,,,,," : $"{c.ReferenceNotes},{c.GeneratedNotes},{F(c.Recall50)},{F(c.Recall100)},{F(c.Precision100)},{F(c.MedianOnsetErrorMs)},{F(c.Coverage)},{F(c.PitchClass)},{F(c.PitchWithinSemitone)},");
+    csv.Append(c is null ? ",,,,,,,,,,," : $"{c.ReferenceNotes},{c.GeneratedNotes},{F(c.Recall50)},{F(c.Recall100)},{F(c.Precision100)},{F(c.MedianOnsetErrorMs)},{F(c.Coverage)},{F(c.PitchClass)},{F(c.PitchWithinSemitone)},{c.Transposition},{F(c.PitchClassTransposed)},");
     csv.Append(F(seconds)).Append(',').Append(Quote(error ?? "")).Append('\n');
 }
 File.WriteAllText(Path.Combine(outDir, "results.csv"), csv.ToString());

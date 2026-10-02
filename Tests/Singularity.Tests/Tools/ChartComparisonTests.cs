@@ -46,4 +46,14 @@ public class ChartComparisonTests
         Assert.Equal(1.0, c.Recall100);
         Assert.Equal(0.5, c.Precision100);
     }
+
+    [Fact]
+    public void ReferenceInAnotherKey_IsReportedAsATransposition()
+    {
+        // The reference is charted a semitone low; the generated melody is otherwise identical.
+        var c = ChartComparison.Compare(Song(0, (0, 10, 59), (10, 10, 61)), Song(0, (0, 10, 60), (10, 10, 62)));
+        Assert.Equal(0.0, c.PitchClass);
+        Assert.Equal(1, c.Transposition);
+        Assert.Equal(1.0, c.PitchClassTransposed);
+    }
 }
