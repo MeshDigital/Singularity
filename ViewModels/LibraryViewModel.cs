@@ -17,9 +17,6 @@ using Avalonia.Threading;
 using Singularity.Events;
 using Singularity.Configuration;
 using Singularity.Services.Library;
-using Singularity.Services.Playlist;
-using Singularity.Services.Similarity;
-using Singularity.Models.Musical;
 
 namespace Singularity.ViewModels;
 
@@ -30,8 +27,6 @@ namespace Singularity.ViewModels;
 public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly CompositeDisposable _disposables = new();
-    private readonly System.Reactive.Subjects.Subject<System.Reactive.Unit> _intelligenceContextRefreshRequests = new();
-    private readonly System.Reactive.Subjects.Subject<System.Reactive.Unit> _selectionInspectorRefreshRequests = new();
     private bool _isDisposed;
 
     private readonly ILogger<LibraryViewModel> _logger;
@@ -56,12 +51,6 @@ public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
     private readonly Configuration.AppConfig _appConfig;
     private readonly ConfigManager _configManager;
     private readonly Services.Library.PlaylistExportService _exportService;
-    private readonly Services.Export.UsbExportOrchestrator _exportOrchestrator;
-    private readonly PlaylistIntelligenceService? _playlistIntelligenceService;
-    private readonly ISavedDoublesService? _savedDoublesService;
-    private readonly TrackSimilarityService? _trackSimilarityService;
-    private readonly SimilarityIndex? _similarityIndex;
-    private readonly TransitionStyleClassifier? _transitionStyleClassifier;
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
     
     public Library.ProjectListViewModel Projects { get; }
@@ -72,9 +61,6 @@ public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
     public LibrarySourcesViewModel LibrarySourcesViewModel { get; }
     public Library.LibraryHealthViewModel LibraryHealthViewModel { get; }
     public ImportHistoryViewModel ImportHistoryViewModel => _importHistoryViewModel;
-    public LibraryDoubleInspectorViewModel DoubleInspector { get; }
-    public LibraryTrackInspectorViewModel TrackInspector { get; }
-    public PlaylistIntelligenceViewModel Intelligence { get; }
 
     private Views.MainViewModel? _mainViewModel;
     public Views.MainViewModel? MainViewModel
@@ -149,12 +135,6 @@ public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
     private int _ingestionBacklogCount;
     private int _desiredDownloadCount;
     private string _libraryLifecycleStatusMessage = string.Empty;
-    private bool _isSmartPlaylistContext;
-    private int _savedDoublesSidebarFocusRequestVersion;
-    private readonly System.Collections.Generic.HashSet<string> _savedDoublePartnersForCurrentTrack = new(StringComparer.Ordinal);
-
-    private const string IntelligenceTabUpgrade = "Upgrade";
-    private const double SavedDoublePriorBonus = 0.03;
 
     public bool IsNavigationHoverAutoHideEnabled => _appConfig.LibraryNavigationAutoHideEnabled;
 
@@ -182,234 +162,8 @@ public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
         set { SetProperty(ref _libraryNavPanelWidth, value); }
     }
 
-    public double LibrarySmartInsertMinConfidence
-    {
-        get => Intelligence.LibrarySmartInsertMinConfidence;
-        set => Intelligence.LibrarySmartInsertMinConfidence = value;
-    }
-
-    public int LibrarySmartInsertStructureSensitivity
-    {
-        get => Intelligence.LibrarySmartInsertStructureSensitivity;
-        set => Intelligence.LibrarySmartInsertStructureSensitivity = value;
-    }
-
-    public string LibrarySmartInsertThresholdPreset => Intelligence.LibrarySmartInsertThresholdPreset;
-
-    public bool IsSmartInsertStrictPresetActive => Intelligence.IsSmartInsertStrictPresetActive;
-
-    public bool IsSmartInsertNormalPresetActive => Intelligence.IsSmartInsertNormalPresetActive;
-
-    public bool IsSmartInsertLoosePresetActive => Intelligence.IsSmartInsertLoosePresetActive;
-
-    public bool IsLibraryIntelligencePanelVisible =>
-        !_isSmartPlaylistContext && Projects.SelectedProject is { Id: var id } && id != Guid.Empty;
-
-    public string LibraryIntelligencePlaylistTitle =>
-        Projects.SelectedProject?.SourceTitle ?? "No playlist selected";
-
-    public string SelectedLibraryIntelligenceTab
-    {
-        get => Intelligence.SelectedLibraryIntelligenceTab;
-        set
-        {
-            if (Intelligence.FocusLibraryIntelligenceTab(value))
-                RaiseLibraryIntelligenceTabStateChanged();
-        }
-    }
-
-    public string? TrackExplainabilitySummary => TrackInspector.TrackExplainabilitySummary;
-
-    public System.Collections.Generic.IReadOnlyList<string> TrackExplainabilityReasons => TrackInspector.TrackExplainabilityReasons;
-
-    public bool IsTrackExplainabilityVisible => TrackInspector.IsTrackExplainabilityVisible;
-
-    public System.Collections.ObjectModel.ObservableCollection<PlaylistTrackViewModel> SimilarTracksPreview => TrackInspector.SimilarTracksPreview;
-
-    public bool HasSimilarTracksPreview => TrackInspector.HasSimilarTracksPreview;
-
-    public System.Collections.ObjectModel.ObservableCollection<Library.SavedDoubleViewModel> SavedDoubles { get; } = new();
-
-    public bool HasSavedDoubles => SavedDoubles.Count > 0;
-
-    public System.Collections.ObjectModel.ObservableCollection<Library.SavedDoubleViewModel> SavedDoublesForLeadTrack { get; } = new();
-
-    public bool HasSavedDoublesForLeadTrack => SavedDoublesForLeadTrack.Count > 0;
-
-    public System.Collections.Generic.IEnumerable<Library.SavedDoubleViewModel> SavedDoublesForLeadTrackPreview => SavedDoublesForLeadTrack.Take(4);
-
-    public bool HasMoreSavedDoublesForLeadTrack => SavedDoublesForLeadTrack.Count > 4;
-
-    public System.Collections.ObjectModel.ObservableCollection<Library.SavedDoubleViewModel> SavedDoublesForCurrentPlayerTrack { get; } = new();
-
-    public bool HasSavedDoublesForCurrentPlayerTrack => SavedDoublesForCurrentPlayerTrack.Count > 0;
-
-    public System.Collections.Generic.IEnumerable<Library.SavedDoubleViewModel> SavedDoublesForCurrentPlayerTrackPreview => SavedDoublesForCurrentPlayerTrack.Take(4);
-
-    public bool HasMoreSavedDoublesForCurrentPlayerTrack => SavedDoublesForCurrentPlayerTrack.Count > 4;
-
-    public int SavedDoublesSidebarFocusRequestVersion
-    {
-        get => _savedDoublesSidebarFocusRequestVersion;
-        private set => SetProperty(ref _savedDoublesSidebarFocusRequestVersion, value);
-    }
-
-    public System.Collections.ObjectModel.ObservableCollection<Library.SuggestNextCandidateViewModel> SuggestNextCandidates => Intelligence.SuggestNextCandidates;
-
-    public bool HasSuggestNextCandidates => SuggestNextCandidates.Count > 0;
-
-    public bool IsSuggestNextLoading => Intelligence.IsSuggestNextLoading;
-
-    public string SuggestNextInfoText => Intelligence.SuggestNextInfoText;
-
-    public System.Collections.ObjectModel.ObservableCollection<Library.PlaylistUpgradeCandidateViewModel> PlaylistUpgradeCandidates => Intelligence.PlaylistUpgradeCandidates;
-
-    public bool HasPlaylistUpgradeCandidates => PlaylistUpgradeCandidates.Count > 0;
-
-    public bool IsPlaylistUpgradeLoading => Intelligence.IsPlaylistUpgradeLoading;
-
-    public string PlaylistUpgradeInfoText => Intelligence.PlaylistUpgradeInfoText;
-
-    public string SmartInsertFromLabel
-    {
-        get => Intelligence.SmartInsertFromLabel;
-    }
-
-    public string SmartInsertToLabel
-    {
-        get => Intelligence.SmartInsertToLabel;
-    }
-
-    public string SmartInsertContextSummary => Intelligence.SmartInsertContextSummary;
-
-    public string SmartInsertPreparationHint
-    {
-        get => Intelligence.SmartInsertPreparationHint;
-    }
-
-    public bool IsSmartInsertPreparationHintVisible => Intelligence.IsSmartInsertPreparationHintVisible;
-
-    public bool HasPendingSmartInsertContext => Intelligence.HasPendingSmartInsertContext;
-
-    private void RaiseSmartInsertPresetStateChanged()
-    {
-        OnPropertyChanged(nameof(LibrarySmartInsertThresholdPreset));
-        OnPropertyChanged(nameof(IsSmartInsertStrictPresetActive));
-        OnPropertyChanged(nameof(IsSmartInsertNormalPresetActive));
-        OnPropertyChanged(nameof(IsSmartInsertLoosePresetActive));
-    }
-
-    internal (double MinConfidence, int StructureSensitivity) GetSmartInsertSettingsSnapshot()
-    {
-        if (_appConfig is null)
-            return (0.72, 55);
-
-        return (
-            Math.Clamp(_appConfig.LibrarySmartInsertMinConfidence, 0.0, 1.0),
-            Math.Clamp(_appConfig.LibrarySmartInsertStructureSensitivity, 0, 100));
-    }
-
-    internal bool UpdateSmartInsertSettingsFromIntelligence(double minConfidence, int structureSensitivity)
-    {
-        if (_appConfig is null)
-        {
-            OnPropertyChanged(nameof(LibrarySmartInsertMinConfidence));
-            OnPropertyChanged(nameof(LibrarySmartInsertStructureSensitivity));
-            RaiseSmartInsertPresetStateChanged();
-            return true;
-        }
-
-        var normalizedMin = Math.Clamp(minConfidence, 0.0, 1.0);
-        var normalizedStructure = Math.Clamp(structureSensitivity, 0, 100);
-
-        var changed = Math.Abs(_appConfig.LibrarySmartInsertMinConfidence - normalizedMin) >= 0.0001
-            || _appConfig.LibrarySmartInsertStructureSensitivity != normalizedStructure;
-
-        _appConfig.LibrarySmartInsertMinConfidence = normalizedMin;
-        _appConfig.LibrarySmartInsertStructureSensitivity = normalizedStructure;
-
-        OnPropertyChanged(nameof(LibrarySmartInsertMinConfidence));
-        OnPropertyChanged(nameof(LibrarySmartInsertStructureSensitivity));
-        RaiseSmartInsertPresetStateChanged();
-
-        return changed;
-    }
-
-    private void RaiseLibraryIntelligenceTabStateChanged()
-    {
-        OnPropertyChanged(nameof(SelectedLibraryIntelligenceTab));
-    }
-
-    private void RaiseLibraryIntelligenceContextStateChanged()
-    {
-        OnPropertyChanged(nameof(IsLibraryIntelligencePanelVisible));
-        OnPropertyChanged(nameof(LibraryIntelligencePlaylistTitle));
-    }
-
-    internal TrackSimilarityService? TrackSimilarityService => _trackSimilarityService;
     internal ILogger<LibraryViewModel> Logger => _logger;
     internal PlayerViewModel Player => _playerViewModel;
-
-    internal static string BuildCamelotCompatibilityLabel(string? leftCamelot, string? rightCamelot)
-    {
-        if (!TryParseCamelot(leftCamelot, out var leftNumber, out var leftWheel) ||
-            !TryParseCamelot(rightCamelot, out var rightNumber, out var rightWheel))
-        {
-            return "Key compatibility: Analyze both tracks";
-        }
-
-        var wheelDistance = Math.Abs(leftNumber - rightNumber);
-        wheelDistance = Math.Min(wheelDistance, 12 - wheelDistance);
-        var sameWheel = leftWheel == rightWheel;
-
-        var verdict = (wheelDistance, sameWheel) switch
-        {
-            (0, true) => "Lock",
-            (0, false) => "Relative",
-            (1, true) => "Compatible",
-            (1, false) => "Creative",
-            (2, _) => "Stretch",
-            _ => "Risky"
-        };
-
-        return $"Key: {leftCamelot} -> {rightCamelot} ({verdict})";
-    }
-
-    private static bool TryParseCamelot(string? camelot, out int number, out char wheel)
-    {
-        number = 0;
-        wheel = 'A';
-
-        if (string.IsNullOrWhiteSpace(camelot))
-            return false;
-
-        var trimmed = camelot.Trim().ToUpperInvariant();
-        if (trimmed.Length < 2)
-            return false;
-
-        wheel = trimmed[^1];
-        if (wheel is not ('A' or 'B'))
-            return false;
-
-        if (!int.TryParse(trimmed[..^1], out number))
-            return false;
-
-        return number is >= 1 and <= 12;
-    }
-
-    private void SetSmartPlaylistContextMode(bool enabled)
-    {
-        if (_isSmartPlaylistContext == enabled)
-            return;
-
-        _isSmartPlaylistContext = enabled;
-        RaiseLibraryIntelligenceContextStateChanged();
-    }
-
-    internal void FocusLibraryIntelligenceTab(string tab)
-    {
-        SelectedLibraryIntelligenceTab = tab;
-    }
 
     public int PhysicalOnDiskCount
     {
@@ -535,13 +289,7 @@ public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
         Configuration.AppConfig appConfig,
         ConfigManager configManager,
         Services.Library.PlaylistExportService exportService,
-        Services.Export.UsbExportOrchestrator exportOrchestrator,
-        IDbContextFactory<AppDbContext> dbFactory,
-        PlaylistIntelligenceService? playlistIntelligenceService = null,
-        ISavedDoublesService? savedDoublesService = null,
-        TrackSimilarityService? trackSimilarityService = null,
-        SimilarityIndex? similarityIndex = null,
-        TransitionStyleClassifier? transitionStyleClassifier = null)
+        IDbContextFactory<AppDbContext> dbFactory)
     {
         _dbFactory = dbFactory;
         _logger = logger;
@@ -564,12 +312,6 @@ public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
         _appConfig = appConfig;
         _configManager = configManager;
         _exportService = exportService;
-        _exportOrchestrator = exportOrchestrator;
-        _playlistIntelligenceService = playlistIntelligenceService;
-        _savedDoublesService = savedDoublesService;
-        _trackSimilarityService = trackSimilarityService;
-        _similarityIndex = similarityIndex;
-        _transitionStyleClassifier = transitionStyleClassifier;
         LibrarySourcesViewModel = librarySourcesViewModel;
         LibraryHealthViewModel = libraryHealthViewModel;
 
@@ -590,10 +332,6 @@ public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
         Tracks = tracks;
         Operations = operations;
         SmartPlaylists = smartPlaylists;
-        DoubleInspector = new LibraryDoubleInspectorViewModel(this, _logger, _trackSimilarityService, _transitionStyleClassifier);
-        TrackInspector = new LibraryTrackInspectorViewModel(this, _logger, _similarityIndex);
-        var optimizer = _serviceProvider?.GetService(typeof(Services.Playlist.PlaylistOptimizer)) as Services.Playlist.PlaylistOptimizer;
-        Intelligence = new PlaylistIntelligenceViewModel(this, _trackSimilarityService, optimizer);
 
         // Bridge TrackList and Operations for ContextMenu functionality
         Tracks.Operations = operations;
@@ -607,25 +345,7 @@ public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
         Projects.ProjectSelected += OnProjectSelected;
         SmartPlaylists.SmartPlaylistSelected += OnSmartPlaylistSelected;
         Tracks.SelectedTracks.CollectionChanged += OnTrackSelectionChanged;
-        WireIntelligenceRefreshDebounce();
-        WireSelectionInspectorRefreshDebounce();
 
-        // Turning "+ Mix" on mid-playback should surface the current pair's transition settings
-        // immediately (same as pressing Play with Mix already on) — not silently do nothing until
-        // the next time Play happens to be pressed.
-        Tracks.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(Tracks.IsMixModeEnabled) && Tracks.IsMixModeEnabled && _playerViewModel.HasCurrentTrack)
-            {
-                _playerViewModel.ShowMixPanelForCurrentPair();
-            }
-        };
-        _playerViewModel.PropertyChanged += OnPlayerViewModelPropertyChanged;
-        _playerViewModel.Queue.CollectionChanged += OnPlayerQueueCollectionChanged;
-        SavedDoubles.CollectionChanged += OnSavedDoublesCollectionChanged;
-        SavedDoublesForLeadTrack.CollectionChanged += OnSavedDoublesForLeadTrackCollectionChanged;
-        SavedDoublesForCurrentPlayerTrack.CollectionChanged += OnSavedDoublesForCurrentPlayerTrackCollectionChanged;
-        
 
         
         _disposables.Add(_eventBus.GetEvent<ProjectAddedEvent>().Subscribe(OnProjectAdded));
@@ -635,19 +355,6 @@ public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
         _disposables.Add(_eventBus.GetEvent<FileIngestionCompletedEvent>().Subscribe(OnFileIngestionCompleted));
         _disposables.Add(_eventBus.GetEvent<FileMissingDetectedEvent>().Subscribe(OnFileMissingDetected));
         _disposables.Add(_eventBus.GetEvent<TrackRemovedEvent>().Subscribe(evt => OnLibraryTrackRemoved(evt.TrackGlobalId)));
-        // Playlist Overview stats should update live as tracks land in whichever playlist is
-        // currently open, not just when the user re-selects it — filtered so an import into a
-        // different playlist elsewhere doesn't trigger a pointless refresh.
-        _disposables.Add(_eventBus.GetEvent<TrackAddedEvent>().Subscribe(evt =>
-        {
-            if (SelectedProject != null && evt.TrackModel.PlaylistId == SelectedProject.Id)
-                _ = Intelligence.RefreshOverviewStatsAsync();
-        }));
-        _disposables.Add(_eventBus.GetEvent<BatchTracksAddedEvent>().Subscribe(evt =>
-        {
-            if (SelectedProject != null && evt.Tracks.Any(t => t.Track.PlaylistId == SelectedProject.Id))
-                _ = Intelligence.RefreshOverviewStatsAsync();
-        }));
         _disposables.Add(_eventBus.GetEvent<RemoveTrackFromInspectorEvent>().Subscribe(_ =>
             Dispatcher.UIThread.InvokeAsync(() => Operations.RemoveTrackCommand.Execute(null))));
         _disposables.Add(_eventBus.GetEvent<EditTagsFromInspectorEvent>().Subscribe(_ =>
@@ -656,107 +363,7 @@ public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
         // Startup background tasks
         Task.Run(() => _libraryService.SyncLibraryEntriesFromTracksAsync()).ConfigureAwait(false);
         _ = RefreshLifecycleMetricsAsync();
-        Intelligence.SeedSuggestNextScaffoldCandidates();
-        Intelligence.SeedPlaylistUpgradeScaffoldCandidates();
-        _ = Intelligence.RefreshSuggestNextCandidatesAsync();
-        _ = Intelligence.RefreshPlaylistUpgradeCandidatesAsync();
-        _ = Intelligence.RefreshOverviewStatsAsync();
 
-        _ = RefreshSavedDoublesAsync();
-    }
-
-    /// <summary>
-    /// RefreshSuggestNextCandidatesAsync/RefreshPlaylistUpgradeCandidatesAsync (both invoked from
-    /// OnTrackSelectionChanged, see LibraryViewModel.Events.cs) each walk up to 120-140 candidate
-    /// tracks with a sequential awaited similarity lookup — clicking rapidly through the track
-    /// list used to fire a fresh pair of these scans on every single click with no debounce, so
-    /// overlapping stale scans piled up (their internal version-counter guard only checks between
-    /// loop iterations, it doesn't stop in-flight work) and visibly delayed the CONTEXT sidepanel
-    /// reacting to whichever track is actually selected now. Collapsed to one recompute per
-    /// click-burst, matching the Throttle pattern TrackListViewModel already uses for search.
-    /// </summary>
-    private void WireIntelligenceRefreshDebounce()
-    {
-        _disposables.Add(_intelligenceContextRefreshRequests
-            .Throttle(TimeSpan.FromMilliseconds(200))
-            .Subscribe(__ =>
-            {
-                // Throttle's timer fires on a raw ThreadPool thread with no synchronization
-                // context safety net — an exception here (e.g. Dispatcher.UIThread.Post throwing
-                // when no Avalonia dispatcher loop is running, such as inside a headless test host)
-                // propagates unhandled through Rx and has been observed to crash the entire
-                // process/test run rather than just this one operation. Guarded defensively since
-                // "one click's refresh failed" must never be allowed to take down the whole app.
-                try
-                {
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        // Guarded separately from the Post(...) call itself: this delegate runs
-                        // later/elsewhere (the real UI-thread dispatcher loop in production, but
-                        // synchronously or on some other thread in a headless/test host with no
-                        // dispatcher loop pumping), so an exception thrown here is NOT inside the
-                        // outer try's dynamic scope and would otherwise still escape unhandled.
-                        try
-                        {
-                            _ = Intelligence.RefreshSuggestNextCandidatesAsync();
-                            _ = Intelligence.RefreshPlaylistUpgradeCandidatesAsync();
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Intelligence candidate refresh failed");
-                        }
-                    });
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to schedule Intelligence candidate refresh");
-                }
-            }));
-    }
-
-    /// <summary>
-    /// Shift-click range selection and marquee drag-select fire one CollectionChanged event per
-    /// row as the DataGrid's selection grows/shrinks — without this debounce, each of those raw
-    /// events used to synchronously kick off DoubleInspector's pairwise DB/similarity lookup and
-    /// TrackInspector's enhancement fetch (both real per-row DB work), piling up overlapping,
-    /// mostly-stale async calls for selection states the user never actually settled on. Collapsed
-    /// to one recompute per selection-burst, reading the settled selection fresh when the throttle
-    /// fires rather than the stale snapshot from whichever intermediate event triggered it — same
-    /// pattern as WireIntelligenceRefreshDebounce above. The cheap, immediately-user-visible parts
-    /// of OnTrackSelectionChanged (Mix-mode click-through pairing, opening the right sidepanel via
-    /// the message bus) stay synchronous/undebounced since they're what the user directly sees.
-    /// </summary>
-    private void WireSelectionInspectorRefreshDebounce()
-    {
-        _disposables.Add(_selectionInspectorRefreshRequests
-            .Throttle(TimeSpan.FromMilliseconds(200))
-            .Subscribe(__ =>
-            {
-                try
-                {
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        try
-                        {
-                            var current = Tracks.SelectedTracks.ToList();
-                            _ = DoubleInspector.HandleSelectionChangedAsync(current);
-                            if (current.Count == 1)
-                            {
-                                _ = TryAttachInspectorPairwiseContextAsync(current[0]);
-                                _ = TrackInspector.TryAttachEnhancementsAsync(current[0]);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Selection inspector refresh failed");
-                        }
-                    });
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to schedule selection inspector refresh");
-                }
-            }));
     }
 
     public void Dispose()
@@ -776,198 +383,9 @@ public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
                 Projects.ProjectSelected -= OnProjectSelected;
                 SmartPlaylists.SmartPlaylistSelected -= OnSmartPlaylistSelected;
                 Tracks.SelectedTracks.CollectionChanged -= OnTrackSelectionChanged;
-                _playerViewModel.PropertyChanged -= OnPlayerViewModelPropertyChanged;
-                _playerViewModel.Queue.CollectionChanged -= OnPlayerQueueCollectionChanged;
-                SavedDoubles.CollectionChanged -= OnSavedDoublesCollectionChanged;
-                SavedDoublesForLeadTrack.CollectionChanged -= OnSavedDoublesForLeadTrackCollectionChanged;
-                SavedDoublesForCurrentPlayerTrack.CollectionChanged -= OnSavedDoublesForCurrentPlayerTrackCollectionChanged;
-                Intelligence.Dispose();
             }
             _isDisposed = true;
         }
-    }
-
-    private void OnSavedDoublesCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
-    {
-        OnPropertyChanged(nameof(HasSavedDoubles));
-    }
-
-    private void OnSavedDoublesForLeadTrackCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
-    {
-        OnPropertyChanged(nameof(SavedDoublesForLeadTrackPreview));
-        OnPropertyChanged(nameof(HasSavedDoublesForLeadTrack));
-        OnPropertyChanged(nameof(HasMoreSavedDoublesForLeadTrack));
-    }
-
-    private void OnSavedDoublesForCurrentPlayerTrackCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
-    {
-        OnPropertyChanged(nameof(SavedDoublesForCurrentPlayerTrackPreview));
-        OnPropertyChanged(nameof(HasSavedDoublesForCurrentPlayerTrack));
-        OnPropertyChanged(nameof(HasMoreSavedDoublesForCurrentPlayerTrack));
-    }
-
-    private void OnPlayerViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (!string.Equals(e.PropertyName, nameof(PlayerViewModel.CurrentTrack), StringComparison.Ordinal) &&
-            !string.Equals(e.PropertyName, nameof(PlayerViewModel.HasCurrentTrack), StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        // No Overview-stats refresh here: they describe the open playlist, not what's playing, and
-        // recomputing them on every track change (twice — CurrentTrack and HasCurrentTrack both
-        // land here) reloaded the whole playlist each time; on a 2k-track playlist that was a
-        // visible stutter on every track change during a listening session.
-        if (Dispatcher.UIThread.CheckAccess())
-        {
-            RefreshSavedDoublesForCurrentPlayerTrack();
-            _ = Intelligence.RefreshSuggestNextCandidatesAsync();
-            _ = Intelligence.RefreshPlaylistUpgradeCandidatesAsync();
-            return;
-        }
-
-        _ = Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            RefreshSavedDoublesForCurrentPlayerTrack();
-            _ = Intelligence.RefreshSuggestNextCandidatesAsync();
-            _ = Intelligence.RefreshPlaylistUpgradeCandidatesAsync();
-        });
-    }
-
-    private void OnPlayerQueueCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
-    {
-        UpdateQueueSavedDoublePartnerFlags();
-    }
-
-    private void RefreshSavedDoublesForLeadTrack(PlaylistTrackViewModel? leadTrack)
-    {
-        SavedDoublesForLeadTrack.Clear();
-
-        var leadTrackId = leadTrack?.GlobalId;
-        if (string.IsNullOrWhiteSpace(leadTrackId))
-        {
-            OnPropertyChanged(nameof(SavedDoublesForLeadTrack));
-            OnPropertyChanged(nameof(HasSavedDoublesForLeadTrack));
-            return;
-        }
-
-        var matches = SavedDoubles
-            .Where(saved =>
-                string.Equals(saved.Model.TrackAId, leadTrackId, StringComparison.Ordinal) ||
-                string.Equals(saved.Model.TrackBId, leadTrackId, StringComparison.Ordinal))
-            .ToList();
-
-        foreach (var saved in matches)
-        {
-            var hydrated = Library.SavedDoubleViewModel.TryCreate(saved.Model, ResolveTrackViewModel);
-            if (hydrated is null)
-                continue;
-
-            hydrated.LeadTrackId = leadTrackId;
-
-            SavedDoublesForLeadTrack.Add(hydrated);
-        }
-
-        OnPropertyChanged(nameof(SavedDoublesForLeadTrack));
-        OnPropertyChanged(nameof(SavedDoublesForLeadTrackPreview));
-        OnPropertyChanged(nameof(HasSavedDoublesForLeadTrack));
-        OnPropertyChanged(nameof(HasMoreSavedDoublesForLeadTrack));
-    }
-
-    private void RefreshSavedDoublesForCurrentPlayerTrack()
-    {
-        SavedDoublesForCurrentPlayerTrack.Clear();
-        _savedDoublePartnersForCurrentTrack.Clear();
-
-        var currentTrackId = _playerViewModel.CurrentTrack?.GlobalId;
-        if (string.IsNullOrWhiteSpace(currentTrackId))
-        {
-            UpdateQueueSavedDoublePartnerFlags();
-            OnPropertyChanged(nameof(SavedDoublesForCurrentPlayerTrack));
-            OnPropertyChanged(nameof(SavedDoublesForCurrentPlayerTrackPreview));
-            OnPropertyChanged(nameof(HasSavedDoublesForCurrentPlayerTrack));
-            OnPropertyChanged(nameof(HasMoreSavedDoublesForCurrentPlayerTrack));
-            return;
-        }
-
-        var matches = SavedDoubles
-            .Where(saved =>
-                string.Equals(saved.Model.TrackAId, currentTrackId, StringComparison.Ordinal) ||
-                string.Equals(saved.Model.TrackBId, currentTrackId, StringComparison.Ordinal))
-            .ToList();
-
-        foreach (var saved in matches)
-        {
-            var hydrated = Library.SavedDoubleViewModel.TryCreate(saved.Model, ResolveTrackViewModel);
-            if (hydrated is null)
-                continue;
-
-            hydrated.LeadTrackId = currentTrackId;
-            var counterpartId = string.Equals(saved.Model.TrackAId, currentTrackId, StringComparison.Ordinal)
-                ? saved.Model.TrackBId
-                : saved.Model.TrackAId;
-            if (!string.IsNullOrWhiteSpace(counterpartId))
-                _savedDoublePartnersForCurrentTrack.Add(counterpartId);
-            SavedDoublesForCurrentPlayerTrack.Add(hydrated);
-        }
-
-        UpdateQueueSavedDoublePartnerFlags();
-
-        OnPropertyChanged(nameof(SavedDoublesForCurrentPlayerTrack));
-        OnPropertyChanged(nameof(SavedDoublesForCurrentPlayerTrackPreview));
-        OnPropertyChanged(nameof(HasSavedDoublesForCurrentPlayerTrack));
-        OnPropertyChanged(nameof(HasMoreSavedDoublesForCurrentPlayerTrack));
-    }
-
-    private void UpdateQueueSavedDoublePartnerFlags()
-    {
-        foreach (var track in _playerViewModel.Queue)
-        {
-            var trackId = track.GlobalId;
-            track.IsSavedDoublePartner =
-                !string.IsNullOrWhiteSpace(trackId) &&
-                _savedDoublePartnersForCurrentTrack.Contains(trackId);
-        }
-    }
-
-    private PlaylistTrackViewModel? ResolveTrackViewModel(string trackId)
-    {
-        if (string.IsNullOrWhiteSpace(trackId))
-            return null;
-
-        return Tracks.FilteredTracks
-            .Concat(Tracks.CurrentProjectTracks)
-            .FirstOrDefault(track => string.Equals(track.GlobalId, trackId, StringComparison.Ordinal));
-    }
-
-    private async Task RefreshSavedDoublesAsync()
-    {
-        if (_savedDoublesService is null)
-            return;
-
-        var savedPairs = await _savedDoublesService.LoadAsync().ConfigureAwait(false);
-        var resolved = savedPairs
-            .Select(saved => Library.SavedDoubleViewModel.TryCreate(saved, ResolveTrackViewModel))
-            .Where(saved => saved is not null)
-            .Select(saved => saved!)
-            .ToList();
-
-        await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            SavedDoubles.Clear();
-            foreach (var saved in resolved)
-                SavedDoubles.Add(saved);
-
-            var selected = Tracks.SelectedTracks.Count == 1
-                ? Tracks.SelectedTracks.First()
-                : null;
-            RefreshSavedDoublesForLeadTrack(selected);
-            RefreshSavedDoublesForCurrentPlayerTrack();
-            // Only refreshes that use saved-double data — Overview stats don't, and re-running them
-            // here made every playlist selection load and compute the whole overview twice.
-            _ = Intelligence.RefreshSuggestNextCandidatesAsync();
-            _ = Intelligence.RefreshPlaylistUpgradeCandidatesAsync();
-        });
     }
 
     public void OnPropertyChanged([CallerMemberName] string? name = null)

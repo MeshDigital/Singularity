@@ -215,12 +215,6 @@ namespace Singularity.Views.Avalonia
                     shellSplitView.DisplayMode = responsiveDisplayMode;
                 }
 
-                // Auto-close Timeline/Overlays panels below tablet threshold
-                if (width < 1024)
-                {
-                    if (vm.IsTimelinePanelOpen)  vm.IsTimelinePanelOpen  = false;
-                    if (vm.IsOverlaysPanelOpen) vm.IsOverlaysPanelOpen = false;
-                }
             }
         }
 
@@ -249,15 +243,6 @@ namespace Singularity.Views.Avalonia
                     if (config.WindowMaximized)
                     {
                         WindowState = WindowState.Maximized;
-                    }
-
-                    // Restore five-column panel state (Epic 12 #110)
-                    if (DataContext is MainViewModel vm)
-                    {
-                        vm.IsTimelinePanelOpen  = config.IsTimelinePanelOpen;
-                        vm.TimelinePanelWidth   = config.TimelinePanelWidth > 0 ? config.TimelinePanelWidth : 300;
-                        vm.IsOverlaysPanelOpen  = config.IsOverlaysPanelOpen;
-                        vm.OverlaysPanelWidth   = config.OverlaysPanelWidth > 0 ? config.OverlaysPanelWidth : 250;
                     }
                 }
             }
@@ -308,15 +293,6 @@ namespace Singularity.Views.Avalonia
                     config.WindowX = Position.X;
                     config.WindowY = Position.Y;
                     config.WindowMaximized = WindowState == WindowState.Maximized;
-
-                    // Persist five-column panel state (Epic 12 #110)
-                    if (DataContext is MainViewModel vm)
-                    {
-                        config.IsTimelinePanelOpen  = vm.IsTimelinePanelOpen;
-                        config.TimelinePanelWidth   = vm.TimelinePanelWidth;
-                        config.IsOverlaysPanelOpen  = vm.IsOverlaysPanelOpen;
-                        config.OverlaysPanelWidth   = vm.OverlaysPanelWidth;
-                    }
                     
                     configManager.Save(config);
                 }

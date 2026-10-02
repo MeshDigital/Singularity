@@ -240,15 +240,6 @@
                                      <TextBlock Text="{Binding PrimaryGenre}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" FontWeight="SemiBold"/>
                                  </Border>
                                  
-                                 <!-- UI Check for Vibe Pills -->
-                                 <controls:VibePillContainer Items="{Binding VibePills}">
-                                     <controls:VibePillContainer.IsVisible>
-                                         <MultiBinding Converter="{x:Static BoolConverters.And}">
-                                             <Binding Path="IsCompleted"/>
-                                             <Binding Path="$parent[views:LibraryPage].DataContext.ViewSettings.ShowVibePills"/>
-                                         </MultiBinding>
-                                     </controls:VibePillContainer.IsVisible>
-                                 </controls:VibePillContainer>
                              </StackPanel>
                         </ScrollViewer>
 

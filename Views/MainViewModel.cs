@@ -42,8 +42,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly NativeDependencyHealthService _dependencyHealthService; // Phase 10.5
     private readonly IDialogService _dialogService;
     private readonly ILibraryService _libraryService;
-    private readonly GlobalHotkeyService _globalHotkeyService;
-    private readonly FlowBuilderViewModel _flowBuilderViewModel;
 
     // Child ViewModels
     public PlayerViewModel PlayerViewModel { get; }
@@ -55,7 +53,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ConnectionViewModel ConnectionViewModel { get; }
     public SettingsViewModel SettingsViewModel { get; }
     public HomeViewModel HomeViewModel { get; }
-    public TimelineViewModel TimelineViewModel { get; }
     public StatusBarViewModel StatusBar { get; }
     // Phase 24: Stem Workspace
     
@@ -104,7 +101,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         ConnectionViewModel connectionViewModel,
         SettingsViewModel settingsViewModel,
         HomeViewModel homeViewModel,
-        TimelineViewModel timelineViewModel,
         DownloadManager downloadManager,
         ISpotifyMetadataService spotifyMetadata,
         SpotifyAuthService spotifyAuth,
@@ -113,11 +109,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         NativeDependencyHealthService dependencyHealthService,
         IDialogService dialogService,
         ILibraryService libraryService,
-        GlobalHotkeyService globalHotkeyService,
         SidebarViewModel sidebarViewModel,
         IRightPanelService rightPanelService,
-        PerformanceTracker perfTracker,
-        FlowBuilderViewModel flowBuilderViewModel)
+        PerformanceTracker perfTracker)
 
     {
         _logger = logger;
@@ -136,8 +130,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _spotifyAuth = spotifyAuth;
         _dialogService = dialogService;
         _libraryService = libraryService;
-        _globalHotkeyService = globalHotkeyService;
-        _flowBuilderViewModel = flowBuilderViewModel;
 
         Sidebar = sidebarViewModel;
         _rightPanelService = rightPanelService;
@@ -149,7 +141,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         ConnectionViewModel = connectionViewModel;
         SettingsViewModel = settingsViewModel;
         HomeViewModel = homeViewModel;
-        TimelineViewModel = timelineViewModel;
         StatusBar = new StatusBarViewModel(eventBus, _dependencyHealthService);
         
         // Setup Global Shell Fallbacks
@@ -200,28 +191,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 }
             }));
 
-        _disposables.Add(_eventBus.GetEvent<OpenStemWorkspaceRequestEvent>()
-            .Subscribe(_ => Dispatcher.UIThread.Post(() =>
-            {
-                IsGlobalSidebarOpen = false;
-                _navigationService.NavigateTo("Workstation");
-            })));
-
-        _disposables.Add(_eventBus.GetEvent<AddToTimelineRequestEvent>()
-            .Subscribe(_ => Dispatcher.UIThread.Post(() =>
-            {
-                IsGlobalSidebarOpen = false;
-                _navigationService.NavigateTo("Workstation");
-            })));
-
         _disposables.Add(_eventBus.GetEvent<OpenConversationRequestedEvent>()
             .Subscribe(evt => Dispatcher.UIThread.Post(() => HandleOpenConversationRequested(evt))));
-
-        _disposables.Add(_eventBus.GetEvent<OpenFlowBuilderForPlaylistEvent>()
-            .Subscribe(evt => Dispatcher.UIThread.Post(() => HandleOpenFlowBuilderForPlaylist(evt))));
-
-        _disposables.Add(_eventBus.GetEvent<OpenLibraryForPlaylistEvent>()
-            .Subscribe(evt => Dispatcher.UIThread.Post(() => HandleOpenLibraryForPlaylist(evt))));
 
         // Initialize commands
         NavigateHomeCommand = new RelayCommand(NavigateToHome); // Phase 6D
@@ -231,14 +202,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         NavigatePlayerCommand = new RelayCommand(NavigateToPlayer);
         NavigateSettingsCommand = new RelayCommand(NavigateToSettings);
         NavigateImportCommand = new RelayCommand(NavigateToImport); // Phase 6D
-        NavigateAnalysisCommand = new RelayCommand(NavigateToAnalysis);
-        NavigateWorkstationCommand = new RelayCommand(NavigateToWorkstation);
-        NavigateDecksCommand = new RelayCommand(NavigateToDecks);
-        NavigateTimelineCommand = new RelayCommand(NavigateToTimeline);
-        NavigateStemsCommand = new RelayCommand(NavigateToStems);
-        NavigateCueForgeCommand = new RelayCommand(NavigateToCueForge);
         NavigateUsersCommand = new RelayCommand(NavigateToUsers);
-        NavigateFlowBuilderCommand = new RelayCommand(NavigateToFlowBuilder);
         PlayPauseCommand = new RelayCommand(() => PlayerViewModel.TogglePlayPauseCommand.Execute(null));
         FocusSearchCommand = new RelayCommand(FocusSearch);
         // Expanded -> Mini -> Collapsed(hidden) -> Expanded. Each state's width transition is
@@ -297,11 +261,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         ToggleZenModeCommand = new RelayCommand(ToggleZenMode);
         ToggleTopBarCommand = new RelayCommand(() => IsTopCommandBarVisible = !IsTopCommandBarVisible);
         TogglePerformanceOverlayCommand = new RelayCommand(() => IsPerformanceOverlayVisible = !IsPerformanceOverlayVisible);
-        ToggleTimelinePanelCommand = new RelayCommand(() => IsTimelinePanelOpen = !IsTimelinePanelOpen);
-        ToggleOverlaysPanelCommand = new RelayCommand(() => IsOverlaysPanelOpen = !IsOverlaysPanelOpen);
         ToggleAcquireCommand  = new RelayCommand(() => IsAcquireExpanded  = !IsAcquireExpanded);
         ToggleSystemCommand   = new RelayCommand(() => IsSystemExpanded   = !IsSystemExpanded);
-        ToggleCreativeCommand = new RelayCommand(() => IsCreativeExpanded = !IsCreativeExpanded);
 
 
         // Spotify Hub Initialization (TODO: Phase 7 - Implement when needed)
@@ -393,11 +354,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             Dispatcher.UIThread.Post(() =>
             {
-                if (ShouldRemapToWorkstationDestination(evt.PageName))
-                {
-                    NavigateToWorkstation();
-                    return;
-                }
 
                 _navigationService.NavigateTo(evt.PageName);
             });
@@ -452,13 +408,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _navigationService.RegisterPage("Settings", typeof(Avalonia.SettingsPage));
         _navigationService.RegisterPage("Import", typeof(Avalonia.ImportPage));
         _navigationService.RegisterPage("ImportPreview", typeof(Avalonia.ImportPreviewPage));
-        _navigationService.RegisterPage("Analysis", typeof(Avalonia.AnalysisPage));
         _navigationService.RegisterPage("NowPlaying", typeof(Avalonia.NowPlayingPage));
-        _navigationService.RegisterPage("Workstation", typeof(Avalonia.WorkstationPage));
-        _navigationService.RegisterPage("Stems", typeof(Avalonia.StemsPage));
-        _navigationService.RegisterPage("CueForge", typeof(Avalonia.CueForgePagee));
         _navigationService.RegisterPage("Users", typeof(Avalonia.UsersPage));
-        _navigationService.RegisterPage("FlowBuilder", typeof(Avalonia.FlowBuilderPage));
 
         // Subscribe to navigation events
         _navigationService.Navigated += OnNavigated;
@@ -502,7 +453,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             SearchViewModel?.Dispose();
             SettingsViewModel?.Dispose();
             HomeViewModel?.Dispose();
-            _globalHotkeyService?.Dispose();
         }
 
         _isDisposed = true;
@@ -716,55 +666,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     }
     public string SystemChevron => _isSystemExpanded ? "▾" : "▸";
 
-    private bool _isCreativeVisible = true;
-    public bool IsCreativeVisible
-    {
-        get => _isCreativeVisible;
-        set => SetProperty(ref _isCreativeVisible, value);
-    }
-
-    private bool _isCreativeExpanded = true;
-    public bool IsCreativeExpanded
-    {
-        get => _isCreativeExpanded;
-        set
-        {
-            SetProperty(ref _isCreativeExpanded, value);
-            OnPropertyChanged(nameof(CreativeChevron));
-        }
-    }
-    public string CreativeChevron => _isCreativeExpanded ? "▾" : "▸";
-
-    // ── Five-column layout — Epic 12 (#110) ───────────────────────────────
-
-    private bool _isTimelinePanelOpen;
-    public bool IsTimelinePanelOpen
-    {
-        get => _isTimelinePanelOpen;
-        set => SetProperty(ref _isTimelinePanelOpen, value);
-    }
-
-    private double _timelinePanelWidth = 300;
-    public double TimelinePanelWidth
-    {
-        get => _timelinePanelWidth;
-        set => SetProperty(ref _timelinePanelWidth, value);
-    }
-
-    private bool _isOverlaysPanelOpen;
-    public bool IsOverlaysPanelOpen
-    {
-        get => _isOverlaysPanelOpen;
-        set => SetProperty(ref _isOverlaysPanelOpen, value);
-    }
-
-    private double _overlaysPanelWidth = 250;
-    public double OverlaysPanelWidth
-    {
-        get => _overlaysPanelWidth;
-        set => SetProperty(ref _overlaysPanelWidth, value);
-    }
-
     // ── Responsive breakpoints — Epic 12 (#111/#112) ──────────────────────
 
     private bool _isTabletMode;
@@ -818,77 +719,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     // === Analysis Queue Status (Glass Box Architecture) ===
     
-    private int _analysisQueueCount;
-    public int AnalysisQueueCount
-    {
-        get => _analysisQueueCount;
-        set
-        {
-            if (SetProperty(ref _analysisQueueCount, value))
-            {
-                OnPropertyChanged(nameof(HasActiveAnalysis));
-                OnPropertyChanged(nameof(AnalysisETA));
-                OnPropertyChanged(nameof(HasETA));
-                OnPropertyChanged(nameof(IsGlobalActivityActive)); // Notify unified activity
-            }
-        }
-    }
-
-    private int _analysisProcessedCount;
-    public int AnalysisProcessedCount
-    {
-        get => _analysisProcessedCount;
-        set => SetProperty(ref _analysisProcessedCount, value);
-    }
-
-    public bool HasActiveAnalysis => AnalysisQueueCount > 0;
-
-    private bool _isAnalysisPaused;
-    public bool IsAnalysisPaused
-    {
-        get => _isAnalysisPaused;
-        set
-        {
-            if (SetProperty(ref _isAnalysisPaused, value))
-            {
-                OnPropertyChanged(nameof(PauseButtonTooltip));
-                OnPropertyChanged(nameof(PauseButtonIcon));
-            }
-        }
-    }
-
-    public string PauseButtonTooltip => IsAnalysisPaused 
-        ? "Resume Analysis (CPU saver mode active)" 
-        : "Pause Analysis (save CPU for gaming/other tasks)";
-
-    public string PauseButtonIcon => IsAnalysisPaused 
-        ? "play_regular" 
-        : "pause_regular";
-
-    public string? AnalysisETA
-    {
-        get
-        {
-            if (AnalysisQueueCount == 0) return null;
-            
-            // Estimate: ~2 seconds per track
-            int seconds = AnalysisQueueCount * 2;
-            
-            if (seconds < 60)
-                return $"~{seconds}s";
-            
-            int minutes = seconds / 60;
-            if (minutes < 60)
-                return $"~{minutes}m";
-            
-            int hours = minutes / 60;
-            int remainingMinutes = minutes % 60;
-            return $"~{hours}h {remainingMinutes}m";
-        }
-    }
-
-    public bool HasETA => !string.IsNullOrEmpty(AnalysisETA);
-
 
     // CurrentPageType != PageType.TheaterMode used to be checked here too, but ResolvePageType
     // never actually produces PageType.TheaterMode (Theater Mode is an IsZenMode overlay toggle,
@@ -912,37 +742,27 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // Phase 12.4: explicit nav-state flags for import/search overlays
     public bool IsAcquireOverlayActive => IsAcquireOverlayPage(CurrentPageType);
     public bool IsSystemOverlayActive => IsSystemOverlayPage(CurrentPageType);
-    public bool IsCreativeOverlayActive => IsCreativeOverlayPage(CurrentPageType);
     public bool IsSearchOverlayActive => CurrentPageType == PageType.Search;
     public bool IsProjectsOverlayActive => CurrentPageType == PageType.Projects;
     public bool IsImportOverlayActive => CurrentPageType == PageType.Import;
     public bool IsHomeOverlayActive => CurrentPageType == PageType.Home;
     public bool IsLibraryOverlayActive => CurrentPageType == PageType.Library;
-    public bool IsAnalysisOverlayActive => CurrentPageType == PageType.Analysis;
     public bool IsPlayerOverlayActive => CurrentPageType == PageType.NowPlaying;
     public bool IsSettingsOverlayActive => CurrentPageType == PageType.Settings;
-    public bool IsWorkstationOverlayActive => IsCreativeOverlayPage(CurrentPageType);
-    public bool IsCueForgeOverlayActive => CurrentPageType == PageType.CueForge;
     public bool IsUsersOverlayActive => CurrentPageType == PageType.Users;
-    public bool IsFlowBuilderOverlayActive => CurrentPageType == PageType.FlowBuilder;
 
     private static readonly string[] NavigationOverlayPropertyNames =
     [
         nameof(IsAcquireOverlayActive),
         nameof(IsSystemOverlayActive),
-        nameof(IsCreativeOverlayActive),
         nameof(IsSearchOverlayActive),
         nameof(IsProjectsOverlayActive),
         nameof(IsImportOverlayActive),
         nameof(IsHomeOverlayActive),
         nameof(IsLibraryOverlayActive),
-        nameof(IsAnalysisOverlayActive),
         nameof(IsPlayerOverlayActive),
         nameof(IsSettingsOverlayActive),
-        nameof(IsWorkstationOverlayActive),
-        nameof(IsCueForgeOverlayActive),
-        nameof(IsUsersOverlayActive),
-        nameof(IsFlowBuilderOverlayActive)
+        nameof(IsUsersOverlayActive)
     ];
 
     public static PageType ResolvePageType(Type? pageType, PageType fallback)
@@ -957,21 +777,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (typeof(Avalonia.LibraryPage).IsAssignableFrom(pageType)) return PageType.Library;
         if (typeof(Avalonia.DownloadsPage).IsAssignableFrom(pageType)) return PageType.Projects;
         if (typeof(Avalonia.ImportPage).IsAssignableFrom(pageType) || typeof(Avalonia.ImportPreviewPage).IsAssignableFrom(pageType)) return PageType.Import;
-        if (typeof(Avalonia.AnalysisPage).IsAssignableFrom(pageType)) return PageType.Analysis;
         if (typeof(Avalonia.NowPlayingPage).IsAssignableFrom(pageType)) return PageType.NowPlaying;
         if (typeof(Avalonia.SettingsPage).IsAssignableFrom(pageType)) return PageType.Settings;
-        if (typeof(Avalonia.WorkstationPage).IsAssignableFrom(pageType)) return PageType.Workstation;
-        if (pageType.Name.Contains("StemsPage", StringComparison.Ordinal)) return PageType.Stems;
         if (typeof(Avalonia.UsersPage).IsAssignableFrom(pageType)) return PageType.Users;
-        if (typeof(Avalonia.FlowBuilderPage).IsAssignableFrom(pageType)) return PageType.FlowBuilder;
 
         return fallback;
-    }
-
-    public static bool ShouldRemapToWorkstationDestination(string? pageName)
-    {
-        return string.Equals(pageName, "Player", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(pageName, "NowPlaying", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string NormalizeInspectorOpenSource(string? source)
@@ -1008,11 +818,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             return currentPageType == PageType.Projects;
         }
 
-        if (normalizedSource.StartsWith("FlowBuilder.", StringComparison.Ordinal))
-        {
-            return currentPageType is PageType.Workstation or PageType.Decks or PageType.Timeline or PageType.Stems;
-        }
-
         return true;
     }
 
@@ -1037,8 +842,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public static bool IsAcquireOverlayPage(PageType pageType) => pageType is PageType.Search or PageType.Projects or PageType.Import;
-    public static bool IsSystemOverlayPage(PageType pageType) => pageType is PageType.Home or PageType.Library or PageType.Analysis or PageType.NowPlaying or PageType.Settings;
-    public static bool IsCreativeOverlayPage(PageType pageType) => pageType is PageType.Workstation or PageType.Decks or PageType.Timeline or PageType.Stems;
+    public static bool IsSystemOverlayPage(PageType pageType) => pageType is PageType.Home or PageType.Library or PageType.NowPlaying or PageType.Settings;
 
     private void EnsureNavigationGroupExpanded(PageType pageType)
     {
@@ -1052,10 +856,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             IsSystemExpanded = true;
         }
 
-        if (IsCreativeOverlayPage(pageType))
-        {
-            IsCreativeExpanded = true;
-        }
     }
 
     private void RaiseNavigationStateProperties()
@@ -1111,7 +911,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // Computed property to drive the global activity spinner
     public bool IsGlobalActivityActive 
     {
-        get => (TodoCount > 0) || (AnalysisQueueCount > 0) || IsInitializing;
+        get => (TodoCount > 0) || IsInitializing;
     }
 
     // Phase 7: Spotify Hub Properties
@@ -1173,14 +973,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand NavigateProjectsCommand { get; }
     public ICommand NavigateSettingsCommand { get; }
     public ICommand NavigateImportCommand { get; } // Phase 6D
-    public ICommand NavigateAnalysisCommand { get; }
-    public ICommand NavigateWorkstationCommand { get; }
-    public ICommand NavigateDecksCommand { get; }
-    public ICommand NavigateTimelineCommand { get; }
-    public ICommand NavigateStemsCommand { get; }
-    public ICommand NavigateCueForgeCommand { get; }
     public ICommand NavigateUsersCommand { get; }
-    public ICommand NavigateFlowBuilderCommand { get; }
     public ICommand PlayPauseCommand { get; }
     public ICommand FocusSearchCommand { get; }
     public ICommand ToggleNavigationCommand { get; }
@@ -1193,11 +986,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand ToggleZenModeCommand { get; }
     public ICommand ToggleTopBarCommand { get; }
     public ICommand TogglePerformanceOverlayCommand { get; }
-    public ICommand ToggleTimelinePanelCommand { get; }
-    public ICommand ToggleOverlaysPanelCommand { get; }
     public ICommand ToggleAcquireCommand  { get; }
     public ICommand ToggleSystemCommand   { get; }
-    public ICommand ToggleCreativeCommand { get; }
     
     public bool IsGlobalSidebarOpen
     {
@@ -1310,8 +1100,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         PlayerViewModel.IsExpandedPlayerOpen = false;
         PlayerViewModel.IsQueueOpen = false;
         IsGlobalSidebarOpen = false;
-        _navigationService.NavigateTo("Workstation");
-        _logger.LogInformation("Player navigation was remapped to Workstation.");
+        _navigationService.NavigateTo("Player");
     }
 
     private void NavigateToImport()
@@ -1319,38 +1108,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _navigationService.NavigateTo("Import");
     }
 
-    private void NavigateToAnalysis()
-    {
-        _navigationService.NavigateTo("Analysis");
-    }
-
-    private void NavigateToWorkstation()
-    {
-        _navigationService.NavigateTo("Workstation");
-    }
-
-    private void NavigateToDecks() => NavigateToWorkstation();
-
-    private void NavigateToTimeline() => NavigateToWorkstation();
-
-    private void NavigateToStems()
-    {
-        _navigationService.NavigateTo("Stems");
-    }
-
-    private void NavigateToCueForge()
-    {
-        _navigationService.NavigateTo("CueForge");
-    }
-
     private void NavigateToUsers()
     {
         _navigationService.NavigateTo("Users");
-    }
-
-    private void NavigateToFlowBuilder()
-    {
-        _navigationService.NavigateTo("FlowBuilder");
     }
 
     /// <summary>
@@ -1372,78 +1132,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 _logger.LogWarning(ex, "Failed to open conversation from notification (Username={Username}, RoomName={RoomName})", evt.Username, evt.RoomName);
             }
         }
-    }
-
-    /// <summary>
-    /// Handles the Mix transition editor's "Open in Flow Builder" link: navigates to Flow
-    /// Builder and preloads the same playlist, so the user doesn't land on whatever playlist
-    /// Flow Builder last had open (it persists its own last-selected playlist independently —
-    /// see FlowBuilderViewModel.SelectedPlaylist).
-    /// </summary>
-    private async void HandleOpenFlowBuilderForPlaylist(OpenFlowBuilderForPlaylistEvent evt)
-    {
-        NavigateToFlowBuilder();
-
-        // Guid.Empty means the link was clicked from the Mix tab's "No transition loaded" empty
-        // state — no pair (and so no playlist) has been picked yet. Just navigate; Flow Builder
-        // opens on whatever playlist it last had, same as clicking the sidebar's own link.
-        if (evt.PlaylistId == Guid.Empty) return;
-
-        try
-        {
-            var playlist = _flowBuilderViewModel.Playlists.FirstOrDefault(p => p.Id == evt.PlaylistId);
-            if (playlist == null)
-            {
-                await _flowBuilderViewModel.LoadPlaylistsCommand.Execute().FirstAsync();
-                playlist = _flowBuilderViewModel.Playlists.FirstOrDefault(p => p.Id == evt.PlaylistId);
-            }
-
-            if (playlist != null && !ReferenceEquals(_flowBuilderViewModel.SelectedPlaylist, playlist))
-            {
-                _flowBuilderViewModel.SelectedPlaylist = playlist;
-                await _flowBuilderViewModel.LoadSelectedPlaylistCommand.Execute().FirstAsync();
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to preload playlist {PlaylistId} into Flow Builder", evt.PlaylistId);
-        }
-    }
-
-    /// <summary>
-    /// Round-trip half of MixTransitionViewModel's "Fix in Cue Forge" link: Cue Forge's own
-    /// "Back to Mix Transition" button (CueForgeViewModel.BackToMixTransitionCommand) publishes
-    /// this to get back to exactly the playlist + track pair the user came from, instead of a
-    /// dead end once they're done fixing a cue.
-    /// </summary>
-    private async void HandleOpenLibraryForPlaylist(OpenLibraryForPlaylistEvent evt)
-    {
-        NavigateToLibrary();
-
-        try
-        {
-            var playlist = LibraryViewModel.Projects.AllProjects.FirstOrDefault(p => p.Id == evt.PlaylistId);
-            if (playlist == null)
-            {
-                await LibraryViewModel.Projects.LoadProjectsAsync();
-                playlist = LibraryViewModel.Projects.AllProjects.FirstOrDefault(p => p.Id == evt.PlaylistId);
-            }
-
-            if (playlist != null)
-            {
-                LibraryViewModel.SelectedProject = playlist;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to preload playlist {PlaylistId} into Library for Mix Transition round-trip", evt.PlaylistId);
-        }
-
-        // Reopens the CONTEXT sidepanel's Mix tab on the exact pair — same event the Library
-        // track list's own transition badge publishes (see TrackListViewModel), so this behaves
-        // identically to the user clicking that badge themselves.
-        ReactiveUI.MessageBus.Current.SendMessage(
-            new Singularity.Events.OpenMixTransitionEvent(evt.PlaylistId, evt.OutgoingPlaylistTrackId, evt.IncomingPlaylistTrackId));
     }
 
     private void UpdateFontSizeResources()
@@ -1748,8 +1436,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                     ? $"Added '{trackList[0].Title}' to '{selectedProject.SourceTitle}'"
                     : $"Added {trackList.Count} tracks to '{selectedProject.SourceTitle}'";
                 
-                StatusText = $"{message} • opening Flow workspace";
-                _eventBus.Publish(new AddToTimelineRequestEvent(trackList));
+                StatusText = message;
             }
         }
         catch (Exception ex)

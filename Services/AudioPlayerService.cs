@@ -5,7 +5,6 @@ using NAudio.Wave.SampleProviders;
 using System.Timers;
 using Singularity.Configuration;
 using Singularity.Services.Audio;
-using Singularity.Services.Timeline;
 
 namespace Singularity.Services
 {
@@ -24,7 +23,6 @@ namespace Singularity.Services
             public IWavePlayer? Output;
             public MeteringSampleProvider? Metering;
             public VariSpeedSampleProvider? VariSpeed;
-            public ThreeBandGainProvider? Eq;
             /// <summary>In-process gain stage for master volume/crossfade/loudness automation.
             /// Deliberately NOT <see cref="IWavePlayer.Volume"/> — on WASAPI that setter writes
             /// through to the OS-level per-app session volume (the same control behind the
@@ -38,32 +36,6 @@ namespace Singularity.Services
             public NAudio.Wave.SampleProviders.VolumeSampleProvider? Gain;
             /// <summary>Linear gain applied on top of the master volume for loudness-normalized playback (see <see cref="AppConfig.LoudnessNormalizationEnabled"/>). 1.0 = no adjustment.</summary>
             public float LoudnessGain = 1f;
-
-            /// <summary>Mix-saved transition to apply to the crossfade into this deck (set via
-            /// PreloadNext), or null to fall back to the legacy fixed CrossfadeSeconds/curve.</summary>
-            public Singularity.Models.Timeline.TransitionModel? PendingTransition;
-            public double PendingTransitionBpm = 128.0;
-
-            /// <summary>Display name of the preset behind <see cref="PendingTransition"/> (e.g.
-            /// "Wave") — carried purely for UI visibility (CrossfadeStartedEventArgs.PresetName),
-            /// not consulted by the DSP itself.</summary>
-            public string? PendingTransitionPresetName;
-
-            /// <summary>Absolute position (seconds) into the OUTGOING (currently-playing) deck
-            /// where the crossfade into this deck should begin — the analysis-suggested or saved
-            /// mix-out point, not "duration minus crossfade length". Null falls back to legacy
-            /// countdown-from-end behavior.</summary>
-            public double? PendingSourceTriggerSeconds;
-
-            /// <summary>Position (seconds) this deck's own file should be seeked to on load — the
-            /// analysis-suggested or saved mix-in point (may skip a low-energy intro straight to
-            /// the first drop). Null means start at 0 as usual.</summary>
-            public double? PendingTargetTriggerSeconds;
-
-            /// <summary>File BPM of the OUTGOING track for this pending transition (the incoming
-            /// file BPM is <see cref="PendingTransitionBpm"/>). With both known, the incoming deck is
-            /// tempo-matched when the mix starts and transition lengths follow the outgoing beat.</summary>
-            public double? PendingSourceBpm;
 
             /// <summary>File this deck plays (for <see cref="Singularity.Services.Audio.ExactSeek"/>).</summary>
             public string FilePath = string.Empty;
@@ -114,65 +86,6 @@ namespace Singularity.Services
             }
         }
 
-        /// <summary>
-        /// Live per-channel 3-band gain stage (one-pole crossover split, same technique as
-        /// <see cref="Singularity.Services.Timeline.TransitionDsp"/>'s EqSwapProvider/FilterSweepProvider)
-        /// inserted into each deck's chain so Mix presets that need audible EQ movement during a
-        /// transition (Blend/Wave/Melt) — not just a plain volume crossfade — actually sound
-        /// different during real queue playback. Gains default to 1.0 (a no-op fast path) outside
-        /// a transition window.
-        /// </summary>
-        private sealed class ThreeBandGainProvider : ISampleProvider
-        {
-            private readonly ISampleProvider _source;
-            private readonly float _lowCrossoverHz;
-            private readonly float _highCrossoverHz;
-            private float[] _lowState = Array.Empty<float>();
-            private float[] _midHighSplitState = Array.Empty<float>();
-
-            public volatile bool Active;
-            public float LowGain = 1f, MidGain = 1f, HighGain = 1f;
-
-            public WaveFormat WaveFormat => _source.WaveFormat;
-
-            public ThreeBandGainProvider(ISampleProvider source, float lowCrossoverHz = 250f, float highCrossoverHz = 4000f)
-            {
-                _source = source;
-                _lowCrossoverHz = lowCrossoverHz;
-                _highCrossoverHz = highCrossoverHz;
-                int channels = Math.Max(1, source.WaveFormat.Channels);
-                _lowState = new float[channels];
-                _midHighSplitState = new float[channels];
-            }
-
-            public int Read(float[] buffer, int offset, int count)
-            {
-                int read = _source.Read(buffer, offset, count);
-                if (!Active || (LowGain == 1f && MidGain == 1f && HighGain == 1f)) return read;
-
-                int channels = WaveFormat.Channels;
-                int sampleRate = WaveFormat.SampleRate;
-                float dt = 1f / sampleRate;
-                float alphaLow = dt / ((1f / (2f * MathF.PI * _lowCrossoverHz)) + dt);
-                float alphaHigh = dt / ((1f / (2f * MathF.PI * _highCrossoverHz)) + dt);
-
-                for (int i = 0; i < read; i++)
-                {
-                    int ch = i % channels;
-                    float x = buffer[offset + i];
-
-                    _lowState[ch] += alphaLow * (x - _lowState[ch]);
-                    float highPassAtLow = x - _lowState[ch];
-                    _midHighSplitState[ch] += alphaHigh * (highPassAtLow - _midHighSplitState[ch]);
-                    float high = highPassAtLow - _midHighSplitState[ch];
-                    float mid = _midHighSplitState[ch];
-
-                    buffer[offset + i] = (_lowState[ch] * LowGain) + (mid * MidGain) + (high * HighGain);
-                }
-
-                return read;
-            }
-        }
 
         private Deck? _current;
         private Deck? _next;
@@ -262,7 +175,7 @@ namespace Singularity.Services
             // almost every transition. Finish the hand-over now instead.
             if (_isCrossfading && current.Output?.PlaybackState == PlaybackState.Stopped)
             {
-                CompleteCrossfade(current);
+                CompleteCrossfade();
                 return;
             }
 
@@ -278,63 +191,26 @@ namespace Singularity.Services
                 return;
             }
 
-            // A saved Mix transition (see PlayerViewModel.SchedulePreloadNext) overrides the
-            // legacy fixed-duration global crossfade — it applies regardless of the
-            // CrossfadeEnabled toggle, since choosing a transition for this specific pair is a
-            // more specific instruction than the app-wide default.
-            var pendingTransition = _next?.PendingTransition;
-            var effectiveCrossfadeSeconds = TransitionSeconds(current, _next);
-
-            if ((CrossfadeEnabled || pendingTransition != null) && _next?.Output != null)
+            if (CrossfadeEnabled && _next?.Output != null)
             {
-                bool shouldStart;
-                double plannedStart = double.NaN;
-                if (_next.PendingSourceTriggerSeconds is double sourceTrigger)
-                {
-                    // Analysis-suggested/saved mix-out point: an absolute position in THIS track,
-                    // not "however many seconds are left" — a mix-out near a phrase boundary well
-                    // before the literal end of a track with a long fade-out tail, for instance.
-                    // …but never so late that the transition can't play out before the track ends
-                    // (auto Outro cues sit 0–10 s from the end; transitions are 8–16 bars).
-                    plannedStart = LatestMixStart(sourceTrigger, current.AudioFile.TotalTime.TotalSeconds, effectiveCrossfadeSeconds);
-                    shouldStart = current.AudioFile.CurrentTime.TotalSeconds >= plannedStart;
-                }
-                else
-                {
-                    var remaining = current.AudioFile.TotalTime - current.AudioFile.CurrentTime;
-                    shouldStart = remaining.TotalSeconds <= effectiveCrossfadeSeconds;
-                }
-
-                if (shouldStart)
+                var remaining = current.AudioFile.TotalTime - current.AudioFile.CurrentTime;
+                if (remaining.TotalSeconds <= CrossfadeSeconds)
                 {
                     _isCrossfading = true;
                     _crossfadeElapsedSeconds = 0;
                     _crossfadeProgress = 0;
                     if (_next.Gain != null) _next.Gain.Volume = 0f;
-                    if (_next.Eq != null) _next.Eq.Active = pendingTransition != null;
-                    if (current.Eq != null) current.Eq.Active = pendingTransition != null;
                     _next.WaitForSeek();
-                    double speedRatio = ApplyTempoSync(current, _next);
-                    // The timer ticks every 50 ms, so the mix starts up to that late. For a planned
-                    // alignment (incoming target point on a bar), skip the incoming deck forward by
-                    // the same musical amount so both downbeats stay together.
-                    if (!double.IsNaN(plannedStart) && _next.PendingTargetTriggerSeconds is > 0)
-                    {
-                        double late = current.AudioFile.CurrentTime.TotalSeconds - plannedStart;
-                        if (late > 0.002 && late < 0.5) SkipForward(_next, late * speedRatio);
-                    }
+                    if (_next.VariSpeed != null) _next.VariSpeed.Speed = current.VariSpeed?.Speed ?? 1.0;
                     _next.Output.Play();
 
                     CrossfadeStarted?.Invoke(this, new CrossfadeStartedEventArgs
                     {
-                        PresetName = _next.PendingTransitionPresetName,
-                        DurationSeconds = effectiveCrossfadeSeconds,
+                        DurationSeconds = CrossfadeSeconds,
                     });
                 }
             }
         }
-
-        private static readonly TransitionEngine _liveTransitionEngine = new();
 
         private void AdvanceCrossfade(Deck current)
         {
@@ -347,157 +223,30 @@ namespace Singularity.Services
                 return;
             }
 
-            var pendingTransition = _next.PendingTransition;
-            var durationSeconds = TransitionSeconds(current, _next);
-
             _crossfadeElapsedSeconds += TimerIntervalSeconds;
-            var t = durationSeconds > 0 ? Math.Clamp(_crossfadeElapsedSeconds / durationSeconds, 0.0, 1.0) : 1.0;
+            var t = CrossfadeSeconds > 0 ? Math.Clamp(_crossfadeElapsedSeconds / CrossfadeSeconds, 0.0, 1.0) : 1.0;
 
-            float currentGain, nextGain;
-
-            if (pendingTransition != null)
-            {
-                // Preset-accurate automation — the same TransitionEngine math the Mix editor's
-                // waveform overlay curves are sampled from, so what plays matches what was previewed.
-                const int samplePoints = 1000;
-                var region = new Singularity.Services.Audio.TransitionRegion
-                {
-                    StartSample = 0,
-                    EndSample = samplePoints,
-                    Type = pendingTransition.Type.ToAutomationType(),
-                    Curve = Singularity.Services.Audio.TransitionCurve.SCurve,
-                    WaveDuckDepth = pendingTransition.WaveDuckDepth,
-                    EchoDecayFactor = pendingTransition.EchoDecayFactor,
-                    EqConfig = new Singularity.Services.Audio.EqBandSwapConfig
-                    {
-                        SwapLow = pendingTransition.EqSwapLow,
-                        SwapMid = pendingTransition.EqSwapMid,
-                        SwapHigh = pendingTransition.EqSwapHigh,
-                        LowCrossover = pendingTransition.EqLowCrossoverHz,
-                        HighCrossover = pendingTransition.EqHighCrossoverHz,
-                        HardLowSwap = pendingTransition.EqHardLowSwap,
-                    },
-                };
-                var automation = _liveTransitionEngine.CalculateAutomation(region, (long)(t * samplePoints));
-
-                currentGain = _masterVolumeFraction * current.LoudnessGain * automation.OutgoingGain;
-                nextGain = _masterVolumeFraction * _next.LoudnessGain * automation.IncomingGain;
-
-                if (current.Eq != null) { current.Eq.LowGain = automation.OutgoingLowGain; current.Eq.MidGain = automation.OutgoingMidGain; current.Eq.HighGain = automation.OutgoingHighGain; }
-                if (_next.Eq != null) { _next.Eq.LowGain = automation.IncomingLowGain; _next.Eq.MidGain = automation.IncomingMidGain; _next.Eq.HighGain = automation.IncomingHighGain; }
-            }
-            else
-            {
-                // Legacy fixed equal-power crossfade curve (constant perceived loudness through
-                // the overlap, unlike a linear fade which dips in the middle) — unchanged
-                // behavior for playlists that haven't saved a Mix transition.
-                currentGain = (float)(_masterVolumeFraction * current.LoudnessGain * Math.Cos(t * Math.PI / 2));
-                nextGain = (float)(_masterVolumeFraction * _next.LoudnessGain * Math.Sin(t * Math.PI / 2));
-            }
-
-            if (current.Gain != null) current.Gain.Volume = currentGain;
-            if (_next.Gain != null) _next.Gain.Volume = nextGain;
+            // Equal-power curve: constant perceived loudness through the overlap, unlike a
+            // linear fade which dips in the middle.
+            if (current.Gain != null) current.Gain.Volume = (float)(_masterVolumeFraction * current.LoudnessGain * Math.Cos(t * Math.PI / 2));
+            if (_next.Gain != null) _next.Gain.Volume = (float)(_masterVolumeFraction * _next.LoudnessGain * Math.Sin(t * Math.PI / 2));
 
             _crossfadeProgress = t;
             CrossfadeProgressChanged?.Invoke(this, t);
 
             if (t >= 1.0)
-                CompleteCrossfade(current);
+                CompleteCrossfade();
         }
 
-        /// <summary>Ends the crossfade: incoming deck at full level with its EQ reset, then promoted.</summary>
-        private void CompleteCrossfade(Deck current)
+        /// <summary>Ends the crossfade: incoming deck at full level, then promoted.</summary>
+        private void CompleteCrossfade()
         {
             _isCrossfading = false;
             _crossfadeElapsedSeconds = 0;
             _crossfadeProgress = 0;
-            if (current.Eq != null) current.Eq.Active = false;
-            if (_next != null)
-            {
-                if (_next.Eq != null) { _next.Eq.Active = false; _next.Eq.LowGain = _next.Eq.MidGain = _next.Eq.HighGain = 1f; }
-                if (_next.Gain != null) _next.Gain.Volume = _masterVolumeFraction * _next.LoudnessGain;
-            }
+            if (_next?.Gain != null) _next.Gain.Volume = _masterVolumeFraction * _next.LoudnessGain;
             if (_current != null) PromoteNextDeck(_current);
             CrossfadeEnded?.Invoke(this, EventArgs.Empty);
-        }
-
-        /// <summary>
-        /// When the crossfade out of a track must begin: at the mix-out point, but no later than
-        /// "track end minus transition length" so the whole transition fits. Public for tests.
-        /// </summary>
-        public static double LatestMixStart(double mixOutSeconds, double trackSeconds, double transitionSeconds)
-        {
-            if (trackSeconds <= 0 || transitionSeconds <= 0) return mixOutSeconds;
-            var latest = Math.Max(0, trackSeconds - transitionSeconds);
-            return Math.Min(mixOutSeconds, latest);
-        }
-
-        /// <summary>Largest tempo change applied to match an incoming track (6 % ≈ one semitone).</summary>
-        private const double MaxTempoSyncRatio = 0.06;
-
-        /// <summary>
-        /// Real-time length of the pending transition. Its bars follow the OUTGOING track's beat as
-        /// it is actually playing (file BPM × deck speed) when that is known — the incoming track is
-        /// tempo-matched to it — otherwise the incoming BPM as before.
-        /// </summary>
-        private double TransitionSeconds(Deck current, Deck? next)
-        {
-            var transition = next?.PendingTransition;
-            if (transition == null) return CrossfadeSeconds;
-            double bpm = next!.PendingSourceBpm is double outBpm
-                ? outBpm * (current.VariSpeed?.Speed ?? 1.0)
-                : next.PendingTransitionBpm;
-            return transition.DurationBeats * 60.0 / Math.Max(1, bpm);
-        }
-
-        /// <summary>
-        /// Matches the incoming deck's tempo to the outgoing one (the DJ pitch fader) when both file
-        /// BPMs are known and within <see cref="MaxTempoSyncRatio"/>; the incoming track keeps that
-        /// tempo after the mix. Without this, two tracks 2 BPM apart drift a quarter-second out of
-        /// time over 16 bars and the kicks flam. Returns incoming/outgoing file-time rate ratio.
-        /// Public for tests.
-        /// </summary>
-        public static double TempoSyncRatio(double? outgoingBpm, double incomingBpm)
-        {
-            if (outgoingBpm is not > 0 || incomingBpm <= 0) return 1.0;
-            double ratio = outgoingBpm.Value / incomingBpm;
-            // Half/double-time readings (87 vs 174) are the same tempo for mixing.
-            if (ratio > 1.8) ratio /= 2; else if (ratio < 0.55) ratio *= 2;
-            return Math.Abs(ratio - 1) <= MaxTempoSyncRatio ? ratio : 1.0;
-        }
-
-        private double ApplyTempoSync(Deck current, Deck next)
-        {
-            double currentSpeed = current.VariSpeed?.Speed ?? 1.0;
-            double ratio = TempoSyncRatio(next.PendingSourceBpm, next.PendingTransitionBpm);
-            if (next.VariSpeed != null && ratio != 1.0)
-            {
-                next.VariSpeed.Speed = currentSpeed * ratio;
-                Serilog.Log.Information("[Mix] Tempo-matched incoming track: ×{Ratio:0.000} ({Out:0.0} → {In:0.0} BPM file tempo)",
-                    ratio, next.PendingSourceBpm, next.PendingTransitionBpm);
-            }
-            else if (next.VariSpeed != null)
-            {
-                next.VariSpeed.Speed = currentSpeed;
-            }
-            // Incoming file seconds per outgoing file second.
-            return (next.VariSpeed?.Speed ?? 1.0) / Math.Max(0.01, currentSpeed);
-        }
-
-        /// <summary>Advances a not-yet-playing deck by <paramref name="seconds"/> of its file.</summary>
-        private static void SkipForward(Deck deck, double seconds)
-        {
-            var file = deck.AudioFile;
-            if (file == null) return;
-            long remaining = (long)Math.Round(seconds * file.WaveFormat.SampleRate) * file.WaveFormat.Channels;
-            var buffer = new float[Math.Min(remaining, 16384)];
-            while (remaining > 0)
-            {
-                int read = file.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
-                if (read <= 0) break;
-                remaining -= read;
-            }
-            deck.VariSpeed?.Reset();
         }
 
         public bool IsInitialized => _isInitialized;
@@ -635,8 +384,7 @@ namespace Singularity.Services
         /// an audible gap. Call this as soon as the next track is known (e.g. right after the
         /// current one starts), well before playback is expected to reach it.
         /// </summary>
-        public void PreloadNext(string filePath, double? trackLoudnessLufs = null, Singularity.Models.Timeline.TransitionModel? transition = null, double? transitionBpm = null,
-            double? sourceTriggerSeconds = null, double? targetTriggerSeconds = null, string? presetName = null)
+        public void PreloadNext(string filePath, double? trackLoudnessLufs = null)
         {
             if (_current == null) return;
             if (_nextFilePath == filePath && _next != null) return; // already preloaded
@@ -647,17 +395,6 @@ namespace Singularity.Services
             {
                 var deck = CreateDeck(filePath, trackLoudnessLufs);
                 deck.Gain!.Volume = 0f;
-                deck.PendingTransition = transition;
-                deck.PendingTransitionBpm = transitionBpm is > 0 ? transitionBpm.Value : 128.0;
-                deck.PendingTransitionPresetName = presetName;
-                deck.PendingSourceTriggerSeconds = sourceTriggerSeconds;
-                deck.PendingTargetTriggerSeconds = targetTriggerSeconds;
-                if (targetTriggerSeconds is > 0 && deck.AudioFile != null)
-                {
-                    // Not CurrentTime directly: on FLAC/M4A a seek on an unread file is dropped and
-                    // the incoming track started at 0:00 instead of its mix-in point (ExactSeek).
-                    deck.SeekInBackground(targetTriggerSeconds.Value);
-                }
                 _next = deck;
                 _nextFilePath = filePath;
             }
@@ -669,45 +406,6 @@ namespace Singularity.Services
             }
         }
 
-        /// <summary>
-        /// Attaches (or clears) a Mix transition — including its analysis-suggested/saved
-        /// trigger points — on the already-preloaded next deck, without reopening the file. Used
-        /// when the file was already hot before the async saved-transition lookup
-        /// (<see cref="ViewModels.PlayerViewModel.SchedulePreloadNext"/>) resolves — avoids a
-        /// second PreloadNext call re-triggering CreateDeck's early-return guard for a filename
-        /// that's already preloaded.
-        /// </summary>
-        public void SetPendingTransitionForNext(string filePath, Singularity.Models.Timeline.TransitionModel? transition, double? transitionBpm,
-            double? sourceTriggerSeconds = null, double? targetTriggerSeconds = null, string? presetName = null, double? outgoingBpm = null)
-        {
-            if (_next == null || _nextFilePath != filePath) return;
-            _next.PendingSourceBpm = outgoingBpm is > 0 ? outgoingBpm : null;
-            _next.PendingTransition = transition;
-            _next.PendingTransitionBpm = transitionBpm is > 0 ? transitionBpm.Value : 128.0;
-            _next.PendingTransitionPresetName = presetName;
-            _next.PendingSourceTriggerSeconds = sourceTriggerSeconds;
-            _next.PendingTargetTriggerSeconds = targetTriggerSeconds;
-
-            // Guarded against re-seeking a deck that's already actively playing: this method is
-            // called once the async saved/suggested-transition lookup resolves (see
-            // PlayerViewModel.SchedulePreloadNext), which can land well after the crossfade has
-            // already started for this exact deck if that lookup takes long enough (a real risk
-            // now that the Auto-suggestion path does its own DB round-trips — see
-            // PlayerViewModel.AttachSavedTransitionAsync). Seeking AudioFile.CurrentTime on a
-            // NAudio device that's mid-playback doesn't just jump the position cleanly — it can
-            // corrupt/stall the live output entirely, which showed up as "the incoming track sits
-            // there and stops" right around when the crossfade finished. Once _isCrossfading is
-            // true for this deck, it's too late to safely reposition it — better to let it keep
-            // playing from wherever it already is than risk killing it.
-            if (!_isCrossfading && targetTriggerSeconds is > 0 && _next.AudioFile != null)
-            {
-                var total = _next.AudioFile.TotalTime.TotalSeconds;
-                if (targetTriggerSeconds.Value < total && _next.Output?.PlaybackState != PlaybackState.Playing)
-                {
-                    _next.SeekInBackground(targetTriggerSeconds.Value);
-                }
-            }
-        }
 
         /// <summary>Discards any preloaded next track (e.g. the queue changed before it was needed).</summary>
         public void CancelPreload()
@@ -873,14 +571,9 @@ namespace Singularity.Services
             // turntable/CDJ pitch fader (as opposed to tempo-only time-stretching).
             deck.VariSpeed = new VariSpeedSampleProvider(sampleChannel) { Speed = _pitch };
 
-            // 0.5. Live per-band gain stage — inert (Active=false) outside a Mix transition
-            // window; AdvanceCrossfade turns it on and drives its gains for presets that need
-            // more than a plain volume crossfade (Blend/Wave/Melt).
-            deck.Eq = new ThreeBandGainProvider(deck.VariSpeed);
-
             // 0.75. In-process gain stage — see the Deck.Gain field doc for why this, and not
             // Output.Volume, is what master volume/crossfade/loudness-normalization drive.
-            deck.Gain = new NAudio.Wave.SampleProviders.VolumeSampleProvider(deck.Eq) { Volume = 1f };
+            deck.Gain = new NAudio.Wave.SampleProviders.VolumeSampleProvider(deck.VariSpeed) { Volume = 1f };
 
             // 1. Intercept for FFT (Spectrum). Only forwarded upstream while this deck is the
             // active one, so a preloaded/promoted deck seamlessly takes over the visualizer.

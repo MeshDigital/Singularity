@@ -6,44 +6,6 @@ namespace Singularity.Tests.Architecture;
 
 public class LibrarySidebarUnificationStartTests
 {
-    [Fact]
-    public void LibraryPage_UsesExtractedPlaylistIntelligencePanelControl()
-    {
-        var xaml = ReadLibraryPageXaml();
-
-        Assert.Contains("<Grid ColumnDefinitions=\"Auto,*\">", xaml);
-        Assert.DoesNotContain("<GridSplitter Grid.Column=\"2\"", xaml);
-        Assert.DoesNotContain("<Border Grid.Column=\"3\"", xaml);
-        Assert.DoesNotContain("Text=\"Smart Insert Intelligence\"", xaml);
-        Assert.DoesNotContain("<Grid IsVisible=\"{Binding IsLibrarySidebarIntelligenceMode}\" RowDefinitions=\"Auto,Auto,Auto,*\">", xaml);
-    }
-
-    [Fact]
-    public void PlaylistIntelligencePanel_ExistsWithExpectedHeader()
-    {
-        var xaml = ReadPlaylistIntelligencePanelXaml();
-
-        Assert.Contains("Text=\"Playlist Intelligence\"", xaml);
-        Assert.Contains("Text=\"Smart Insert Settings\"", xaml);
-        Assert.Contains("Command=\"{Binding SetSmartInsertStrictPresetCommand}\"", xaml);
-        Assert.Contains("Text=\"{Binding LibraryIntelligencePlaylistTitle}\"", xaml);
-        Assert.Contains("Command=\"{Binding SetLibraryIntelligenceTabCommand}\"", xaml);
-    }
-
-    [Fact]
-    public void MainWindow_UsesExplicitLibraryInspectorContextTemplates()
-    {
-        var xaml = ReadMainWindowXaml();
-
-        Assert.Contains("DataTemplate DataType=\"vmCore:LibraryDoubleInspectorViewModel\"", xaml);
-        Assert.Contains("DataTemplate DataType=\"vmCore:PlaylistIntelligenceViewModel\"", xaml);
-        Assert.Contains("DataTemplate DataType=\"vmCore:PlaylistTrackViewModel\"", xaml);
-        Assert.Contains("<controls:DoubleInspectorPanel/>", xaml);
-        Assert.Contains("<controls:PlaylistIntelligencePanel/>", xaml);
-        Assert.Contains("Inspector content is unavailable for this selection.", xaml);
-        Assert.DoesNotContain("TrackInspectorPanel", xaml);
-        Assert.DoesNotContain("DataTemplate DataType=\"vmCore:LibraryViewModel\"", xaml);
-    }
 
     [Fact]
     public void LibraryViewModel_DoesNotRetainLegacySidebarModeCompatibilityState()
@@ -56,96 +18,6 @@ public class LibrarySidebarUnificationStartTests
         Assert.DoesNotContain("IsLibrarySidebarDoubleInspectorMode", source);
         Assert.DoesNotContain("IsLibrarySidebarIntelligenceMode", source);
         Assert.DoesNotContain("EvaluateSidebarMode(", source);
-    }
-
-    [Fact]
-    public void LibraryViewModel_DoesNotRetainLegacyDoubleInspectorMirrorProperties()
-    {
-        var source = ReadLibraryViewModelSource();
-
-        Assert.DoesNotContain("DoubleInspectorTrackA", source);
-        Assert.DoesNotContain("DoubleInspectorTrackB", source);
-        Assert.DoesNotContain("IsDoubleInspectorPairAnalyzable", source);
-        Assert.DoesNotContain("IsDoubleInspectorPairScoreLoading", source);
-        Assert.DoesNotContain("HasDoubleInspectorPairContext", source);
-        Assert.DoesNotContain("DoubleInspectorHeaderTitle", source);
-        Assert.DoesNotContain("DoubleInspectorKeyCompatibilitySummary", source);
-        Assert.DoesNotContain("DoubleInspectorBpmDifferenceSummary", source);
-        Assert.DoesNotContain("DoubleInspectorEnergyAlignmentSummary", source);
-        Assert.DoesNotContain("DoubleInspectorTransitionScore", source);
-        Assert.DoesNotContain("DoubleInspectorHarmonicScore", source);
-        Assert.DoesNotContain("DoubleInspectorBeatScore", source);
-        Assert.DoesNotContain("DoubleInspectorDropScore", source);
-        Assert.DoesNotContain("DoubleInspectorReasonTags", source);
-        Assert.DoesNotContain("DoubleInspectorTransitionStyleLabel", source);
-        Assert.DoesNotContain("DoubleInspectorTransitionStyleReason", source);
-    }
-
-    [Fact]
-    public void LibraryViewModel_DoesNotRetainLegacyIntelligenceTabMirrorBooleans()
-    {
-        var source = ReadLibraryViewModelSource();
-
-        Assert.DoesNotContain("IsLibraryIntelligenceSmartInsertActive", source);
-        Assert.DoesNotContain("IsLibraryIntelligenceSuggestNextActive", source);
-        Assert.DoesNotContain("IsLibraryIntelligenceUpgradeActive", source);
-        Assert.DoesNotContain("IsLibraryIntelligenceAutomixActive", source);
-    }
-
-    [Fact]
-    public void SidebarInspectorLane_DoesNotUseServiceLocatorForSimilarityDependencies()
-    {
-        var doubleInspectorSource = ReadLibraryDoubleInspectorSource();
-        var trackInspectorSource = ReadLibraryTrackInspectorSource();
-        var intelligenceSource = ReadPlaylistIntelligenceSource();
-        var eventsSource = ReadLibraryEventsSource();
-
-        Assert.DoesNotContain("GetService(typeof(TrackSimilarityService))", doubleInspectorSource);
-        Assert.DoesNotContain("GetService(typeof(TransitionStyleClassifier))", doubleInspectorSource);
-        Assert.DoesNotContain("GetService(typeof(SimilarityIndex))", trackInspectorSource);
-        Assert.DoesNotContain("GetService(typeof(TrackSimilarityService))", intelligenceSource);
-        Assert.DoesNotContain("GetService(typeof(TrackSimilarityService))", eventsSource);
-    }
-
-    [Fact]
-    public void SidebarLane_DoesNotRetainStaleParentForwardingNotifications()
-    {
-        var librarySource = ReadLibraryViewModelSource();
-        var intelligenceSource = ReadPlaylistIntelligenceSource();
-        var trackInspectorSource = ReadLibraryTrackInspectorSource();
-
-        Assert.DoesNotContain("OnSuggestNextCandidatesCollectionChanged", librarySource);
-        Assert.DoesNotContain("OnPlaylistUpgradeCandidatesCollectionChanged", librarySource);
-
-        Assert.DoesNotContain("_library.OnPropertyChanged(nameof(LibraryViewModel.SmartInsertFromLabel))", intelligenceSource);
-        Assert.DoesNotContain("_library.OnPropertyChanged(nameof(LibraryViewModel.IsSuggestNextLoading))", intelligenceSource);
-        Assert.DoesNotContain("_library.OnPropertyChanged(nameof(LibraryViewModel.IsPlaylistUpgradeLoading))", intelligenceSource);
-
-        Assert.DoesNotContain("_library.OnPropertyChanged(nameof(LibraryViewModel.TrackExplainabilitySummary))", trackInspectorSource);
-        Assert.DoesNotContain("_library.OnPropertyChanged(nameof(LibraryViewModel.HasSimilarTracksPreview))", trackInspectorSource);
-    }
-
-    [Fact]
-    public void LibraryViewModel_DoesNotRetainSmartInsertShimWrapperMethods()
-    {
-        var source = ReadLibraryViewModelSource();
-
-        Assert.DoesNotContain("private void SetSmartInsertPairContext", source);
-        Assert.DoesNotContain("private void ResetSmartInsertPairContext", source);
-        Assert.DoesNotContain("private void SetSmartInsertPreparationHint", source);
-        Assert.DoesNotContain("private void ClearSmartInsertPreparationHint", source);
-    }
-
-    [Fact]
-    public void LibraryTrackInspectorViewModel_DoesNotRetainDeadForwardingNoOps()
-    {
-        var source = ReadLibraryTrackInspectorSource();
-        var librarySource = ReadLibraryViewModelSource();
-
-        Assert.DoesNotContain("OnSimilarTracksPreviewCollectionChanged", source);
-        Assert.DoesNotContain("RaiseStateChanged", source);
-        Assert.DoesNotContain("IDisposable", source);
-        Assert.DoesNotContain("TrackInspector.Dispose();", librarySource);
     }
 
     [Fact]
@@ -163,44 +35,11 @@ public class LibrarySidebarUnificationStartTests
     {
         var eventsSource = ReadLibraryEventsSource();
 
-        Assert.Contains("OpenInspectorEvent.Create(DoubleInspector, \"Library.TrackSelection.Double\")", eventsSource);
-        Assert.Contains("OpenInspectorEvent.Create(Intelligence, \"Library.TrackSelection.EmptyIntelligence\")", eventsSource);
-        Assert.Contains("OpenInspectorEvent.Create(single, \"Library.TrackSelection.Single\")", eventsSource);
-        Assert.Contains("OpenInspectorEvent.Create(Intelligence, \"Library.ProjectSelection.EmptyIntelligence\")", eventsSource);
+        Assert.Contains("OpenInspectorEvent.Create(selectedTracks[0], \"Library.TrackSelection.Single\")", eventsSource);
         Assert.Contains("ReactiveUI.MessageBus.Current.SendMessage(new CloseInspectorEvent());", eventsSource);
         Assert.DoesNotContain("new OpenInspectorEvent(this, \"DOUBLE INSPECTOR\", \"🔗\")", eventsSource);
         Assert.DoesNotContain("new OpenInspectorEvent(this, \"INTELLIGENCE\", \"🧠\")", eventsSource);
         Assert.DoesNotContain("new OpenInspectorEvent(single, source: \"Library.TrackSelection.Single\")", eventsSource);
-    }
-
-    [Fact]
-    public void LibraryEvents_SelectionFlow_RoutesThroughChildInspectorOwners()
-    {
-        var eventsSource = ReadLibraryEventsSource();
-        var libraryViewModelSource = ReadLibraryViewModelSource();
-
-        // DoubleInspector.HandleSelectionChangedAsync/TrackInspector.TryAttachEnhancementsAsync are
-        // fired from WireSelectionInspectorRefreshDebounce in LibraryViewModel.cs (200ms throttle on
-        // _selectionInspectorRefreshRequests), not inline in Events.cs — see that method's doc
-        // comment: a shift-click range or marquee drag fires one CollectionChanged event per row,
-        // and each used to kick off a fresh pairwise DB/similarity lookup with no debounce.
-        Assert.Contains("_selectionInspectorRefreshRequests.OnNext(Unit.Default);", eventsSource);
-        Assert.Contains("_ = DoubleInspector.HandleSelectionChangedAsync(current);", libraryViewModelSource);
-        Assert.Contains("_ = TrackInspector.TryAttachEnhancementsAsync(current[0]);", libraryViewModelSource);
-        Assert.Contains("TrackInspector.ClearEnhancements();", eventsSource);
-        Assert.Contains("_ = Intelligence.RefreshSuggestNextCandidatesAsync();", eventsSource);
-        Assert.Contains("_ = Intelligence.RefreshPlaylistUpgradeCandidatesAsync();", eventsSource);
-    }
-
-    [Fact]
-    public void SimilarTracks_PrimesFromDedicatedInspectorViewModels()
-    {
-        var source = ReadSimilarTracksSource();
-
-        Assert.Contains("case LibraryDoubleInspectorViewModel", source);
-        Assert.Contains("case PlaylistIntelligenceViewModel", source);
-        Assert.DoesNotContain("case LibraryDoubleInspectorContext", source);
-        Assert.DoesNotContain("case PlaylistIntelligenceInspectorContext", source);
     }
 
     [Fact]
@@ -262,28 +101,6 @@ public class LibrarySidebarUnificationStartTests
         return File.ReadAllText(filePath);
     }
 
-    private static string ReadPlaylistIntelligencePanelXaml()
-    {
-        var sourceRoot = FindSourceRoot();
-        Assert.False(string.IsNullOrWhiteSpace(sourceRoot));
-
-        var filePath = Path.Combine(sourceRoot, "Views", "Avalonia", "Controls", "PlaylistIntelligencePanel.axaml");
-        Assert.True(File.Exists(filePath), $"Expected playlist intelligence panel at {filePath}");
-
-        return File.ReadAllText(filePath);
-    }
-
-    private static string ReadMainWindowXaml()
-    {
-        var sourceRoot = FindSourceRoot();
-        Assert.False(string.IsNullOrWhiteSpace(sourceRoot));
-
-        var filePath = Path.Combine(sourceRoot, "Views", "Avalonia", "MainWindow.axaml");
-        Assert.True(File.Exists(filePath), $"Expected main window view at {filePath}");
-
-        return File.ReadAllText(filePath);
-    }
-
     private static string ReadLibraryEventsSource()
     {
         var sourceRoot = FindSourceRoot();
@@ -317,39 +134,6 @@ public class LibrarySidebarUnificationStartTests
         return File.ReadAllText(filePath);
     }
 
-    private static string ReadLibraryDoubleInspectorSource()
-    {
-        var sourceRoot = FindSourceRoot();
-        Assert.False(string.IsNullOrWhiteSpace(sourceRoot));
-
-        var filePath = Path.Combine(sourceRoot, "ViewModels", "LibraryDoubleInspectorViewModel.cs");
-        Assert.True(File.Exists(filePath), $"Expected double inspector source at {filePath}");
-
-        return File.ReadAllText(filePath);
-    }
-
-    private static string ReadLibraryTrackInspectorSource()
-    {
-        var sourceRoot = FindSourceRoot();
-        Assert.False(string.IsNullOrWhiteSpace(sourceRoot));
-
-        var filePath = Path.Combine(sourceRoot, "ViewModels", "LibraryTrackInspectorViewModel.cs");
-        Assert.True(File.Exists(filePath), $"Expected track inspector source at {filePath}");
-
-        return File.ReadAllText(filePath);
-    }
-
-    private static string ReadPlaylistIntelligenceSource()
-    {
-        var sourceRoot = FindSourceRoot();
-        Assert.False(string.IsNullOrWhiteSpace(sourceRoot));
-
-        var filePath = Path.Combine(sourceRoot, "ViewModels", "PlaylistIntelligenceViewModel.cs");
-        Assert.True(File.Exists(filePath), $"Expected playlist intelligence source at {filePath}");
-
-        return File.ReadAllText(filePath);
-    }
-
     private static string ReadCompactPlaylistTemplateXaml()
     {
         var sourceRoot = FindSourceRoot();
@@ -357,17 +141,6 @@ public class LibrarySidebarUnificationStartTests
 
         var filePath = Path.Combine(sourceRoot, "Views", "Avalonia", "Controls", "CompactPlaylistTemplate.axaml");
         Assert.True(File.Exists(filePath), $"Expected compact playlist template view at {filePath}");
-
-        return File.ReadAllText(filePath);
-    }
-
-    private static string ReadSimilarTracksSource()
-    {
-        var sourceRoot = FindSourceRoot();
-        Assert.False(string.IsNullOrWhiteSpace(sourceRoot));
-
-        var filePath = Path.Combine(sourceRoot, "ViewModels", "SimilarTracksViewModel.cs");
-        Assert.True(File.Exists(filePath), $"Expected similar tracks source at {filePath}");
 
         return File.ReadAllText(filePath);
     }

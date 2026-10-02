@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using Singularity.Models;
-using Singularity.Services.Timeline;
 
 namespace Singularity.Services;
 

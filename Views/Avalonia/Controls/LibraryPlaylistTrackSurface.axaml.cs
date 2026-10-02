@@ -21,9 +21,6 @@ public partial class LibraryPlaylistTrackSurface : UserControl
 {
     private int _selectionAnchorIndex = -1;
     private int _focusedIndex = -1;
-    private InsertBetweenRowControl? _activeMagneticGap;
-    private TrackListViewModel? _boundVm;
-    private INotifyCollectionChanged? _boundFilteredCollection;
 
     // Drag-initiation state: a track row press becomes a drag once the pointer moves past the
     // threshold, so it can be dropped onto a playlist in the sidebar or the player queue.
@@ -33,9 +30,6 @@ public partial class LibraryPlaylistTrackSurface : UserControl
     public LibraryPlaylistTrackSurface()
     {
         InitializeComponent();
-        DataContextChanged += OnDataContextChanged;
-        Loaded += OnLoaded;
-        Unloaded += OnUnloaded;
     }
 
     private void InitializeComponent()
@@ -46,29 +40,10 @@ public partial class LibraryPlaylistTrackSurface : UserControl
     private void OnRootPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         Focus();
-
-        if (DataContext is not TrackListViewModel vm)
-            return;
-
-        if (!TryResolveGapContextRequest(e.Source, out var request, out var gapControl))
-            return;
-
-        if (request.FromTrack.IsPlaceholder)
-            return;
-
-        var focusIndex = vm.FilteredTracks.IndexOf(request.FromTrack);
-        if (focusIndex < 0)
-            return;
-
-        _selectionAnchorIndex = focusIndex;
-        _focusedIndex = focusIndex;
-        ApplySelectionSet(vm, new[] { request.FromTrack });
-        SetMagneticGap(gapControl);
     }
 
     private void OnRootPointerExited(object? sender, PointerEventArgs e)
     {
-        SetMagneticGap(null);
 
         // Mouse left the library surface — stop any active hover-preview
         if (DataContext is TrackListViewModel vm)
@@ -99,7 +74,6 @@ public partial class LibraryPlaylistTrackSurface : UserControl
         ApplyPointerSelection(vm, index, e.KeyModifiers);
         _focusedIndex = index;
         UpdateFocusedRowVisual(vm);
-        RefreshInsertGapStates(vm);
         Focus();
         e.Handled = true;
     }
@@ -149,16 +123,6 @@ public partial class LibraryPlaylistTrackSurface : UserControl
             }
         }
 
-        RefreshInsertGapStates(vm);
-
-        var index = vm.FilteredTracks.IndexOf(track);
-        if (index < 0)
-            return;
-
-        var y = e.GetPosition(row).Y;
-        var targetAnchorIndex = y < row.Bounds.Height * 0.5 ? index - 1 : index;
-        var targetGap = ResolveGapByAnchorIndex(vm, targetAnchorIndex);
-        SetMagneticGap(targetGap);
     }
 
     private void OnTrackRowPointerExited(object? sender, PointerEventArgs e)
@@ -166,29 +130,6 @@ public partial class LibraryPlaylistTrackSurface : UserControl
         // Keep current magnetic state until another row/gap claims hover.
         _dragStartPoint = null;
         _dragCandidateTrack = null;
-    }
-
-    private void OnInsertGapPointerEntered(object? sender, PointerEventArgs e)
-    {
-        if (sender is InsertBetweenRowControl gap)
-            SetMagneticGap(gap);
-    }
-
-    private void OnInsertGapPointerMoved(object? sender, PointerEventArgs e)
-    {
-        if (sender is InsertBetweenRowControl gap)
-            SetMagneticGap(gap);
-    }
-
-    private void OnInsertGapPointerExited(object? sender, PointerEventArgs e)
-    {
-        // Keep current magnetic state while moving between row and gap; root exit clears stale state.
-    }
-
-    private void OnTrackScrollChanged(object? sender, ScrollChangedEventArgs e)
-    {
-        if (DataContext is TrackListViewModel vm)
-            RefreshInsertGapStates(vm);
     }
 
     private void OnRootKeyDown(object? sender, KeyEventArgs e)
@@ -237,7 +178,6 @@ public partial class LibraryPlaylistTrackSurface : UserControl
         ApplyKeyboardSelection(vm, targetIndex, e.KeyModifiers);
         _focusedIndex = targetIndex;
         UpdateFocusedRowVisual(vm);
-        RefreshInsertGapStates(vm);
         e.Handled = true;
     }
 
@@ -316,7 +256,6 @@ public partial class LibraryPlaylistTrackSurface : UserControl
 
         vm.UpdateSelection(selected);
         UpdateFocusedRowVisual(vm);
-        RefreshInsertGapStates(vm);
     }
 
     private void ExecuteFocusedSpaceAction(TrackListViewModel vm, KeyModifiers modifiers)
@@ -360,188 +299,6 @@ public partial class LibraryPlaylistTrackSurface : UserControl
             else
                 border.Classes.Remove("focused");
         }
-    }
-
-    private void OnLoaded(object? sender, RoutedEventArgs e)
-    {
-        AttachToVm(DataContext as TrackListViewModel);
-        if (DataContext is TrackListViewModel vm)
-            RefreshInsertGapStates(vm);
-    }
-
-    private void OnUnloaded(object? sender, RoutedEventArgs e)
-    {
-        PublishSmartInsertPreviewHint(null);
-        AttachToVm(null);
-    }
-
-    private void OnDataContextChanged(object? sender, System.EventArgs e)
-    {
-        AttachToVm(DataContext as TrackListViewModel);
-        if (DataContext is TrackListViewModel vm)
-            RefreshInsertGapStates(vm);
-    }
-
-    private void AttachToVm(TrackListViewModel? nextVm)
-    {
-        if (ReferenceEquals(_boundVm, nextVm))
-            return;
-
-        if (_boundVm is not null)
-        {
-            _boundVm.PropertyChanged -= OnVmPropertyChanged;
-            if (_boundFilteredCollection is not null)
-                _boundFilteredCollection.CollectionChanged -= OnFilteredTracksCollectionChanged;
-            _boundFilteredCollection = null;
-        }
-
-        _boundVm = nextVm;
-
-        if (_boundVm is not null)
-        {
-            _boundVm.PropertyChanged += OnVmPropertyChanged;
-            _boundFilteredCollection = _boundVm.FilteredTracks as INotifyCollectionChanged;
-            if (_boundFilteredCollection is not null)
-                _boundFilteredCollection.CollectionChanged += OnFilteredTracksCollectionChanged;
-        }
-    }
-
-    private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (!string.Equals(e.PropertyName, nameof(TrackListViewModel.FilteredTracks), System.StringComparison.Ordinal))
-            return;
-
-        if (_boundVm is null)
-            return;
-
-        if (_boundFilteredCollection is not null)
-            _boundFilteredCollection.CollectionChanged -= OnFilteredTracksCollectionChanged;
-
-        _boundFilteredCollection = _boundVm.FilteredTracks as INotifyCollectionChanged;
-        if (_boundFilteredCollection is not null)
-            _boundFilteredCollection.CollectionChanged += OnFilteredTracksCollectionChanged;
-
-        RefreshInsertGapStates(_boundVm);
-    }
-
-    private void OnFilteredTracksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        if (_boundVm is not null)
-            RefreshInsertGapStates(_boundVm);
-    }
-
-    private void RefreshInsertGapStates(TrackListViewModel vm)
-    {
-        foreach (var item in EnumerateRealizedRowsAndGaps(vm))
-        {
-            var hasNext = item.Index + 1 < vm.FilteredTracks.Count;
-            var nextTrack = hasNext ? vm.FilteredTracks[item.Index + 1] : null;
-            var nextIsUsable = hasNext && nextTrack?.IsPlaceholder == false;
-
-            item.Gap.IsVisible = nextIsUsable;
-
-            if (!nextIsUsable)
-            {
-                // A not-yet-loaded neighbor just keeps the gap's prior state — the next
-                // CollectionChanged-triggered RefreshInsertGapStates call (already wired via
-                // OnFilteredTracksCollectionChanged) re-evaluates it once the real row arrives.
-                item.Gap.IsMagneticHover = false;
-                item.Gap.InsertBetweenCommandParameter = null;
-                continue;
-            }
-
-            item.Gap.InsertBetweenCommandParameter = new SmartInsertContextRequest(item.Track, nextTrack!);
-        }
-
-        if (_activeMagneticGap is { IsVisible: false })
-            SetMagneticGap(null);
-    }
-
-    private InsertBetweenRowControl? ResolveGapByAnchorIndex(TrackListViewModel vm, int anchorIndex)
-    {
-        if (anchorIndex < 0 || anchorIndex >= vm.FilteredTracks.Count - 1)
-            return null;
-
-        return EnumerateRealizedRowsAndGaps(vm)
-            .Where(item => item.Index == anchorIndex)
-            .Select(item => item.Gap)
-            .FirstOrDefault();
-    }
-
-    private IEnumerable<(PlaylistTrackViewModel Track, Border Row, InsertBetweenRowControl Gap, int Index)> EnumerateRealizedRowsAndGaps(TrackListViewModel vm)
-    {
-        foreach (var panel in this.GetVisualDescendants().OfType<StackPanel>())
-        {
-            if (panel.DataContext is not PlaylistTrackViewModel track || track.IsPlaceholder)
-                continue;
-
-            var row = panel.Children.OfType<Border>().FirstOrDefault(border => border.Classes.Contains("track-row"));
-            var gap = panel.Children.OfType<InsertBetweenRowControl>().FirstOrDefault();
-            if (row is null || gap is null)
-                continue;
-
-            var index = vm.FilteredTracks.IndexOf(track);
-            if (index < 0)
-                continue;
-
-            yield return (track, row, gap, index);
-        }
-    }
-
-    private void SetMagneticGap(InsertBetweenRowControl? gap)
-    {
-        if (ReferenceEquals(_activeMagneticGap, gap))
-            return;
-
-        if (_activeMagneticGap is not null)
-            _activeMagneticGap.IsMagneticHover = false;
-
-        _activeMagneticGap = gap;
-
-        if (_activeMagneticGap is { IsVisible: true })
-            _activeMagneticGap.IsMagneticHover = true;
-
-        var previewRequest = _activeMagneticGap?.InsertBetweenCommandParameter as SmartInsertContextRequest;
-        PublishSmartInsertPreviewHint(previewRequest);
-    }
-
-    private void PublishSmartInsertPreviewHint(SmartInsertContextRequest? request)
-    {
-        var libraryVm = ResolveLibraryViewModel();
-        if (libraryVm?.PreviewSmartInsertContextCommand is null)
-            return;
-
-        if (libraryVm.PreviewSmartInsertContextCommand.CanExecute(request))
-            libraryVm.PreviewSmartInsertContextCommand.Execute(request);
-    }
-
-    private LibraryViewModel? ResolveLibraryViewModel()
-    {
-        return this.GetSelfAndVisualAncestors()
-            .OfType<LibraryPage>()
-            .Select(page => page.DataContext)
-            .OfType<LibraryViewModel>()
-            .FirstOrDefault();
-    }
-
-    private bool TryResolveGapContextRequest(object? source, out SmartInsertContextRequest request, out InsertBetweenRowControl? gapControl)
-    {
-        request = default!;
-        gapControl = null;
-
-        if (source is not Control control)
-            return false;
-
-        gapControl = control
-            .GetSelfAndVisualAncestors()
-            .OfType<InsertBetweenRowControl>()
-            .FirstOrDefault();
-
-        if (gapControl?.InsertBetweenCommandParameter is not SmartInsertContextRequest resolved)
-            return false;
-
-        request = resolved;
-        return true;
     }
 
     private static int ResolveLeadSelectionIndex(TrackListViewModel vm)

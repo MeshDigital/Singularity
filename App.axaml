@@ -16,7 +16,6 @@
         <converters:BoolToHeartConverter x:Key="BoolToHeartConverter"/>
         <converters:BoolToHeartColorConverter x:Key="BoolToHeartColorConverter"/>
         <converters:ActiveColorConverter x:Key="ActiveColorConverter"/>
-        <converters:FlowHealthColorConverter x:Key="FlowHealthColorConverter"/>
         
         <!-- Boolean State Converters -->
         <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
@@ -56,7 +55,6 @@
         <converters:WidthToVisibilityConverter x:Key="WidthToVisibilityConverter"/>
         <converters:PlayerLocationConverter x:Key="PlayerLocationConverter"/>
         <converters:PlayerDockIconConverter x:Key="PlayerDockIconConverter"/>
-        <converters:MixPresetIconConverter x:Key="MixPresetIconConverter"/>
         <converters:BitmapValueConverter x:Key="BitmapValueConverter"/>
         <converters:UsernameToInitialsConverter x:Key="UsernameToInitialsConverter"/>
         <converters:UsernameToColorConverter x:Key="UsernameToColorConverter"/>
@@ -71,12 +69,8 @@
         <converters:PercentToWidthConverter x:Key="PercentToWidthConverter"/>
         
         <!-- Phase 18: Sonic Match Visual Converters -->
-        <conv_root:EnergyToColorConverter x:Key="EnergyToColorConverter"/>
-        <conv_root:OpacityMultiplierConverter x:Key="OpacityMultiplierConverter"/>
 
         <!-- BPM dynamic coloring -->
-        <conv_root:BpmForegroundConverter x:Key="BpmForegroundConverter"/>
-        <conv_root:BpmBackgroundConverter x:Key="BpmBackgroundConverter"/>
         <converters:LedColorConverter x:Key="LedColorConverter"/>
         
         <!-- Alias EqualityConverter as StringEqualsConverter for semantic clarity in XAML -->

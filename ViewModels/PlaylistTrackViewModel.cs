@@ -32,7 +32,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
     private bool _isAnalyzing; // New field for analysis feedback
     private bool _isEnriching; // New field for metadata enrichment feedback
     private bool _isSelected;
-    private List<OrbitCue> _cues = new();
     
     // NEW Phase 12.1: Live Console Log for granular updates
     public System.Collections.ObjectModel.ObservableCollection<string> LiveConsoleLog { get; } = new();
@@ -55,29 +54,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
                 _ = LoadTechnicalDataAsync();
             }
         }
-    }
-
-    private bool _isSavedDoublePartner;
-    public bool IsSavedDoublePartner
-    {
-        get => _isSavedDoublePartner;
-        set => SetProperty(ref _isSavedDoublePartner, value);
-    }
-
-    // MixedInKey-style harmonic mixing highlight, driven by TrackListViewModel
-    // relative to the currently selected/lead track. Mutually exclusive.
-    private bool _isHarmonicMatch;
-    public bool IsHarmonicMatch
-    {
-        get => _isHarmonicMatch;
-        set => SetProperty(ref _isHarmonicMatch, value);
-    }
-
-    private bool _isExactKeyMatch;
-    public bool IsExactKeyMatch
-    {
-        get => _isExactKeyMatch;
-        set => SetProperty(ref _isExactKeyMatch, value);
     }
 
     private int _sortOrder;
@@ -254,7 +230,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
         {
             Model.Energy = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(SonicProfile));
         }
     }
 
@@ -307,7 +282,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
         {
             Model.Valence = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(SonicProfile));
         }
     }
 
@@ -331,11 +305,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
     /// </summary>
     public float MoodConfidence => Model.MoodConfidence ?? 0f;
 
-    public Models.SonicProfileData SonicProfile => new Models.SonicProfileData(
-        Energy, 
-        Valence, 
-        Model.InstrumentalProbability ?? 0.0);
-    
     public double InstrumentalProbability => Model.InstrumentalProbability ?? 0.0;
     
     public double BPM => Model.BPM ?? 0.0;
@@ -521,9 +490,7 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
     }
 
     public string Format => Model.Format ?? "Unknown";
-    public IEnumerable<OrbitCue> Cues => _cues;
-    public bool HasCues => _cues.Count > 0;
-    public bool HasAnalysisData => HasBpm || HasKey || HasCues || HasGenre || SampleRate > 0 || EnergyCurvePoints.Count > 0;
+    public bool HasAnalysisData => HasBpm || HasKey || HasGenre || SampleRate > 0 || EnergyCurvePoints.Count > 0;
     public double BpmConfidence => Model.QualityConfidence is > 0 ? Math.Clamp(Model.QualityConfidence.Value, 0.0, 1.0) : (HasBpm ? 0.82 : 0.0);
     public double RadarEnergy => Math.Clamp(Energy, 0.0, 1.0);
     public double RadarDanceability => Math.Clamp(Danceability, 0.0, 1.0);
@@ -593,111 +560,12 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
         _ => "Mixed"
     };
     public IReadOnlyList<double> EnergyCurvePoints => BuildEnergyCurvePoints();
-    public IReadOnlyList<PhraseSegment> PhraseSegments => BuildPhraseSegments();
-    public bool HasPhraseSegments => (Model.CanonicalDuration ?? 0) > 0;
 
     // Inspector panel: last analysis timestamp + model version tooltip
     public string LastAnalyzedDisplay =>
         _technicalEntity?.LastUpdated is { } dt
             ? dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
             : "—";
-
-    private bool _hasInspectorA10PairwiseContext;
-    public bool HasInspectorA10PairwiseContext
-    {
-        get => _hasInspectorA10PairwiseContext;
-        private set => SetProperty(ref _hasInspectorA10PairwiseContext, value);
-    }
-
-    private string _inspectorA10PairContextLabel = string.Empty;
-    public string InspectorA10PairContextLabel
-    {
-        get => _inspectorA10PairContextLabel;
-        private set => SetProperty(ref _inspectorA10PairContextLabel, value);
-    }
-
-    private double _inspectorA10OverallScore;
-    public double InspectorA10OverallScore
-    {
-        get => _inspectorA10OverallScore;
-        private set => SetProperty(ref _inspectorA10OverallScore, value);
-    }
-
-    private double _inspectorA10HarmonicScore;
-    public double InspectorA10HarmonicScore
-    {
-        get => _inspectorA10HarmonicScore;
-        private set => SetProperty(ref _inspectorA10HarmonicScore, value);
-    }
-
-    private double _inspectorA10BeatScore;
-    public double InspectorA10BeatScore
-    {
-        get => _inspectorA10BeatScore;
-        private set => SetProperty(ref _inspectorA10BeatScore, value);
-    }
-
-    private double _inspectorA10DropScore;
-    public double InspectorA10DropScore
-    {
-        get => _inspectorA10DropScore;
-        private set => SetProperty(ref _inspectorA10DropScore, value);
-    }
-
-    private string _inspectorA10ReasonTags = string.Empty;
-    public string InspectorA10ReasonTags
-    {
-        get => _inspectorA10ReasonTags;
-        private set => SetProperty(ref _inspectorA10ReasonTags, value);
-    }
-
-    private string _inspectorTransitionStyleLabel = string.Empty;
-    public string InspectorTransitionStyleLabel
-    {
-        get => _inspectorTransitionStyleLabel;
-        private set => SetProperty(ref _inspectorTransitionStyleLabel, value);
-    }
-
-    private string _inspectorTransitionStyleReason = string.Empty;
-    public string InspectorTransitionStyleReason
-    {
-        get => _inspectorTransitionStyleReason;
-        private set => SetProperty(ref _inspectorTransitionStyleReason, value);
-    }
-
-    public void SetInspectorA10PairwiseContext(
-        string contextLabel,
-        double overallScore,
-        double harmonicScore,
-        double beatScore,
-        double dropScore,
-        string reasonTags,
-        string? transitionStyleLabel = null,
-        string? transitionStyleReason = null)
-    {
-        InspectorA10PairContextLabel = contextLabel;
-        InspectorA10OverallScore = overallScore;
-        InspectorA10HarmonicScore = harmonicScore;
-        InspectorA10BeatScore = beatScore;
-        InspectorA10DropScore = dropScore;
-        InspectorA10ReasonTags = reasonTags;
-        InspectorTransitionStyleLabel = transitionStyleLabel ?? string.Empty;
-        InspectorTransitionStyleReason = transitionStyleReason ?? string.Empty;
-        HasInspectorA10PairwiseContext = true;
-    }
-
-    public void ClearInspectorA10PairwiseContext()
-    {
-        InspectorA10PairContextLabel = string.Empty;
-        InspectorA10OverallScore = 0;
-        InspectorA10HarmonicScore = 0;
-        InspectorA10BeatScore = 0;
-        InspectorA10DropScore = 0;
-        InspectorA10ReasonTags = string.Empty;
-        InspectorTransitionStyleLabel = string.Empty;
-        InspectorTransitionStyleReason = string.Empty;
-        HasInspectorA10PairwiseContext = false;
-    }
 
     public string AnalysisModelVersion =>
         _technicalEntity?.LastUpdated is { } dt
@@ -723,16 +591,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
 
     public string CamelotDisplay => !string.IsNullOrEmpty(Model.MusicalKey) ? Utils.KeyConverter.ToCamelot(Model.MusicalKey) : "—";
 
-    // Mix (Spotify-Mix-parity) transition badge — set externally by TrackListViewModel's
-    // UpdateMixTransitionBadges(), mirroring how IsHarmonicMatch/IsExactKeyMatch above are
-    // computed relative to sibling rows rather than owned by this row in isolation.
-    private bool _showMixTransitionBadge;
-    public bool ShowMixTransitionBadge
-    {
-        get => _showMixTransitionBadge;
-        set => SetProperty(ref _showMixTransitionBadge, value);
-    }
-
     // Play-queue position, maintained by PlayerViewModel.UpdateQueueStates() for the rows in its
     // Queue, so every queue list (sidepanel, Now Playing page, fullscreen player) can mark the
     // playing track and dim the ones already played.
@@ -757,46 +615,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
         get => _queueNumber;
         set => SetProperty(ref _queueNumber, value);
     }
-
-    private string _transitionPresetLabel = "Auto";
-    public string TransitionPresetLabel
-    {
-        get => _transitionPresetLabel;
-        set => SetProperty(ref _transitionPresetLabel, value);
-    }
-
-    private string _transitionBadgeColor = "#66888888";
-    public string TransitionBadgeColor
-    {
-        get => _transitionBadgeColor;
-        set => SetProperty(ref _transitionBadgeColor, value);
-    }
-
-    // Set alongside TransitionBadgeColor by TrackListViewModel.UpdateMixTransitionBadgesAsync —
-    // human-readable reasons (BPM gap, genre drift, harmonic risk, energy jump) the transition
-    // into the next track scored poorly, joined for the badge tooltip. Empty when the transition
-    // is fine.
-    private string _transitionWarningText = string.Empty;
-    public string TransitionWarningText
-    {
-        get => _transitionWarningText;
-        set
-        {
-            SetProperty(ref _transitionWarningText, value);
-            OnPropertyChanged(nameof(HasTransitionWarning));
-            OnPropertyChanged(nameof(TransitionTooltip));
-        }
-    }
-
-    public bool HasTransitionWarning => !string.IsNullOrEmpty(TransitionWarningText);
-
-    public string TransitionTooltip => HasTransitionWarning
-        ? TransitionWarningText
-        : "Edit transition into the next track";
-
-    /// <summary>The next track's PlaylistTracks.Id, i.e. the "incoming" side of this row's
-    /// transition badge — null when this is the last row or Mix mode is off.</summary>
-    public Guid? NextPlaylistTrackId { get; set; }
 
 
     public Avalonia.Media.IBrush ColorBrush
@@ -913,38 +731,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
             "dubstep" => Avalonia.Media.Brushes.Indigo,
             _ => Avalonia.Media.Brushes.SlateGray
         };
-    }
-
-    public IEnumerable<VibePill> VibePills
-    {
-        get
-        {
-            var list = new List<VibePill>();
-            if (!string.IsNullOrEmpty(DetectedSubGenre))
-            {
-                 list.Add(new VibePill("🎵", DetectedSubGenre, GetGenreColor(DetectedSubGenre)));
-            }
-
-            // Energy/Mood Pills
-            // Refined thresholds (normalized 0-1)
-            if (Energy > 0.85) list.Add(new VibePill("⚡", "High Energy", Avalonia.Media.Brushes.Gold));
-            else if (Energy < 0.3 && Energy > 0.05) list.Add(new VibePill("🌙", "Chill", Avalonia.Media.Brushes.CornflowerBlue));
-
-            if (Valence > 0.75) list.Add(new VibePill("😎", "Positive", Avalonia.Media.Brushes.LimeGreen));
-            else if (Valence < 0.25 && Valence > 0.05) list.Add(new VibePill("💀", "Dark", Avalonia.Media.Brushes.DarkSlateGray));
-            
-            if (!string.IsNullOrEmpty(MoodTag) && MoodTag != "Neutral")
-            {
-                list.Add(new VibePill("🎭", MoodTag, Avalonia.Media.Brushes.MediumSlateBlue));
-            }
-
-            if (Model.InstrumentalProbability > 0.85)
-            {
-                list.Add(new VibePill("🎤", "Instrumental", Avalonia.Media.Brushes.DarkCyan));
-            }
-
-            return list;
-        }
     }
 
     private WaveformAnalysisData? _cachedWaveformData;
@@ -1194,11 +980,8 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
     public ICommand ResumeCommand { get; }
     public ICommand CancelCommand { get; }
     public ICommand FindNewVersionCommand { get; }
-    public ICommand AnalyzeTrackCommand { get; }
-    public ICommand SeparateStemsCommand { get; }
     public ICommand PlayCommand { get; }
     public ICommand RevealFileCommand { get; }
-    public ICommand OpenWorkstationCommand { get; }
     public ICommand AddToProjectCommand { get; }
     public ICommand ToggleLikeCommand { get; }
     public ICommand FilterByKeyCommand { get; }
@@ -1268,11 +1051,8 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
         ResumeCommand = new RelayCommand(Resume, () => CanResume);
         CancelCommand = new RelayCommand(Cancel, () => CanCancel);
         FindNewVersionCommand = new RelayCommand(FindNewVersion, () => CanHardRetry);
-        AnalyzeTrackCommand = new RelayCommand(AnalyzeTrack, () => State == PlaylistTrackState.Completed); // Enable only if available locally
-        SeparateStemsCommand = new RelayCommand(SeparateStems, () => State == PlaylistTrackState.Completed && !HasStems);
         PlayCommand = new RelayCommand(PlayTrack, () => IsCompleted);
         RevealFileCommand = new RelayCommand(RevealFile, () => IsCompleted);
-        OpenWorkstationCommand = new RelayCommand(OpenWorkstation, () => IsCompleted);
         AddToProjectCommand = new RelayCommand(() => _eventBus?.Publish(new Models.AddToProjectRequestEvent(new[] { Model })), () => IsCompleted);
         RetryCommand = new RelayCommand(FindNewVersion, () => CanHardRetry);
         HardRetryCommand = RetryCommand;
@@ -1448,7 +1228,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
              OnPropertyChanged(nameof(HasMood));
              OnPropertyChanged(nameof(HasVibeData));
              OnPropertyChanged(nameof(MoodConfidence));
-             OnPropertyChanged(nameof(SonicProfile));
              OnPropertyChanged(nameof(Genres));
              OnPropertyChanged(nameof(Popularity));
              OnPropertyChanged(nameof(Label));
@@ -1458,7 +1237,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
              OnPropertyChanged(nameof(BitrateFormatted));
              OnPropertyChanged(nameof(DetectedSubGenre));
              OnPropertyChanged(nameof(PrimaryGenre));
-             OnPropertyChanged(nameof(VibePills));
              OnPropertyChanged(nameof(MatchConfidence));
              OnPropertyChanged(nameof(VibeColor));
              OnPropertyChanged(nameof(VibeTooltip));
@@ -1593,20 +1371,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
             }
         }
         catch { /* Fail silently */ }
-    }
-
-    private void AnalyzeTrack()
-    {
-        if (_eventBus == null || string.IsNullOrEmpty(GlobalId)) return;
-        
-        // Publish event to request analysis
-        // The AnalysisOrchestrator or AnalysisQueueService should listen to this.
-        _eventBus.Publish(new Models.TrackAnalysisRequestedEvent(GlobalId));
-        
-        // Optimistic UI update
-        _isAnalyzing = true;
-        OnPropertyChanged(nameof(MetadataStatus));
-        OnPropertyChanged(nameof(MetadataStatusSymbol));
     }
 
     internal void OnProgressChanged(TrackProgressChangedEvent evt)
@@ -1939,23 +1703,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
               
             if (_technicalEntity != null)
             {
-                // Parse Cues
-                if (!string.IsNullOrEmpty(_technicalEntity.CuePointsJson))
-                {
-                    try
-                    {
-                        var cues = System.Text.Json.JsonSerializer.Deserialize<List<OrbitCue>>(_technicalEntity.CuePointsJson);
-                        if (cues != null)
-                        {
-                            _cues = cues;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Serilog.Log.Warning(ex, "Failed to parse cue points for track {GlobalId}", GlobalId);
-                    }
-                }
-
                 _technicalDataLoaded = true;
                 _cachedWaveformData = null; // Invalidate cache
 
@@ -1965,8 +1712,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
                 OnPropertyChanged(nameof(MidData));
                 OnPropertyChanged(nameof(HighData));
                 OnPropertyChanged(nameof(TechnicalSummary));
-                OnPropertyChanged(nameof(Cues));
-                OnPropertyChanged(nameof(PhraseSegments));
                 OnPropertyChanged(nameof(EnergyCurvePoints));
                 OnPropertyChanged(nameof(HasAnalysisData));
                 OnPropertyChanged(nameof(BpmConfidence));
@@ -1985,25 +1730,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
 
     /// <summary>Loads analysis/technical data for this track. Alias for <see cref="LoadTechnicalDataAsync"/>.</summary>
     public Task LoadAnalysisDataAsync() => LoadTechnicalDataAsync();
-
-    /// <summary>Updates the label on a cue point and persists the full cue list for this track.</summary>
-    public async Task SaveCueLabelAsync(OrbitCue cue, string newLabel)
-    {
-        cue.Name = newLabel;
-
-        if (_libraryService == null || string.IsNullOrEmpty(GlobalId))
-            return;
-
-        try
-        {
-            var json = System.Text.Json.JsonSerializer.Serialize(_cues);
-            await _libraryService.UpdateTrackCuePointsAsync(GlobalId, json);
-        }
-        catch (Exception ex)
-        {
-            Serilog.Log.Warning(ex, "Failed to persist cue label change for track {GlobalId}", GlobalId);
-        }
-    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -2035,18 +1761,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
         field = value;
         OnPropertyChanged(propertyName);
         return true;
-    }
-
-    public void SeparateStems()
-    {
-        if (_eventBus == null || string.IsNullOrEmpty(GlobalId)) return;
-        _eventBus.Publish(new Models.StemSeparationRequestedEvent(GlobalId, Model.ResolvedFilePath ?? ""));
-        _eventBus.Publish(new Models.OpenStemWorkspaceRequestEvent(Model, OpenStemRack: true));
-        
-        // UI notification or temporary state if needed
-        ErrorMessage = "Opening stem rack...";
-        OnPropertyChanged(nameof(StatusText));
-        OnPropertyChanged(nameof(DetailedStatusText));
     }
 
     // Every consumer is a small chart (the tracklist sparkline is ~75px wide, the inspector bar a
@@ -2103,55 +1817,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
         }
 
         return points;
-    }
-
-    private IReadOnlyList<PhraseSegment> BuildPhraseSegments()
-    {
-        var duration = Math.Max(0.0, (Model.CanonicalDuration ?? 0) / 1000.0);
-        var orderedCues = _cues.OrderBy(c => c.Timestamp).ToList();
-
-        if (orderedCues.Count == 0)
-        {
-            if (duration <= 0)
-                return Array.Empty<PhraseSegment>();
-
-            var introEnd = Math.Max(8.0, duration * 0.15);
-            var outroStart = Math.Max(introEnd, duration * 0.82);
-            return new[]
-            {
-                new PhraseSegment { Label = "Intro", Start = 0f, Duration = (float)Math.Max(4.0, introEnd), Color = "#1E3A5F" },
-                new PhraseSegment { Label = "Main", Start = (float)introEnd, Duration = (float)Math.Max(4.0, outroStart - introEnd), Color = "#6A0DAD" },
-                new PhraseSegment { Label = "Outro", Start = (float)outroStart, Duration = (float)Math.Max(4.0, duration - outroStart), Color = "#708090" }
-            };
-        }
-
-        var segments = new List<PhraseSegment>(orderedCues.Count);
-        for (var i = 0; i < orderedCues.Count; i++)
-        {
-            var current = orderedCues[i];
-            var nextTime = i < orderedCues.Count - 1
-                ? orderedCues[i + 1].Timestamp
-                : Math.Max(duration, current.Timestamp + 8.0);
-
-            segments.Add(new PhraseSegment
-            {
-                Label = string.IsNullOrWhiteSpace(current.Name) ? $"Cue {i + 1}" : current.Name,
-                Start = (float)Math.Max(0.0, current.Timestamp),
-                Duration = (float)Math.Max(2.0, nextTime - current.Timestamp),
-                Confidence = (float)Math.Clamp(current.Confidence, 0.0, 1.0),
-                Color = string.IsNullOrWhiteSpace(current.Color) ? "#708090" : current.Color
-            });
-        }
-
-        return segments;
-    }
-
-    private void OpenWorkstation()
-    {
-        PlayTrack();
-
-        if (_eventBus != null)
-            _eventBus.Publish(new Models.OpenStemWorkspaceRequestEvent(Model));
     }
 
     private void PlayTrack()

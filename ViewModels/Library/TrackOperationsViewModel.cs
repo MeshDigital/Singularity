@@ -32,12 +32,8 @@ public class TrackOperationsViewModel : INotifyPropertyChanged, IDisposable
     private readonly IBulkOperationCoordinator _bulkCoordinator; // Phase 10.5
     private readonly IEventBus _eventBus; // Phase 11.6 Notification
     private readonly IDialogService _dialogService;
-    private readonly CueForgeViewModel _cueForgeViewModel;
     private readonly INotificationService _notificationService;
-    private readonly AnalyzeTrackStructureJob? _cueStructureJob;
     private readonly Services.Repositories.ITrackRepository _trackRepository;
-    private readonly Services.Integrations.Serato.SeratoCueExportService? _seratoExport;
-    private readonly Services.AudioAnalysis.CueDetrCueService? _cueDetrCues;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -55,16 +51,9 @@ public class TrackOperationsViewModel : INotifyPropertyChanged, IDisposable
     public System.Windows.Input.ICommand OpenFolderCommand { get; }
     public System.Windows.Input.ICommand AddToQueueCommand { get; }
     public System.Windows.Input.ICommand AddSelectedToQueueCommand { get; }
-    public System.Windows.Input.ICommand AnalyseTrackCommand { get; }
     public System.Windows.Input.ICommand OpenAuditLogCommand { get; }
-    public System.Windows.Input.ICommand OpenInCueForgeCommand { get; }
     public System.Windows.Input.ICommand SetColorTagCommand { get; }
-    public System.Windows.Input.ICommand RegenerateCuesCommand { get; }
     public System.Windows.Input.ICommand RefreshBpmFromTagsCommand { get; }
-    /// <summary>Parameter "keep" (default) or "replace" — see <see cref="Services.Integrations.Serato.SeratoWriteMode"/>.</summary>
-    public System.Windows.Input.ICommand WriteSeratoCuesCommand { get; }
-    /// <summary>Parameter "compare" (ORBIT + CUE-DETR side by side) or "ai" (CUE-DETR only).</summary>
-    public System.Windows.Input.ICommand GenerateCuesWithAiCommand { get; }
 
     // Phase 10.5: Dependency Warning Property
     public bool AreDependenciesHealthy => _dependencyHealthService.IsHealthy;
@@ -81,12 +70,8 @@ public class TrackOperationsViewModel : INotifyPropertyChanged, IDisposable
         IBulkOperationCoordinator bulkCoordinator,
         IEventBus eventBus,
         IDialogService dialogService,
-        CueForgeViewModel cueForgeViewModel,
         INotificationService notificationService,
-        Services.Repositories.ITrackRepository trackRepository,
-        AnalyzeTrackStructureJob? cueStructureJob = null,
-        Services.Integrations.Serato.SeratoCueExportService? seratoExport = null,
-        Services.AudioAnalysis.CueDetrCueService? cueDetrCues = null)
+        Services.Repositories.ITrackRepository trackRepository)
     {
         _logger = logger;
         _downloadManager = downloadManager;
@@ -98,12 +83,8 @@ public class TrackOperationsViewModel : INotifyPropertyChanged, IDisposable
         _bulkCoordinator = bulkCoordinator;
         _eventBus = eventBus;
         _dialogService = dialogService;
-        _cueForgeViewModel = cueForgeViewModel;
         _notificationService = notificationService;
         _trackRepository = trackRepository;
-        _cueStructureJob = cueStructureJob;
-        _seratoExport = seratoExport;
-        _cueDetrCues = cueDetrCues;
 
         // Subscribe to dynamic health updates
         _healthChangedHandler = (s, healthy) =>
@@ -131,115 +112,9 @@ public class TrackOperationsViewModel : INotifyPropertyChanged, IDisposable
         OpenFolderCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteOpenFolder);
         AddToQueueCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteAddToQueue);
         AddSelectedToQueueCommand = new RelayCommand(ExecuteAddSelectedToQueue);
-        AnalyseTrackCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteAnalyseTrack);
-        RegenerateCuesCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteRegenerateCues);
         RefreshBpmFromTagsCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteRefreshBpmFromTags);
         OpenAuditLogCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteOpenAuditLog);
-        OpenInCueForgeCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteOpenInCueForge);
         SetColorTagCommand = new RelayCommand<string>(ExecuteSetColorTag);
-        WriteSeratoCuesCommand = new AsyncRelayCommand<string>(ExecuteWriteSeratoCues);
-        GenerateCuesWithAiCommand = new AsyncRelayCommand<string>(ExecuteGenerateCuesWithAi);
-    }
-
-    /// <summary>
-    /// Regenerates the selected tracks' auto cues with CUE-DETR in the loop, so its opinion can be
-    /// judged on the waveform: "compare" keeps ORBIT's cues (marked ✓AI where CUE-DETR agrees) and
-    /// adds CUE-DETR's other points as cyan "AI" cues; "ai" shows CUE-DETR's points alone. The model
-    /// runs once per track (~10 s) and is cached, so switching back and forth is instant after that.
-    /// "Regenerate Cues → ORBIT analysis" restores the normal cues. Hand-placed cues are kept.
-    /// </summary>
-    private async Task ExecuteGenerateCuesWithAi(string? modeText)
-    {
-        if (_cueDetrCues == null) return;
-        if (!_cueDetrCues.IsModelAvailable)
-        {
-            _notificationService.Show("CUE-DETR", "The CUE-DETR model (Tools/Essentia/models/cue-detr.onnx) isn't installed.", Views.NotificationType.Warning);
-            return;
-        }
-        var mode = modeText == "ai" ? Engine.Analysis.CueDetr.CueSourceMode.AiOnly : Engine.Analysis.CueDetr.CueSourceMode.Compare;
-        var selected = LibraryViewModel?.Tracks.SelectedTracks?.ToList() ?? [];
-        var targets = selected.Count > 0
-            ? selected
-            : LibraryViewModel?.Tracks.LeadSelectedTrack is { } lead ? new List<PlaylistTrackViewModel> { lead } : new List<PlaylistTrackViewModel>();
-        if (targets.Count == 0) return;
-        if (targets.Count > 3)
-            _notificationService.Show("CUE-DETR",
-                $"Running CUE-DETR on {targets.Count} tracks — about {Math.Ceiling(targets.Count * 13 / 60.0)} min the first time (results are cached).",
-                Views.NotificationType.Information);
-
-        int done = 0, cues = 0, agreed = 0, ai = 0;
-        var problems = new List<string>();
-        async Task<bool> RunOne(PlaylistTrackViewModel t, System.Threading.CancellationToken ct)
-        {
-            var hash = t.Model?.TrackUniqueHash;
-            if (string.IsNullOrEmpty(hash)) { lock (problems) problems.Add($"{t.Title}: no track id"); return false; }
-            var r = await _cueDetrCues.RegenerateAsync(hash, t.Model?.ResolvedFilePath, mode, ct);
-            if (!r.Success) { lock (problems) problems.Add($"{t.Title}: {r.Error}"); return false; }
-            System.Threading.Interlocked.Increment(ref done);
-            System.Threading.Interlocked.Add(ref cues, r.CueCount);
-            System.Threading.Interlocked.Add(ref agreed, r.Agreed);
-            System.Threading.Interlocked.Add(ref ai, r.AiPoints);
-            return true;
-        }
-
-        if (targets.Count == 1) await RunOne(targets[0], default);
-        else
-        {
-            if (_bulkCoordinator.IsRunning) return;
-            await _bulkCoordinator.RunOperationAsync(targets, RunOne, mode == Engine.Analysis.CueDetr.CueSourceMode.AiOnly ? "CUE-DETR Cues" : "Compare Cues (ORBIT + CUE-DETR)");
-        }
-
-        string summary = mode == Engine.Analysis.CueDetr.CueSourceMode.AiOnly
-            ? $"{done} track(s): {cues} CUE-DETR cue(s), shown in cyan as \"AI n\"."
-            : $"{done} track(s): {agreed} ORBIT cue(s) marked ✓AI where CUE-DETR agrees; CUE-DETR's other points added as cyan \"AI\" cues ({ai} AI points in total).";
-        if (problems.Count > 0) summary += $" Skipped {problems.Count}: {string.Join("; ", problems.Take(3))}";
-        _notificationService.Show("CUE-DETR", summary, problems.Count == 0 ? Views.NotificationType.Success : Views.NotificationType.Warning);
-    }
-
-    /// <summary>
-    /// Writes the selected tracks' cues into their files as Serato Markers2 (Serato DJ and Mixxx
-    /// read them straight from the file). "keep" leaves cues already set in Serato alone and uses
-    /// free slots; "replace" swaps all of the file's cues/loops for ORBIT's after a confirmation.
-    /// </summary>
-    private async Task ExecuteWriteSeratoCues(string? modeText)
-    {
-        if (_seratoExport == null) return;
-        var mode = modeText == "replace" ? Services.Integrations.Serato.SeratoWriteMode.Replace : Services.Integrations.Serato.SeratoWriteMode.KeepExisting;
-        var selected = LibraryViewModel?.Tracks.SelectedTracks?.ToList() ?? [];
-        var targets = selected.Count > 0
-            ? selected
-            : LibraryViewModel?.Tracks.LeadSelectedTrack is { } lead ? new List<PlaylistTrackViewModel> { lead } : new List<PlaylistTrackViewModel>();
-        if (targets.Count == 0) return;
-
-        if (mode == Services.Integrations.Serato.SeratoWriteMode.Replace && !await _dialogService.ConfirmAsync(
-                "Replace Serato cues",
-                $"Replace all hot cues and saved loops in {targets.Count} file(s) with ORBIT's cues? Cues you set in Serato for these tracks will be lost. Track colour and BPM lock are kept.",
-                "Replace", "Cancel"))
-            return;
-
-        int cues = 0, files = 0;
-        var problems = new List<string>();
-        async Task<bool> WriteOne(PlaylistTrackViewModel t, System.Threading.CancellationToken ct)
-        {
-            var path = t.Model?.ResolvedFilePath;
-            var hash = t.Model?.TrackUniqueHash;
-            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(hash)) { problems.Add($"{t.Title}: no file"); return false; }
-            var result = await _seratoExport.WriteAsync(path, hash, mode, ct);
-            if (!result.Success) { problems.Add($"{t.Title}: {result.Error}"); return false; }
-            System.Threading.Interlocked.Add(ref cues, result.CuesWritten + result.LoopsWritten);
-            System.Threading.Interlocked.Increment(ref files);
-            return true;
-        }
-
-        if (targets.Count == 1) await WriteOne(targets[0], default);
-        else
-        {
-            if (_bulkCoordinator.IsRunning) return;
-            await _bulkCoordinator.RunOperationAsync(targets, WriteOne, "Write Serato Cues");
-        }
-
-        var message = $"Wrote {cues} cue(s) to {files} file(s)." + (problems.Count > 0 ? $" Skipped {problems.Count}: {string.Join("; ", problems.Take(3))}" : "");
-        _notificationService.Show("Serato cues", message, problems.Count == 0 ? Views.NotificationType.Success : Views.NotificationType.Warning);
     }
 
     public void SetMainViewModel(MainViewModel mainViewModel)
@@ -374,41 +249,10 @@ public class TrackOperationsViewModel : INotifyPropertyChanged, IDisposable
 
         _logger.LogInformation("Playing track: {Artist} - {Title}", track.Artist, track.Title);
 
-        // Mix on: play this track and keep mixing through the rest of the playlist from here,
-        // instead of playing it on its own.
-        if (LibraryViewModel?.Tracks.IsMixModeEnabled == true && track.Model is { PlaylistId: var playlistId } model && playlistId != Guid.Empty)
-        {
-            _ = PlayPlaylistFromTrackAsync(playlistId, model.Id, track);
-            return;
-        }
 
         // Clear queue and add this track
         _playerViewModel.ClearQueue();
         _playerViewModel.AddToQueue(track);
-    }
-
-    /// <summary>Queues the playlist (downloaded tracks, playlist order) and starts at
-    /// <paramref name="startTrackId"/>, with Mix on — the same request the playlist Play button
-    /// sends, so every following pair crossfades with its saved transition.</summary>
-    private async Task PlayPlaylistFromTrackAsync(Guid playlistId, Guid startTrackId, PlaylistTrackViewModel fallback)
-    {
-        try
-        {
-            var tracks = await _libraryService.LoadPlaylistTracksAsync(playlistId);
-            var playable = tracks.Where(t => !string.IsNullOrEmpty(t.ResolvedFilePath)).ToList();
-            if (playable.Any(t => t.Id == startTrackId))
-            {
-                _eventBus.Publish(new PlayAlbumRequestEvent(playable, MixModeEnabled: true, StartTrackId: startTrackId));
-                return;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Couldn't queue the playlist for mix playback; playing the track on its own");
-        }
-
-        _playerViewModel.ClearQueue();
-        _playerViewModel.AddToQueue(fallback);
     }
 
     private void ExecuteAddToQueue(PlaylistTrackViewModel? track)
@@ -449,51 +293,6 @@ public class TrackOperationsViewModel : INotifyPropertyChanged, IDisposable
         }
 
         _logger.LogInformation("Queued {Count} selected track(s) into player queue from Library", added);
-    }
-
-    private void ExecuteAnalyseTrack(PlaylistTrackViewModel? track)
-    {
-        track ??= LibraryViewModel?.Tracks.LeadSelectedTrack;
-        if (track == null) return;
-        _eventBus.Publish(new Models.TrackAnalysisRequestedEvent(track.GlobalId));
-        _logger.LogInformation("Analysis queued for track: {Title}", track.Title);
-    }
-
-    /// <summary>
-    /// Re-maps cue points from this track's (or, if multiple rows are selected, every selected
-    /// track's) already-persisted analysis data — no full re-analysis. The fast path for picking
-    /// up a CueGenerationService logic change without re-decoding audio; see
-    /// AnalyzeTrackStructureJob.RegenerateCuesOnlyAsync. Tracks that have never been fully
-    /// analysed are skipped (nothing to re-map cues from) and counted separately.
-    /// </summary>
-    private async Task ExecuteRegenerateCues(PlaylistTrackViewModel? track)
-    {
-        if (_cueStructureJob == null) return;
-
-        var selectedTracks = LibraryViewModel?.Tracks.SelectedTracks?.ToList() ?? [];
-        var operateOnSelection = track != null && selectedTracks.Count > 1 && selectedTracks.Contains(track);
-        var targets = operateOnSelection
-            ? selectedTracks
-            : (track ?? LibraryViewModel?.Tracks.LeadSelectedTrack) is { } single
-                ? new List<PlaylistTrackViewModel> { single }
-                : new List<PlaylistTrackViewModel>();
-
-        if (targets.Count == 0) return;
-
-        if (targets.Count == 1)
-        {
-            var ok = await _cueStructureJob.RegenerateCuesOnlyAsync(targets[0].GlobalId);
-            _notificationService.Show("Regenerate Cues",
-                ok ? $"Regenerated cues for '{targets[0].Title}'." : $"'{targets[0].Title}' hasn't been analysed yet — nothing to regenerate from.",
-                ok ? Views.NotificationType.Success : Views.NotificationType.Warning);
-            return;
-        }
-
-        if (_bulkCoordinator.IsRunning) return;
-        await _bulkCoordinator.RunOperationAsync(
-            targets,
-            (t, ct) => _cueStructureJob.RegenerateCuesOnlyAsync(t.GlobalId, ct),
-            "Regenerate Cues");
     }
 
     /// <summary>
@@ -830,23 +629,6 @@ public class TrackOperationsViewModel : INotifyPropertyChanged, IDisposable
         ReactiveUI.MessageBus.Current.SendMessage(Singularity.Events.OpenInspectorEvent.Create(
             new Singularity.ViewModels.Diagnostics.BlackBoxTerminalViewModel(trackHash), 
             "Library.TrackSelection.AuditLog"));
-    }
-
-    private async Task ExecuteOpenInCueForge(PlaylistTrackViewModel? track)
-    {
-        track ??= LibraryViewModel?.Tracks.LeadSelectedTrack;
-        if (track == null) return;
-
-        var hash = string.IsNullOrWhiteSpace(track.Model?.TrackUniqueHash)
-            ? track.Model?.Id.ToString("N")
-            : track.Model?.TrackUniqueHash;
-        if (string.IsNullOrEmpty(hash)) return;
-
-        // Sync browser sidebar to the playlist that contains this track
-        _cueForgeViewModel.SetPlaylistContext(LibraryViewModel?.SelectedProject);
-
-        await _cueForgeViewModel.LoadTrackAsync(hash, track.Title, track.Artist);
-        _eventBus.Publish(new Models.NavigateToPageEvent("CueForge"));
     }
 
     public void Dispose()

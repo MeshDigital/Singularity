@@ -13,7 +13,6 @@ public class MainViewModelNavigationTests
     [InlineData(typeof(Singularity.Views.Avalonia.ImportPreviewPage), PageType.Import)]
     [InlineData(typeof(Singularity.Views.Avalonia.SearchPage), PageType.Search)]
     [InlineData(typeof(Singularity.Views.Avalonia.NowPlayingPage), PageType.NowPlaying)]
-    [InlineData(typeof(Singularity.Views.Avalonia.WorkstationPage), PageType.Workstation)]
     public void ResolvePageType_MapsKnownViews(Type pageType, PageType expected)
     {
         var resolved = MainViewModel.ResolvePageType(pageType, PageType.Home);
@@ -34,29 +33,6 @@ public class MainViewModelNavigationTests
     {
         Assert.True(MainViewModel.IsAcquireOverlayPage(PageType.Import));
         Assert.False(MainViewModel.IsSystemOverlayPage(PageType.Import));
-        Assert.False(MainViewModel.IsCreativeOverlayPage(PageType.Import));
-    }
-
-    [Fact]
-    public void OverlaySectionHelpers_ReportWorkstationWithinCreativeGroup()
-    {
-        Assert.True(MainViewModel.IsCreativeOverlayPage(PageType.Workstation));
-        Assert.False(MainViewModel.IsAcquireOverlayPage(PageType.Workstation));
-    }
-
-    [Theory]
-    [InlineData("Player", true)]
-    [InlineData("player", true)]
-    [InlineData("NowPlaying", true)]
-    [InlineData("nowplaying", true)]
-    [InlineData("Workstation", false)]
-    [InlineData("Library", false)]
-    [InlineData(null, false)]
-    public void ShouldRemapToWorkstationDestination_MatchesExpectedAliases(string? pageName, bool expected)
-    {
-        var shouldRemap = MainViewModel.ShouldRemapToWorkstationDestination(pageName);
-
-        Assert.Equal(expected, shouldRemap);
     }
 
     [Theory]
@@ -109,11 +85,8 @@ public class MainViewModelNavigationTests
     [InlineData("Search.Selection.Single", PageType.Library, false)]
     [InlineData("Downloads.Selection.Single", PageType.Projects, true)]
     [InlineData("Downloads.Selection.Single", PageType.Library, false)]
-    [InlineData("FlowBuilder.TransitionInspector", PageType.Workstation, true)]
-    [InlineData("FlowBuilder.TransitionInspector", PageType.Decks, true)]
-    [InlineData("FlowBuilder.TransitionInspector", PageType.Library, false)]
     [InlineData("Unknown", PageType.Search, true)]
-    [InlineData(null, PageType.Analysis, true)]
+    [InlineData(null, PageType.Settings, true)]
     [InlineData("External.Plugin.Source", PageType.Library, true)]
     public void ShouldApplyInspectorOpenForCurrentPage_ReturnsExpectedEligibility(string? source, PageType currentPageType, bool expected)
     {

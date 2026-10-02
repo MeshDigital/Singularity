@@ -261,11 +261,6 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
 
     public bool HasCrossProjectReference => !string.IsNullOrEmpty(CrossProjectReference);
 
-    // Cues Support
-    private List<OrbitCue> _cues = new();
-    public IEnumerable<OrbitCue> Cues => _cues;
-    public IEnumerable<OrbitCue> OrbitCues => _cues;
-
     public UnifiedTrackViewModel(
         PlaylistTrack model,
         DownloadManager downloadManager,
@@ -302,16 +297,6 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
 
         // Keep UI visibility state consistent with persisted soft-clear flag.
         IsClearedFromDownloadCenter = Model.IsClearedFromDownloadCenter;
-
-        // Parse Cues
-        if (!string.IsNullOrEmpty(Model.CuePointsJson))
-        {
-            try 
-            {
-                _cues = System.Text.Json.JsonSerializer.Deserialize<List<OrbitCue>>(Model.CuePointsJson) ?? new List<OrbitCue>();
-            }
-            catch { _cues = new List<OrbitCue>(); }
-        }
 
         // Initialize Commands
         PlayCommand = ReactiveCommand.Create(PlayTrack, this.WhenAnyValue(x => x.IsCompleted));
@@ -468,8 +453,6 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
          // Phase 0: Load artwork via Proxy
          _artwork = new ArtworkProxy(_artworkCache, Model.AlbumArtUrl);
          
-         FindSimilarCommand = ReactiveCommand.Create(FindSimilar);
-         FindSimilarAiCommand = ReactiveCommand.Create(FindSimilarAi);
          FilterByVibeCommand = ReactiveCommand.Create(() => 
          {
              if (!string.IsNullOrEmpty(DetectedSubGenre))
@@ -607,22 +590,6 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
         }
         catch (Exception) { /* Synergy is non-critical; swallow errors silently */ }
     }
-    
-    // Both open the Similar Tracks panel seeded with this track — the same request the Library's
-    // "Find Similar" sends (TrackListViewModel.ExecuteFindSimilar). They used to publish the old
-    // FindSimilarRequestEvent, whose only subscriber was removed, so the button did nothing.
-    // The similarity engine already blends harmonic, rhythmic and learned (embedding) matching, so
-    // the "AI" variant has no separate path to take.
-    private void FindSimilar()
-    {
-        if (Model == null || string.IsNullOrWhiteSpace(GlobalId)) return;
-        ReactiveUI.MessageBus.Current.SendMessage(
-            new Singularity.Events.FindSimilarTrackRequestEvent(GlobalId, $"{ArtistName} - {TrackTitle}"));
-    }
-
-    private void FindSimilarAi() => FindSimilar();
-
-
 
     // IDisplayableTrack Implementation
     public string GlobalId => !string.IsNullOrWhiteSpace(Model.TrackUniqueHash)
@@ -1610,8 +1577,6 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
     public ICommand ForceDownloadIgnoreGuardsCommand { get; }
     public ICommand SearchAgainCommand { get; }
     public ICommand FilterByVibeCommand { get; }
-    public ICommand FindSimilarCommand { get; }
-    public ICommand FindSimilarAiCommand { get; }
     public ICommand ViewAllSearchResultsCommand { get; }
     public ICommand BumpToTopCommand { get; }
     public ICommand ViewLogCommand { get; }

@@ -41,7 +41,6 @@
         <KeyBinding Gesture="Ctrl+D" Command="{Binding NavigateProjectsCommand}"/>
         <KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding NavigateSettingsCommand}"/>
         <KeyBinding Gesture="Ctrl+P" Command="{Binding TogglePlayerCommand}"/>
-        <KeyBinding Gesture="Ctrl+Shift+P" Command="{Binding NavigateWorkstationCommand}"/>
         <KeyBinding Gesture="Ctrl+N" Command="{Binding ToggleNavigationCommand}"/>
         <KeyBinding Gesture="F10" Command="{Binding ToggleZenModeCommand}"/>
         <KeyBinding Gesture="F11" Command="{Binding ToggleTopBarCommand}"/>
@@ -219,11 +218,6 @@
                         </StackPanel>
                     </StackPanel>
                     <Rectangle Width="1" Height="16" Fill="#333"/>
-                    <StackPanel Orientation="Horizontal" Spacing="4" ToolTip.Tip="Analysis queue">
-                        <TextBlock Text="🧠" FontSize="12" VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding AnalysisQueueCount}" Foreground="#C586C0" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <Rectangle Width="1" Height="16" Fill="#333"/>
                     <Button Command="{Binding Sidebar.OpenNotificationsCommand}"
                             Background="Transparent"
                             BorderThickness="0"
@@ -254,15 +248,11 @@
             </Grid>
         </Border>
 
-        <!-- Main Content Area with Sidebars — Epic 12 #110 Six-Column Layout -->
+        <!-- Main Content Area with Sidebars -->
         <!-- ColumnDefinitions:
              0 = Nav sidebar (user-drag-resizable, 56-320px)
              1 = GridSplitter (4px) for Nav sidebar
              2 = Content + Inspector SplitView (*)
-             3 = GridSplitter (4px) for Timeline
-             4 = Timeline panel (toggleable, min 160px)
-             5 = GridSplitter (4px) for Overlays
-             6 = Overlays panel (toggleable, min 140px)
         -->
         <Grid Grid.Row="1" x:Name="MainLayoutGrid">
             <Grid.ColumnDefinitions>
@@ -280,10 +270,6 @@
                                   MaxWidth="320"/>
                 <ColumnDefinition Width="4"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="4"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="4"/>
-                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <!-- Left Navigation Sidebar -->
@@ -298,7 +284,6 @@
                     <ContextMenu>
                         <MenuItem Header="Show ACQUIRE" IsChecked="{Binding IsAcquireVisible}" ToggleType="CheckBox"/>
                         <MenuItem Header="Show SYSTEM" IsChecked="{Binding IsSystemVisible}" ToggleType="CheckBox"/>
-                        <MenuItem Header="Show EXPERIMENTAL" IsChecked="{Binding IsCreativeVisible}" ToggleType="CheckBox"/>
                         <Separator/>
                         <MenuItem Header="Zen Mode (F10)" IsChecked="{Binding IsZenMode}" ToggleType="CheckBox"/>
                     </ContextMenu>
@@ -386,14 +371,6 @@
                                     </StackPanel>
                                 </Button>
 
-                                <Button Classes="nav" Command="{Binding NavigateAnalysisCommand}"
-                                        ToolTip.Tip="Analysis Pipeline"
-                                        Classes.selected="{Binding IsAnalysisOverlayActive}">
-                                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="16,0">
-                                        <TextBlock Text="🔬" FontSize="16"/>
-                                        <TextBlock Text="Analysis" FontSize="14"/>
-                                    </StackPanel>
-                                </Button>
 
                                 <Button Classes="nav" Command="{Binding NavigateSettingsCommand}"
                                         ToolTip.Tip="Settings"
@@ -406,44 +383,6 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <!-- EXPERIMENTAL -->
-                        <StackPanel IsVisible="{Binding IsCreativeVisible}">
-                            <Button Classes="group-header" Command="{Binding ToggleCreativeCommand}"
-                                    Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch"
-                                    Padding="16,8,12,4" ToolTip.Tip="Collapse / expand">                                <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Grid.Column="0" Text="EXPERIMENTAL" FontSize="11" FontWeight="Bold" Foreground="#666" LetterSpacing="1" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding CreativeChevron}" FontSize="11" Foreground="#555" VerticalAlignment="Center"/>
-                                </Grid>
-                            </Button>
-                            <StackPanel Spacing="2" IsVisible="{Binding IsCreativeExpanded}">
-                                <Button Classes="nav" Command="{Binding NavigateCueForgeCommand}"
-                                        ToolTip.Tip="Cue Forge — Visual cue generation and loop placement"
-                                        Classes.selected="{Binding IsCueForgeOverlayActive}">
-                                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="16,0">
-                                        <TextBlock Text="🎯" FontSize="16"/>
-                                        <TextBlock Text="Cue Forge" FontSize="14"/>
-                                    </StackPanel>
-                                </Button>
-
-                                <Button Classes="nav" Command="{Binding NavigateFlowBuilderCommand}"
-                                        ToolTip.Tip="Flow Builder — Suggest and apply a DJ-mix track order for a playlist"
-                                        Classes.selected="{Binding IsFlowBuilderOverlayActive}">
-                                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="16,0">
-                                        <TextBlock Text="🌊" FontSize="16"/>
-                                        <TextBlock Text="Flow Builder" FontSize="14"/>
-                                    </StackPanel>
-                                </Button>
-
-                                <Button Classes="nav" Command="{Binding NavigateWorkstationCommand}"
-                                        ToolTip.Tip="Workstation — Decks, Timeline &amp; Stem Editor"
-                                        Classes.selected="{Binding IsWorkstationOverlayActive}">
-                                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="16,0">
-                                        <TextBlock Text="🎛️" FontSize="16"/>
-                                        <TextBlock Text="Workstation" FontSize="14"/>
-                                    </StackPanel>
-                                </Button>
-                            </StackPanel>
-                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
@@ -518,12 +457,6 @@
                                                                HorizontalAlignment="Center"/>
                                                 </StackPanel>
                                             </DataTemplate>
-                                            <DataTemplate DataType="vmCore:LibraryDoubleInspectorViewModel">
-                                                <controls:DoubleInspectorPanel/>
-                                            </DataTemplate>
-                                            <DataTemplate DataType="vmCore:PlaylistIntelligenceViewModel">
-                                                <controls:PlaylistIntelligencePanel/>
-                                            </DataTemplate>
                                             <DataTemplate DataType="vmDownloads:UnifiedTrackViewModel">
                                                 <controls:TrackInspector/>
                                             </DataTemplate>
@@ -540,9 +473,6 @@
                                     </ContentControl>
                                 </TabItem>
 
-                                <TabItem Header="Similar">
-                                    <views:SimilarTracksPanel DataContext="{Binding Sidebar.SimilarTracksVm}"/>
-                                </TabItem>
 
                                 <TabItem Header="Playing">
                                     <views:PlayerControl DataContext="{Binding Sidebar.PlayerVm}"/>
@@ -554,23 +484,13 @@
                                      since NotificationCenterService matched none of SidebarViewModel's
                                      explicit tab-routing checks and fell into the generic Inspector
                                      branch. Bound directly to the stable Sidebar.NotificationCenter
-                                     instance (like Similar Tracks/Now Playing above), so it's always
+                                     instance (like Now Playing above), so it's always
                                      populated regardless of whatever else CurrentContent points to. -->
                                 <TabItem Header="Notifications">
                                     <controls:NotificationsPanel DataContext="{Binding Sidebar.NotificationCenter}"/>
                                 </TabItem>
 
-                                <!-- Mix (Spotify-Mix-parity): transition editor for a clicked
-                                     Mix-mode badge between two adjacent playlist tracks. -->
-                                <TabItem Header="Mix">
-                                    <views:MixTransitionPanel DataContext="{Binding Sidebar.MixTransitionVm}"/>
-                                </TabItem>
 
-                                <!-- Discover: tracks to add to the selected playlist (Beatport + Deezer),
-                                     queued straight into the Soulseek download pipeline. -->
-                                <TabItem Header="Discover">
-                                    <controls:PlaylistDiscoveryPanel DataContext="{Binding Sidebar.DiscoveryVm}"/>
-                                </TabItem>
 
                             </TabControl>
 
@@ -617,90 +537,16 @@
                 </Grid>
             </SplitView>
 
-            <!-- GridSplitter: Content ↔ Timeline (col 3) — Epic 12 #110 -->
-            <GridSplitter Grid.Column="3"
-                          IsVisible="{Binding IsTimelinePanelOpen}"
-                          Background="#3C3C3C"
-                          HorizontalAlignment="Stretch"
-                          ResizeDirection="Columns"
-                          ShowsPreview="True"
-                          ToolTip.Tip="Drag to resize Timeline panel"/>
 
-            <!-- Timeline Panel (col 4) — Epic 12 #110 -->
-            <Border Grid.Column="4"
-                    IsVisible="{Binding IsTimelinePanelOpen}"
-                    Width="{Binding TimelinePanelWidth}"
-                    MinWidth="160"
-                    Background="#1A1A2E"
-                    BorderBrush="#3C3C3C"
-                    BorderThickness="0,0,0,0">
-                <Grid RowDefinitions="Auto,*">
-                    <Border Grid.Row="0" Padding="10,8" Background="#111122"
-                            BorderBrush="#3C3C3C" BorderThickness="0,0,0,1">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBlock Text="⏱ TIMELINE" FontSize="11" FontWeight="Bold"
-                                       Foreground="#9B8DFF" LetterSpacing="1"
-                                       VerticalAlignment="Center"/>
-                            <Button Grid.Column="1" Classes="tool"
-                                    Command="{Binding ToggleTimelinePanelCommand}"
-                                    Content="✕" Foreground="#888"
-                                    MinWidth="24" MinHeight="24"
-                                    ToolTip.Tip="Close Timeline panel"/>
-                        </Grid>
-                    </Border>
-                    <!-- Hosted inside this panel: navigate to the Timeline page or embed TimelinePage directly -->
-                    <ContentControl Grid.Row="1"
-                                    Content="{Binding TimelineViewModel}"
-                                    Margin="0"/>
-                </Grid>
-            </Border>
 
-            <!-- GridSplitter: Timeline ↔ Overlays (col 5) — Epic 12 #110 -->
-            <GridSplitter Grid.Column="5"
-                          IsVisible="{Binding IsOverlaysPanelOpen}"
-                          Background="#3C3C3C"
-                          HorizontalAlignment="Stretch"
-                          ResizeDirection="Columns"
-                          ShowsPreview="True"
-                          ToolTip.Tip="Drag to resize Overlays panel"/>
 
-            <!-- Overlays / Visual Engine Panel (col 6) — Epic 12 #110 -->
-            <Border Grid.Column="6"
-                    IsVisible="{Binding IsOverlaysPanelOpen}"
-                    Width="{Binding OverlaysPanelWidth}"
-                    MinWidth="140"
-                    Background="#1A2A1A"
-                    BorderBrush="#3C3C3C"
-                    BorderThickness="0,0,0,0">
-                <Grid RowDefinitions="Auto,*">
-                    <Border Grid.Row="0" Padding="10,8" Background="#112211"
-                            BorderBrush="#3C3C3C" BorderThickness="0,0,0,1">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBlock Text="✦ OVERLAYS" FontSize="11" FontWeight="Bold"
-                                       Foreground="#7FD47F" LetterSpacing="1"
-                                       VerticalAlignment="Center"/>
-                            <Button Grid.Column="1" Classes="tool"
-                                    Command="{Binding ToggleOverlaysPanelCommand}"
-                                    Content="✕" Foreground="#888"
-                                    MinWidth="24" MinHeight="24"
-                                    ToolTip.Tip="Close Overlays panel"/>
-                        </Grid>
-                    </Border>
-                    <ScrollViewer Grid.Row="1" Padding="8">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Visual Engine &amp; Performance Overlays" FontSize="11"
-                                       Foreground="#666" TextWrapping="Wrap"/>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Grid>
-            </Border>
 
         </Grid>
 
         <!-- ═══════════════════════════════════════════════════════════════════
              Tablet Bottom Sheet — Epic 12 #111
              Collapsed from columns when width < 1024. Slides up from bottom.
-             Shows Inspector + Timeline in a tabbed bottom sheet.
+             Shows Inspector + Now Playing in a tabbed bottom sheet.
         ═════════════════════════════════════════════════════════════════════ -->
         <Grid Grid.Row="2"
               IsVisible="{Binding IsTabletMode}"
@@ -727,18 +573,6 @@
                             Command="{Binding Sidebar.SwitchToInspectorCommand}"
                             ToolTip.Tip="Inspector">
                         <TextBlock Text="Inspector" FontSize="12" Foreground="#CCC"/>
-                    </Button>
-                    <Button Background="Transparent" BorderThickness="0" Padding="8,4"
-                            MinHeight="44" MinWidth="44"
-                            Command="{Binding Sidebar.SwitchToSimilarityCommand}"
-                            ToolTip.Tip="Similar Tracks">
-                        <TextBlock Text="Similar" FontSize="12" Foreground="#63B3ED"/>
-                    </Button>
-                    <Button Background="Transparent" BorderThickness="0" Padding="8,4"
-                            MinHeight="44" MinWidth="44"
-                            Command="{Binding ToggleTimelinePanelCommand}"
-                            ToolTip.Tip="Timeline">
-                        <TextBlock Text="Timeline" FontSize="12" Foreground="#9B8DFF"/>
                     </Button>
                     <Button Background="Transparent" BorderThickness="0" Padding="8,4"
                             MinHeight="44" MinWidth="44"
@@ -799,12 +633,6 @@
                                            HorizontalAlignment="Center"/>
                             </StackPanel>
                         </DataTemplate>
-                        <DataTemplate DataType="vmCore:LibraryDoubleInspectorViewModel">
-                            <controls:DoubleInspectorPanel/>
-                        </DataTemplate>
-                        <DataTemplate DataType="vmCore:PlaylistIntelligenceViewModel">
-                            <controls:PlaylistIntelligencePanel/>
-                        </DataTemplate>
                         <DataTemplate DataType="vmDownloads:UnifiedTrackViewModel">
                             <controls:TrackInspector/>
                         </DataTemplate>
@@ -820,15 +648,6 @@
                     </ContentControl.DataTemplates>
                 </ContentControl>
 
-                <Border Opacity="{Binding Sidebar.IsSimilarityTab, Converter={StaticResource BoolToOpacityConverter}, ConverterParameter='1;0'}"
-                        IsHitTestVisible="{Binding Sidebar.IsSimilarityTab}">
-                    <Border.Transitions>
-                        <Transitions>
-                            <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
-                        </Transitions>
-                    </Border.Transitions>
-                    <views:SimilarTracksPanel DataContext="{Binding Sidebar.SimilarTracksVm}"/>
-                </Border>
             </Grid>
         </Grid>
 

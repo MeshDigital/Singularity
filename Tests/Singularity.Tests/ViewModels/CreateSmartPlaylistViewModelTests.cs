@@ -11,45 +11,6 @@ namespace Singularity.Tests.ViewModels;
 /// </summary>
 public class CreateSmartPlaylistViewModelTests
 {
-    [Fact]
-    public void PreviewProfile_AveragesMinAndMaxEnergy_WhenBothSet()
-    {
-        var vm = new CreateSmartPlaylistViewModel { MinEnergy = 0.4, MaxEnergy = 0.8 };
-
-        Assert.Equal(0.6, vm.PreviewProfile.Energy, precision: 5);
-    }
-
-    [Fact]
-    public void PreviewProfile_UsesMinEnergy_WhenMaxNotSet()
-    {
-        var vm = new CreateSmartPlaylistViewModel { MinEnergy = 0.3 };
-
-        Assert.Equal(0.3, vm.PreviewProfile.Energy, precision: 5);
-    }
-
-    [Fact]
-    public void PreviewProfile_UsesMaxEnergy_WhenMinNotSet()
-    {
-        var vm = new CreateSmartPlaylistViewModel { MaxEnergy = 0.9 };
-
-        Assert.Equal(0.9, vm.PreviewProfile.Energy, precision: 5);
-    }
-
-    [Fact]
-    public void PreviewProfile_DefaultsToMidpoint_WhenNeitherSet()
-    {
-        var vm = new CreateSmartPlaylistViewModel();
-
-        Assert.Equal(0.5, vm.PreviewProfile.Energy, precision: 5);
-    }
-
-    [Fact]
-    public void PreviewProfile_AveragesMinAndMaxValence_WhenBothSet()
-    {
-        var vm = new CreateSmartPlaylistViewModel { MinValence = 0.2, MaxValence = 0.6 };
-
-        Assert.Equal(0.4, vm.PreviewProfile.Valence, precision: 5);
-    }
 
     [Fact]
     public void Save_MapsAllCriteriaFields_IncludingDanceabilityRatingAndLiked()

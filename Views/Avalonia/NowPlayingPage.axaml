@@ -27,27 +27,11 @@
                 </Button>
 
                 <StackPanel Grid.Column="1" Spacing="2" HorizontalAlignment="Center">
-                    <TextBlock Text="ORBIT ENTERTAINMENT" FontSize="11" LetterSpacing="3" Foreground="#78D6F4" HorizontalAlignment="Center"/>
+                    <TextBlock Text="SINGULARITY" FontSize="11" LetterSpacing="3" Foreground="#78D6F4" HorizontalAlignment="Center"/>
                     <TextBlock Text="Full Now Playing View" FontSize="22" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                    <ToggleButton IsChecked="{Binding IsAmbientMode}"
-                                  Command="{Binding ToggleAmbientModeCommand}"
-                                  Background="#1B2430"
-                                  BorderBrush="#304254"
-                                  BorderThickness="1"
-                                  Padding="12,6">
-                        <TextBlock Text="AMBIENT" FontSize="10" FontWeight="Bold" Foreground="#D7E7F6"/>
-                    </ToggleButton>
-                    <ToggleButton IsChecked="{Binding IsFlowMode}"
-                                  Command="{Binding ToggleFlowModeCommand}"
-                                  Background="#1B2430"
-                                  BorderBrush="#304254"
-                                  BorderThickness="1"
-                                  Padding="12,6">
-                        <TextBlock Text="FLOW" FontSize="10" FontWeight="Bold" Foreground="#D7E7F6"/>
-                    </ToggleButton>
                     <Button Command="{Binding ToggleExpandedPlayerCommand}"
                             Background="{StaticResource BrushAccentSubtle}"
                             BorderBrush="{StaticResource BrushAccent}"
@@ -88,41 +72,11 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <StackPanel Grid.Column="1" HorizontalAlignment="Right" Spacing="8">
-                            <Button Command="{Binding CycleVisualizerPresetCommand}"
-                                    Padding="10,6"
-                                    Background="#1B2430"
-                                    BorderBrush="#304254"
-                                    BorderThickness="1">
-                                <TextBlock Text="VISUALIZER" FontSize="10" FontWeight="Bold" Foreground="#D7E7F6"/>
-                            </Button>
-                            <ToggleButton IsChecked="{Binding IsMetadataDrivenVisuals}"
-                                          Command="{Binding ToggleMetadataDrivenVisualsCommand}"
-                                          Padding="10,6"
-                                          Background="#1B2430"
-                                          BorderBrush="#304254"
-                                          BorderThickness="1">
-                                <TextBlock Text="METADATA" FontSize="10" FontWeight="Bold" Foreground="#D7E7F6"/>
-                            </ToggleButton>
-                        </StackPanel>
                     </Grid>
 
                     <Grid Grid.Row="1" ColumnDefinitions="1.5*,0.9*">
                         <Border Grid.Column="0" Margin="0,0,20,0" CornerRadius="18" Background="#0C1218" Padding="12" BorderBrush="#273646" BorderThickness="1">
                             <Grid>
-                                <controls:OrbitVisualizerCanvas
-                                    SpectrumData="{Binding SpectrumData}"
-                                    VuLeft="{Binding VuLeft}"
-                                    VuRight="{Binding VuRight}"
-                                    Energy="{Binding CurrentTrack.Energy, FallbackValue=0.5}"
-                                    Bpm="{Binding CurrentTrack.BPM, FallbackValue=120}"
-                                    BeatPulse="{Binding BeatPulse}"
-                                    MoodTag="{Binding CurrentTrack.MoodTag}"
-                                    IsPlaying="{Binding IsPlaying}"
-                                    Preset="{Binding CurrentVisualizerPreset}"
-                                    EngineMode="{Binding VisualizerEngineMode}"
-                                    AlbumHue="{Binding AlbumArtHue}"
-                                    IsVisible="{Binding CurrentTrack, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
                                 <Border Width="220" Height="220"
                                         CornerRadius="110"
@@ -145,10 +99,6 @@
                                     </Panel>
                                 </Border>
 
-                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,18" Spacing="4">
-                                    <TextBlock Text="{Binding CurrentVisualizerPreset}" FontSize="12" FontWeight="SemiBold" Foreground="#DCE7F3" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{Binding FlowModeState.NextTrackReason}" MaxWidth="420" TextWrapping="Wrap" TextAlignment="Center" FontSize="11" Foreground="#8FA5B8"/>
-                                </StackPanel>
                             </Grid>
                         </Border>
 
@@ -186,18 +136,6 @@
                                     </Border>
                                 </Grid>
 
-                                <Border Grid.Row="3" Background="#1B2430" CornerRadius="12" Padding="12,10" Margin="0,0,0,12">
-                                    <StackPanel Spacing="4">
-                                        <TextBlock Text="FLOW PATH" FontSize="10" Foreground="#8FA5B8"/>
-                                        <ItemsControl ItemsSource="{Binding FlowModeState.FlowPathTitles}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding}" FontSize="12" Foreground="#DCE7F3" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-                                </Border>
 
                                 <StackPanel Grid.Row="4" Spacing="10" VerticalAlignment="Bottom">
                                     <Button Command="{Binding ToggleQueueCommand}"
@@ -226,7 +164,6 @@
                                                   LowBand="{Binding CurrentTrack.LowData}"
                                                   MidBand="{Binding CurrentTrack.MidData}"
                                                   HighBand="{Binding CurrentTrack.HighData}"
-                                                  PhraseSegments="{Binding CurrentTrack.PhraseSegments}"
                                                   Progress="{Binding Position}"
                                                   Background="#01000000"
                                                   PlayheadBrush="{StaticResource BrushAccent}"
@@ -235,7 +172,6 @@
                                                   Gain="{Binding WaveformGain}"
                                                   ShowEnergyCurve="{Binding WaveformShowEnergyCurve}"
                                                   ShowVocalGhost="{Binding WaveformShowVocalGhost}"
-                                                  ShowPhraseSections="{Binding WaveformShowPhraseSections}"
                                                   Height="76"
                                                   IsVisible="{Binding CurrentTrack, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                         <TextBlock Grid.Column="2" Text="{Binding TotalTimeStr}" FontSize="12" Foreground="#8FA5B8" VerticalAlignment="Center" Margin="12,0,0,0"/>

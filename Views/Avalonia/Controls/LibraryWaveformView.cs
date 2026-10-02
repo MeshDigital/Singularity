@@ -8,7 +8,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Singularity.Models;
-using Singularity.Services.Timeline;
+using Singularity.Services;
 using SkiaSharp;
 
 namespace Singularity.Views.Avalonia.Controls;

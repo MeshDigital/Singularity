@@ -555,9 +555,6 @@
                 <!-- Group 1: Terminal/Success -->
                 <Button Classes="ActionBtn" Command="{Binding PlayCommand}" IsVisible="{Binding IsCompleted}" ToolTip.Tip="Play"><PathIcon Data="{StaticResource play_circle_regular}" Width="18" Height="18" Foreground="{StaticResource AccentBrush}"/></Button>
                 <Button Classes="ActionBtn" Command="{Binding RevealFileCommand}" IsVisible="{Binding IsCompleted}" ToolTip.Tip="Show in Explorer"><PathIcon Data="{StaticResource folder_open_regular}" Width="16" Height="16"/></Button>
-                <Button Classes="ActionBtn" Command="{Binding FindSimilarCommand}" IsVisible="{Binding IsCompleted}" ToolTip.Tip="Find Similar Tracks (Harmonic + Sound Match)">
-                    <PathIcon Data="{StaticResource sparkles_regular}" Width="16" Height="16" Foreground="#9B6FD6"/>
-                </Button>
                 
                 <!-- Group 2: Recovery (Core Feature) -->
                 <Button Classes="ActionBtn" Command="{Binding ViewAllSearchResultsCommand}" IsVisible="{Binding IsFailed}" ToolTip.Tip="Deep Search (Manual Overwrite)" Background="{DynamicResource AccentGlowBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1">

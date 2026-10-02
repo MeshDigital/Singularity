@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Singularity.Models;
-using Singularity.Models.Musical;
 using Singularity.Data.Entities;
 using Singularity.Database.Enums;
 

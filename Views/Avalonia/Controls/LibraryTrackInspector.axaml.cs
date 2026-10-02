@@ -15,8 +15,6 @@ public partial class LibraryTrackInspector : UserControl
         InitializeComponent();
         // Trigger analysis data loading when the inspector becomes visible
         this.DataContextChanged += OnDataContextChanged;
-        // Save cue label when a TextBox inside the cue list loses focus
-        this.AddHandler(TextBox.LostFocusEvent, OnCueLabelLostFocus, handledEventsToo: true);
     }
 
     private void InitializeComponent()
@@ -30,15 +28,4 @@ public partial class LibraryTrackInspector : UserControl
             await vm.LoadAnalysisDataAsync();
     }
 
-    /// <summary>
-    /// When a cue label TextBox loses focus, persist the updated name to the DB.
-    /// </summary>
-    private async void OnCueLabelLostFocus(object? sender, RoutedEventArgs e)
-    {
-        if (e.Source is TextBox tb && tb.DataContext is OrbitCue cue
-            && DataContext is PlaylistTrackViewModel vm)
-        {
-            await vm.SaveCueLabelAsync(cue, tb.Text ?? string.Empty);
-        }
-    }
 }

@@ -5,19 +5,14 @@ using Moq;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using Singularity.Configuration;
-using Singularity.Data;
-using Singularity.Data.Entities;
-using Singularity.Engine.Transitions;
 using Singularity.Services;
 using Xunit;
 
 namespace Singularity.Tests.Services;
 
 /// <summary>
-/// Mix playback end-of-track behaviour (2026-09-29): auto Outro cues sit seconds before the end
-/// of a track, so the outgoing track regularly ran out mid-crossfade — and the player stalled
-/// there: the incoming track kept playing at a partial fade level, the UI stayed on the old
-/// track past the end of its waveform, and the hand-over came late or never.
+/// Crossfade end-of-track behaviour: when the outgoing track runs out mid-crossfade the player
+/// must still complete the hand-over instead of stalling with the incoming track at a partial level.
 /// </summary>
 public class AudioPlayerCrossfadeTests : IDisposable
 {
@@ -32,16 +27,6 @@ public class AudioPlayerCrossfadeTests : IDisposable
     public void Dispose()
     {
         try { File.Delete(_wav); } catch { /* reader may still be closing on the disposal task */ }
-    }
-
-    [Theory]
-    [InlineData(177.3, 195.8, 21.9, 173.9)] // Outro cue 18 s from the end, 16-bar mix → start 22 s before the end
-    [InlineData(161.5, 161.8, 21.9, 139.9)] // Outro cue at the very end
-    [InlineData(120.0, 240.0, 21.9, 120.0)] // plenty of room → the mix-out point itself
-    [InlineData(10.0, 15.0, 30.0, 0.0)]     // transition longer than the track → start immediately
-    public void MixStart_LeavesRoomForTheWholeTransition(double mixOut, double track, double transition, double expected)
-    {
-        Assert.Equal(expected, AudioPlayerService.LatestMixStart(mixOut, track, transition), 1);
     }
 
     [Fact]
@@ -66,18 +51,6 @@ public class AudioPlayerCrossfadeTests : IDisposable
         Assert.Same(incoming.Deck, Get<object>(sut, "_current"));
         Assert.Null(Get<object>(sut, "_next"));
         Assert.Equal(1f, incoming.Gain.Volume);
-    }
-
-    [Fact]
-    public void NoOutroCue_FallbackMixOutIsInSeconds_NotMilliseconds()
-    {
-        var engine = new TransitionEngine();
-        var source = new TrackEntity { GlobalId = "a", BPM = 174, MusicalKey = "8A", CanonicalDuration = 195000 };
-        var target = new TrackEntity { GlobalId = "b", BPM = 174, MusicalKey = "8A", CanonicalDuration = 200000 };
-
-        var suggestion = engine.OptimizeTransition(source, target, new(), new());
-
-        Assert.Equal(165.0, suggestion.SourceTriggerTime, 1); // 195 s - 30 s, not 194,970 s
     }
 
     private (object Deck, VolumeSampleProvider Gain) NewDeck(PlaybackState state, float gain)

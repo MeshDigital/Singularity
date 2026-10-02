@@ -36,7 +36,6 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
     private readonly SearchViewModel _searchViewModel;
     private readonly ArtworkCacheService _artworkCacheService;
     private readonly PlaylistMosaicService _mosaicService;
-    private readonly AnalysisPageViewModel _analysisPageViewModel;
     private readonly PeerReliabilityService _peerReliabilityService;
     private IDisposable? _eventSubscription;
     private PropertyChangedEventHandler? _connectionChangedHandler;
@@ -272,7 +271,6 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
         SearchViewModel searchViewModel,
         ArtworkCacheService artworkCacheService,
         PlaylistMosaicService mosaicService,
-        AnalysisPageViewModel analysisPageViewModel,
         PeerReliabilityService peerReliabilityService)
     {
         _logger = logger;
@@ -291,7 +289,6 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
         _eventBus = eventBus;
         _libraryViewModel = libraryViewModel;
         _searchViewModel = searchViewModel;
-        _analysisPageViewModel = analysisPageViewModel;
         _peerReliabilityService = peerReliabilityService;
 
         RecentPlaylists.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowRecentPlaylistsEmptyState));
@@ -876,24 +873,6 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
                 }
                 break;
 
-            case Models.OperationType.Analysis:
-                // "Reanalyze Incomplete Tracks" — navigate, then trigger the real batch-reanalyze
-                // command Analysis already has, same navigate-then-trigger pattern as quick search.
-                _navigationService.NavigateTo("Analysis");
-                mission.IsRunning = true;
-                try
-                {
-                    await Task.Delay(50); // allow navigation frame to settle
-                    ICommand reanalyzeCommand = _analysisPageViewModel.ReanalyzeAllIncompleteCommand;
-                    if (reanalyzeCommand.CanExecute(null))
-                        reanalyzeCommand.Execute(null);
-                }
-                finally
-                {
-                    mission.IsRunning = false;
-                }
-                break;
-
             case Models.OperationType.Enrichment:
                 // "Enrich Metadata" — no batch metadata-enrichment trigger exists anywhere in the
                 // codebase to deep-link into yet; honest navigation-only until that's built.
@@ -945,15 +924,6 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
                 Name = "Repair Dead Letters",
                 StatusText = $"{LibraryHealth.IssuesCount} items need recovery",
                 Type = Models.OperationType.System
-            });
-
-        if (IncompleteAnalysisCount > 0)
-            ActiveMissions.Add(new MissionOperation
-            {
-                Icon = "🧪",
-                Name = "Reanalyze Incomplete Tracks",
-                StatusText = $"{IncompleteAnalysisCount} tracks missing analysis fields",
-                Type = Models.OperationType.Analysis
             });
 
         if (ActiveMissions.Count == 0)

@@ -73,14 +73,7 @@ namespace Singularity.Services
         /// <summary>Opens and initializes the output device for the next track ahead of time so
         /// the transition when the current track ends is a near-instant swap (gapless) or a
         /// timed overlap (crossfade) instead of a cold file-open that causes an audible gap.</summary>
-        /// <param name="presetName">Display name of the Mix preset (e.g. "Wave"), if any — carried
-        /// through purely for UI visibility (see <see cref="CrossfadeStartedEventArgs.PresetName"/>),
-        /// not used by the DSP itself.</param>
-        void PreloadNext(string uri, double? trackLoudnessLufs = null, Singularity.Models.Timeline.TransitionModel? transition = null, double? transitionBpm = null,
-            double? sourceTriggerSeconds = null, double? targetTriggerSeconds = null, string? presetName = null);
-        /// <param name="outgoingBpm">File BPM of the track being mixed out of; enables tempo matching.</param>
-        void SetPendingTransitionForNext(string filePath, Singularity.Models.Timeline.TransitionModel? transition, double? transitionBpm,
-            double? sourceTriggerSeconds = null, double? targetTriggerSeconds = null, string? presetName = null, double? outgoingBpm = null);
+        void PreloadNext(string uri, double? trackLoudnessLufs = null);
 
         /// <summary>Discards any preloaded next track.</summary>
         void CancelPreload();
@@ -98,10 +91,6 @@ namespace Singularity.Services
     /// <summary>Raised once when AudioPlayerService begins an active crossfade.</summary>
     public class CrossfadeStartedEventArgs : EventArgs
     {
-        /// <summary>Display name of the Mix preset driving this crossfade (e.g. "Wave"), or null
-        /// when no saved transition was attached (the legacy fixed equal-power crossfade).</summary>
-        public string? PresetName { get; init; }
-
         /// <summary>Total length of the crossfade, in seconds.</summary>
         public double DurationSeconds { get; init; }
     }

@@ -22,7 +22,6 @@ namespace Singularity.ViewModels.Library
             set
             {
                 this.RaiseAndSetIfChanged(ref _minEnergy, value);
-                this.RaisePropertyChanged(nameof(PreviewProfile));
             }
         }
 
@@ -33,7 +32,6 @@ namespace Singularity.ViewModels.Library
             set
             {
                 this.RaiseAndSetIfChanged(ref _maxEnergy, value);
-                this.RaisePropertyChanged(nameof(PreviewProfile));
             }
         }
         
@@ -44,7 +42,6 @@ namespace Singularity.ViewModels.Library
             set
             {
                 this.RaiseAndSetIfChanged(ref _minValence, value);
-                this.RaisePropertyChanged(nameof(PreviewProfile));
             }
         }
 
@@ -55,7 +52,6 @@ namespace Singularity.ViewModels.Library
             set
             {
                 this.RaiseAndSetIfChanged(ref _maxValence, value);
-                this.RaisePropertyChanged(nameof(PreviewProfile));
             }
         }
         
@@ -99,23 +95,6 @@ namespace Singularity.ViewModels.Library
         {
             get => _onlyLiked;
             set => this.RaiseAndSetIfChanged(ref _onlyLiked, value);
-        }
-
-        public SonicProfileData PreviewProfile
-        {
-            get
-            {
-                // Calculate average target logic for preview
-                var e = ((MinEnergy ?? 0) + (MaxEnergy ?? 1.0)) / 2.0;
-                if (MinEnergy.HasValue && !MaxEnergy.HasValue) e = MinEnergy.Value;
-                if (!MinEnergy.HasValue && MaxEnergy.HasValue) e = MaxEnergy.Value;
-
-                var v = ((MinValence ?? 0) + (MaxValence ?? 1.0)) / 2.0;
-                if (MinValence.HasValue && !MaxValence.HasValue) v = MinValence.Value;
-                if (!MinValence.HasValue && MaxValence.HasValue) v = MaxValence.Value;
-
-                return new SonicProfileData(e, v, 0.0); // Assuming vocal toggle not yet in criteria
-            }
         }
 
         private string? _genre;

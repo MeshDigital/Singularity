@@ -19,13 +19,11 @@ namespace Singularity.Views.Avalonia;
 public partial class LibraryPage : UserControl
 {
     private readonly ILogger<LibraryPage>? _logger;
-    private LibraryViewModel? _boundLibraryViewModel;
     private Point? _playlistDragStartPoint;
 
     public LibraryPage()
     {
         InitializeComponent();
-        AttachLibraryViewModel(DataContext as LibraryViewModel);
     }
 
     public LibraryPage(LibraryViewModel viewModel, ILogger<LibraryPage>? logger = null)
@@ -33,7 +31,6 @@ public partial class LibraryPage : UserControl
         _logger = logger;
         DataContext = viewModel; // CRITICAL: Set DataContext from DI
         InitializeComponent();
-        AttachLibraryViewModel(viewModel);
         
         // Enable drag-drop on playlist ListBox
         AddHandler(DragDrop.DragOverEvent, OnPlaylistDragOver);
@@ -150,12 +147,6 @@ public partial class LibraryPage : UserControl
         dg.ContextMenu = menu;
     }
 
-    private void OpenDiscover_Click(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is LibraryViewModel { SelectedProject: { } project } && project.Id != Guid.Empty)
-            ReactiveUI.MessageBus.Current.SendMessage(new Singularity.Events.OpenPlaylistDiscoverEvent(project.Id, project.SourceTitle));
-    }
-
     private void CloseRemovalHistory_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is LibraryViewModel vm)
@@ -226,7 +217,6 @@ public partial class LibraryPage : UserControl
     protected override void OnUnloaded(RoutedEventArgs e)
     {
         base.OnUnloaded(e);
-        AttachLibraryViewModel(null);
     }
 
     private void OnPlaylistDragOver(object? sender, DragEventArgs e)
@@ -409,29 +399,6 @@ public partial class LibraryPage : UserControl
         }
     }
 
-    protected override void OnDataContextChanged(EventArgs e)
-    {
-        base.OnDataContextChanged(e);
-        AttachLibraryViewModel(DataContext as LibraryViewModel);
-    }
 
-    private void AttachLibraryViewModel(LibraryViewModel? viewModel)
-    {
-        if (_boundLibraryViewModel is not null)
-            _boundLibraryViewModel.PropertyChanged -= OnLibraryViewModelPropertyChanged;
 
-        _boundLibraryViewModel = viewModel;
-
-        if (_boundLibraryViewModel is not null)
-            _boundLibraryViewModel.PropertyChanged += OnLibraryViewModelPropertyChanged;
-    }
-
-    private void OnLibraryViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (!string.Equals(e.PropertyName, nameof(LibraryViewModel.SavedDoublesSidebarFocusRequestVersion), StringComparison.Ordinal))
-            return;
-
-        var target = this.FindControl<Control>("SavedDoublesSidebarSection");
-        target?.BringIntoView();
-    }
 }

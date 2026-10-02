@@ -36,15 +36,6 @@
                                  artwork to show instead — the Image below (UniformToFill,
                                  ClipToBounds) otherwise covers this 60x60 box completely and the
                                  glow was never visible at all. -->
-                            <controls:VibeVisualizer IsPlaying="{Binding IsPlaying}"
-                                                 VuLeft="{Binding VuLeft}"
-                                                 VuRight="{Binding VuRight}"
-                                                 SpectrumData="{Binding SpectrumData}"
-                                                 Energy="{Binding CurrentTrack.Energy}"
-                                                 MoodTag="{Binding CurrentTrack.MoodTag}"
-                                                 VisualStyle="{Binding CurrentVisualStyle}"
-                                                 IsVisible="{Binding CurrentTrack.ArtworkBitmap, Converter={x:Static ObjectConverters.IsNull}}"
-                                                 Opacity="0.9"/>
                             <Image Source="{Binding CurrentTrack.ArtworkBitmap}" 
                                    Stretch="UniformToFill"
                                    IsVisible="{Binding CurrentTrack.ArtworkBitmap, Converter={x:Static ObjectConverters.IsNotNull}}"/>
@@ -107,21 +98,10 @@
                         <TextBlock Text="{Binding CurrentTrack.Format}" FontSize="9" Foreground="#B3B3B3" FontWeight="Bold"/>
                     </Border>
 
-                    <!-- Mix crossfade visibility — this bar is now the default player chrome for a
-                         playing playlist (see PlayerViewModel's PlayAlbumRequestEvent handler), so
-                         it needs the same "what's mixing / what's next" visibility the vertical
-                         Now Playing panel has, just condensed to fit a 100px-tall bar. -->
+                    <!-- Crossfade in progress -->
                     <Border Background="{StaticResource BrushAccentSubtle}" CornerRadius="3" Padding="4,1" IsVisible="{Binding IsCrossfading}">
                         <StackPanel Orientation="Horizontal" Spacing="3">
-                            <TextBlock Text="{Binding ActiveCrossfadePresetName, Converter={StaticResource MixPresetIconConverter}}" FontSize="9"/>
-                            <TextBlock Text="Mixing" FontSize="9" Foreground="{StaticResource BrushAccent}" FontWeight="Bold"/>
-                        </StackPanel>
-                    </Border>
-                    <Border Background="#3E3E3E" CornerRadius="3" Padding="4,1"
-                            IsVisible="{Binding UpcomingTransitionPresetName, Converter={x:Static ObjectConverters.IsNotNull}}">
-                        <StackPanel Orientation="Horizontal" Spacing="3">
-                            <TextBlock Text="{Binding UpcomingTransitionPresetName, Converter={StaticResource MixPresetIconConverter}}" FontSize="9"/>
-                            <TextBlock Text="{Binding UpcomingTransitionPresetName, StringFormat='via {0}'}" FontSize="9" Foreground="#B3B3B3"/>
+                            <TextBlock Text="Crossfading" FontSize="9" Foreground="{StaticResource BrushAccent}" FontWeight="Bold"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -181,7 +161,6 @@
                                              LowBand="{Binding CurrentTrack.LowData}"
                                              MidBand="{Binding CurrentTrack.MidData}"
                                              HighBand="{Binding CurrentTrack.HighData}"
-                                             PhraseSegments="{Binding CurrentTrack.PhraseSegments}"
                                              Progress="{Binding Position}"
                                              Background="#01000000"
                                              PlayheadBrush="{StaticResource BrushAccent}"
@@ -190,7 +169,6 @@
                                              Gain="{Binding WaveformGain}"
                                              ShowEnergyCurve="{Binding WaveformShowEnergyCurve}"
                                              ShowVocalGhost="{Binding WaveformShowVocalGhost}"
-                                             ShowPhraseSections="{Binding WaveformShowPhraseSections}"
                                              VerticalAlignment="Stretch"/>
                 </Panel>
                 
@@ -263,11 +241,6 @@
 
                 <Rectangle Width="1" Height="24" Fill="#3E3E3E"/>
 
-                <Button Command="{Binding CycleVisualStyleCommand}"
-                        Classes="icon-button"
-                        ToolTip.Tip="Cycle compact visual style">
-                    <TextBlock Text="◌" FontSize="16" Foreground="#B3B3B3"/>
-                </Button>
 
                 <Button Command="{Binding OpenPlayerViewCommand}"
                         Padding="8,4"

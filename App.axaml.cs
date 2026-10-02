@@ -14,14 +14,11 @@ using Singularity.Data;
 using Singularity.Services;
 using Singularity.Services.InputParsers;
 using Singularity.Services.Audio;
-using Singularity.Services.Entertainment;
 using Singularity.Services.AutoDownload;
 using Singularity.Services.Library;
 using Singularity.ViewModels;
-using Singularity.Services.Input;
 using Singularity.Views;
 using Singularity.Views.Avalonia;
-using Singularity.ViewModels.Settings;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -61,10 +58,6 @@ public partial class App : Application
         {
             // Configure services
             Services = ConfigureServices();
-
-            // Eagerly activate background queue listeners that subscribe to the event bus.
-            // Without resolving this singleton, manual Analyse actions appear to do nothing.
-            _ = Services.GetRequiredService<Services.AnalysisQueueService>();
 
             // Eagerly activate the network activity monitor so it's observing from startup, not
             // only once something (e.g. the Settings page) happens to resolve it first.
@@ -267,14 +260,6 @@ public partial class App : Application
                             mainWindow.Show();
                             splashScreen.Close();
 
-                            // GlobalHotkeyService was constructed as part of mainVm's DI graph
-                            // above, while desktop.MainWindow was still the splash screen — its
-                            // constructor-time attach bound to that (about-to-close) window.
-                            // Re-attach now that the real window is actually showing, or every DJ
-                            // keyboard shortcut (play/pause, cues, loops, beat jump, ...) would
-                            // silently never fire for the rest of the session.
-                            Services.GetRequiredService<GlobalHotkeyService>().AttachToCurrentMainWindow();
-
                             // Real OS-level notifications (Windows Action Center toasts) need the
                             // main window's native handle, which only exists after Show().
                             var toastHandle = mainWindow.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
@@ -289,9 +274,6 @@ public partial class App : Application
                         // Initialize and Start DownloadManager Orchestrator
                         var downloadManager = Services.GetRequiredService<DownloadManager>();
                         _ = downloadManager.StartAsync(); // Auto-start engine on launch
-
-                        // One-time re-fit of stored beat grids (quantised BPM fix); no-op once done.
-                        Services.GetRequiredService<Services.AudioAnalysis.BeatGridRecomputeService>().StartIfPending();
 
                         // Activate post-download spectral scan listener (eager resolve so it
                         // subscribes to TrackStateChangedEvent immediately after the engine starts).
@@ -533,7 +515,6 @@ public partial class App : Application
         
         //Session 1: Performance Optimization - Smart caching layer
         services.AddSingleton<LibraryCacheService>();
-        services.AddSingleton<ISavedDoublesService, SavedDoublesService>();
         
         // Session 2: Performance Optimization - Extracted services
         services.AddSingleton<IAudioIntegrityService, AudioIntegrityService>();
@@ -583,17 +564,7 @@ public partial class App : Application
         
         // Phase 1: Library Enrichment
         services.AddSingleton<SpotifyEnrichmentService>();
-        services.AddSingleton<DiscoveryBridgeService>();
         // Playlist Discover tab: Beatport public pages + Deezer API → ranked suggestions.
-        services.AddHttpClient<Services.Discovery.BeatportCatalogClient>();
-        services.AddHttpClient<Services.Discovery.DeezerCatalogClient>();
-        services.AddSingleton<Services.Discovery.PlaylistDiscoveryService>();
-        services.AddSingleton<Services.Discovery.DiscoveryCache>();
-        services.AddSingleton<Services.Integrations.Serato.SeratoCueExportService>(); // cues → Serato Markers2 file tags
-        services.AddSingleton<Services.AudioAnalysis.CueDetrService>(); // CUE-DETR (ONNX) cue point detector
-        services.AddSingleton<Services.AudioAnalysis.CueDetrCueService>(); // cue regeneration with CUE-DETR (compare / AI only)
-        services.AddSingleton<Services.Transitions.TransitionPlanService>(); // Mixxx-style sections + DnB transition planning
-        services.AddSingleton<PlaylistDiscoveryViewModel>();
 
         // Input parsers
         services.AddSingleton<CsvInputSource>();
@@ -630,7 +601,6 @@ public partial class App : Application
         services.AddSingleton<ColumnConfigurationService>();
         services.AddSingleton<SmartCrateService>();
         services.AddSingleton<PlaylistExportService>();
-        services.AddSingleton<Services.Export.UsbExportOrchestrator>();
 
         // Audio Player
         services.AddSingleton<IAudioPlayerService, AudioPlayerService>();
@@ -638,8 +608,6 @@ public partial class App : Application
         services.AddSingleton<PlayerViewModel>();
 
         // Entertainment Engine Services
-        services.AddSingleton<IAmbientModeService, AmbientModeService>();
-        services.AddSingleton<IFlowModeService, FlowModeService>();
 
         // Metadata and tagging service
         services.AddSingleton<ITaggerService, MetadataTaggerService>();
@@ -677,7 +645,6 @@ public partial class App : Application
         services.AddDbContextFactory<AppDbContext>();
         services.AddSingleton<SchemaMigratorService>();
         services.AddSingleton<Singularity.Services.Repositories.ITrackRepository, Singularity.Services.Repositories.TrackRepository>();
-        services.AddSingleton<Singularity.Services.Repositories.ITransitionRepository, Singularity.Services.Repositories.TransitionRepository>();
         services.AddSingleton<DatabaseService>();
         services.AddSingleton<IMetadataService, MetadataService>();
 
@@ -685,16 +652,11 @@ public partial class App : Application
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<PerformanceTracker>(); // live perf overlay (Ctrl+Shift+P) — page-nav and opted-in ViewModel load timings
         services.AddSingleton<UiStallWatchdog>();
-        services.AddSingleton<Services.AudioAnalysis.BeatGridRecomputeService>();
         services.AddSingleton<IUserInputService, UserInputService>();
         services.AddSingleton<IFileInteractionService, FileInteractionService>();
         services.AddSingleton<INotificationService, NotificationServiceAdapter>();
         services.AddSingleton<IClipboardService, ClipboardService>();
         services.AddSingleton<IDialogService, DialogService>();
-        services.AddSingleton<Services.Telemetry.FlowBuilderSuggestionTelemetryService>();
-        // FlowBuilderView resolves this from DI at construction — without this registration the
-        // whole Flow Builder tab silently gets a null DataContext (every control dead).
-        services.AddSingleton<ViewModels.FlowBuilderViewModel>();
         services.AddSingleton<DashboardService>();
         // Never registered before — its Start() (500ms heartbeat publishing DashboardSnapshot)
         // was consequently never called by anything, so HomeViewModel's CurrentSnapshot stayed at
@@ -704,30 +666,14 @@ public partial class App : Application
         // 0/0/0/OPTIMAL regardless of real state, not just during a startup race. Started further
         // down, once the background init sequence confirms the app is data-safe.
         services.AddSingleton<MissionControlService>();
-        // Keyboard mapping system (Epic #119)
-        services.AddSingleton<IKeyboardMappingService, KeyboardMappingService>();
-        services.AddSingleton<IKeyboardTelemetryService, KeyboardTelemetryService>();
-        services.AddSingleton<KeyboardEventRouter>();
-        services.AddSingleton<KeyboardMappingsViewModel>();
-        services.AddSingleton<GlobalHotkeyService>();
 
         // Global Shell Services
         services.AddSingleton<IRightPanelService, RightPanelService>();
-        services.AddSingleton<SimilarTracksViewModel>();
         services.AddSingleton<NotificationCenterService>();
-        // Transient (not Singleton): both SidebarViewModel's compact "Mix" tab AND
-        // FlowBuilderViewModel's full-option transition editor inject this — sharing one
-        // singleton instance meant opening a pair in one silently clobbered whatever the other
-        // had loaded. Both consumers are themselves singletons, so DI still resolves this once
-        // per consumer at construction and holds it for the app's lifetime; this just gives each
-        // consumer its own independent instance instead of one shared, fought-over one.
-        services.AddTransient<MixTransitionViewModel>();
         services.AddSingleton<SidebarViewModel>();
 
         // ViewModels
         services.AddSingleton<MainViewModel>();
-        // Lazy<MainViewModel> breaks the circular dependency: MainViewModel → GlobalHotkeyService → KeyboardEventRouter → MainViewModel
-        services.AddSingleton(sp => new Lazy<MainViewModel>(sp.GetRequiredService<MainViewModel>));
         services.AddSingleton<SearchViewModel>();
         // Transient (not singleton): a per-profile Users/Contacts page needs its own fresh browse
         // instance per opened profile. SearchViewModel is itself a singleton, so it still captures
@@ -799,104 +745,21 @@ public partial class App : Application
         services.AddTransient<Views.Avalonia.SettingsPage>();
         services.AddTransient<Views.Avalonia.ImportPage>();
         services.AddTransient<Views.Avalonia.ImportPreviewPage>();
-        services.AddTransient<Views.Avalonia.AnalysisPage>();
-        services.AddSingleton<ViewModels.AnalysisPageViewModel>();
-        services.AddTransient<Views.Avalonia.StemsPage>();
-        services.AddTransient<Views.Avalonia.WorkstationPage>();
         services.AddTransient<Views.Avalonia.UsersPage>();
-        services.AddTransient<Views.Avalonia.CueForgePagee>();
-        services.AddTransient<Views.Avalonia.FlowBuilderPage>();
-        services.AddSingleton<Services.ICuePointService, Services.CuePointService>();
-        services.AddSingleton<Services.Audio.StemPreferenceService>();
-        services.AddSingleton<Services.Audio.MixdownService>();
-        services.AddSingleton<Services.WorkstationSessionService>();
-        services.AddSingleton<Services.OrbSessionBundleService>();
-        services.AddSingleton<Services.IUndoService, Services.UndoService>();
 
-
-        // ── Rekordbox PSSI phrase analysis (optional — reads Rekordbox's own local analysis cache) ──
-        services.AddSingleton<Services.Rekordbox.IRekordboxPssiService, Services.Rekordbox.RekordboxPssiService>();
-
-        // ── Auto-cue / phrase detection pipeline ──────────────────────────
-        services.AddSingleton<Services.AudioAnalysis.CuePointDetectionService>();
-        services.AddSingleton<Services.AudioAnalysis.DnBTransientDetectionService>();
-        services.AddSingleton<Services.DnBCueNamingService>();
-        services.AddSingleton<Engine.Analysis.BreakbeatAnalysisStrategy>();
-        services.AddSingleton<Engine.Analysis.FourOnTheFloorAnalysisStrategy>();
-        services.AddSingleton<Services.CamelotKeyDisplayService>();
-        services.AddSingleton<Services.PhraseAlignmentService>();
-        services.AddSingleton<Services.IPhraseAlignmentService>(sp =>
-            sp.GetRequiredService<Services.PhraseAlignmentService>());
-        services.AddSingleton<Services.AnalyzeTrackStructureJob>();
-
-        services.AddSingleton<Singularity.ViewModels.Workstation.WorkstationViewModel>();
-        services.AddSingleton<Singularity.ViewModels.Workstation.CueEditorViewModel>();
-        services.AddSingleton<Singularity.ViewModels.CueForgeViewModel>();
-        services.AddSingleton<Singularity.Engine.Analysis.AnalysisPipeline>(sp =>
-            new Singularity.Engine.Analysis.AnalysisPipeline(
-                sp.GetRequiredService<Singularity.Services.AudioAnalysis.AudioIngestionPipeline>(),
-                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Singularity.Engine.Analysis.AnalysisPipeline>>()));
-        services.AddSingleton<Singularity.Engine.Cueing.CueGenerationService>(sp =>
-        {
-            var generator = ActivatorUtilities.CreateInstance<Singularity.Engine.Cueing.CueGenerationService>(sp);
-            // Build-in cues follow the cue template chosen in the editors (read at generation time).
-            var configManager = sp.GetRequiredService<ConfigManager>();
-            generator.CountdownBars = (genre, bpm) =>
-            {
-                var config = configManager.GetCurrent();
-                var bars = Singularity.Engine.Cueing.DropCountdownCues.ResolveBars(config.DropCountdownMode, genre, bpm, config.CustomCountdownBars);
-                return bars.Count > 0 ? bars : new[] { 16, 8 }; // "Off" only affects manual editing
-            };
-            return generator;
-        });
-        services.AddSingleton<Services.AnalysisQueueService>();
-
-        // ── Task 1.5: Beatgrid Detection ──────────────────────────────────
-        services.AddSingleton<Services.AudioAnalysis.BeatgridDetectionService>();
-        services.AddSingleton<Services.AudioAnalysis.BpmDetectionService>();
-        services.AddSingleton<Services.AudioAnalysis.KeyDetectionService>();
-        services.AddSingleton<Services.AudioAnalysis.EnergyScoringService>();
-        services.AddSingleton<Services.AudioAnalysis.HarmonicAnalysisService>();
-        services.AddSingleton<Services.AudioAnalysis.HarmonicCompatibilityService>();
-        services.AddSingleton<Services.AudioAnalysis.TrackFingerprintBuilderService>();
-        services.AddSingleton<Services.AudioAnalysis.TrackFingerprintStore>();
-        services.AddSingleton<Services.AudioAnalysis.TrackFingerprintBackfillService>();
-        services.AddSingleton<Services.AudioAnalysis.AudioIngestionPipeline>();
-        services.AddSingleton<Services.AudioAnalysis.EssentiaRunner>();
         services.AddSingleton<Services.FrequentSourceService>();
         services.AddSingleton<Services.PrefetchService>();
 
-        // ── Task 1.6: Waveform + Energy Extraction ───────────────────────
+        // ── Audio tooling kept for the karaoke pipeline ───────────────────
+        // FFmpeg decode to normalised PCM, waveform extraction, and key detection. Key detection
+        // maps the Essentia CLI's output, so it needs essentia_streaming_extractor_music on disk.
+        services.AddSingleton<Services.AudioAnalysis.AudioIngestionPipeline>();
         services.AddSingleton<Services.AudioAnalysis.WaveformExtractionService>();
-        services.AddSingleton<Services.AudioAnalysis.EnergyAnalysisService>();
-        // DiscogsEffnet embedding + genre/mood classification via ONNX Runtime, run in-process —
-        // replaces the Essentia CLI's TensorFlow-model layer, which was found to silently produce
-        // no output at all with the binary ORBIT bundles.
-        services.AddSingleton<Services.Similarity.DiscogsEffnetEmbeddingExtractor>();
-        services.AddSingleton<Services.Similarity.EffnetClassifierHeadService>();
-        services.AddSingleton<Services.AudioAnalysis.AudioAnalysisService>();
-        services.AddSingleton<Services.IAudioAnalysisService>(sp =>
-            sp.GetRequiredService<Services.AudioAnalysis.AudioAnalysisService>());
+        services.AddSingleton<Services.AudioAnalysis.EssentiaRunner>();
+        services.AddSingleton<Services.AudioAnalysis.KeyDetectionService>();
+        services.AddSingleton<Services.IWaveformCacheService, Services.WaveformCacheService>();
 
-        // ── Issue 2.1: Embedding Extraction Service ───────────────────────
-        services.AddSingleton<Services.Embeddings.EmbeddingExtractionService>();
-        services.AddSingleton<Services.Embeddings.IEmbeddingExtractionService>(sp =>
-            sp.GetRequiredService<Services.Embeddings.EmbeddingExtractionService>());
-
-        // ── Issue 2.2: Similarity Index ───────────────────────────────────
-        services.AddSingleton<Services.Similarity.SimilarityIndex>();
-        services.AddSingleton<Services.ISimilarityService, Services.SimilarityServiceAdapter>();
-        // Section-level feature vectors (Intro/Drop/Outro per track) for
-        // transition-aware playlist optimisation — no new DB schema needed.
-        services.AddSingleton<Services.Similarity.SectionVectorService>();
-        services.AddSingleton<Services.Similarity.TrackSimilarityService>();
-        services.AddSingleton<Services.Similarity.TransitionStyleClassifier>();
-        services.AddSingleton<Services.Playlist.PlaylistIntelligenceService>();
-
-        // ── Tasks 5.1-5.5: Dual Deck Engine + Sync ───────────────────────
-        services.AddSingleton<ViewModels.DeckViewModel>();
-
-        // ── Tasks 6.1-6.5: Stem Separation + Mixer + EQ ──────────────────
+        // ── Stem separation (Demucs ONNX) — the karaoke vocal remover ─────
         services.AddSingleton<Services.Audio.StemCacheService>();
         services.AddSingleton<Services.Audio.Separation.DemucsModelManager>();
         services.AddSingleton<Services.Audio.Separation.DemucsOnnxSeparator>();
@@ -906,26 +769,8 @@ public partial class App : Application
                 sp.GetRequiredService<Services.Audio.StemCacheService>(),
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Services.Audio.Separation.CachedStemSeparator>>()));
         services.AddSingleton<Services.IStemSeparationService, Services.StemSeparationServiceAdapter>();
-        services.AddSingleton<Services.Audio.ISurgicalProcessingService, Services.Audio.SurgicalProcessingService>();
-        services.AddSingleton<Services.Audio.ITransitionPreviewPlayer, Services.Audio.TransitionPreviewPlayer>();
-        services.AddSingleton<Services.IWaveformCacheService, Services.WaveformCacheService>();
-        services.AddSingleton<ViewModels.StemMixerViewModel>();
-        services.AddSingleton<ViewModels.StemWaveformViewModel>();
-        services.AddSingleton<ViewModels.NeuralMixEqViewModel>();
 
-        // ── Task 7.4-7.6: Timeline Editor ViewModel ───────────────────────
-        services.AddSingleton<ViewModels.TimelineViewModel>();
-
-        // ── Task 8.4: YouTube Chapter Export ─────────────────────────────
-        services.AddSingleton<Services.Video.YouTubeChapterExportService>();
-
-        // ── Task 9.1: Rekordbox USB translation + auto-export watcher ─────
-        services.AddSingleton<Services.Library.RekordboxExportExtensions>();
-
-        // ── Issue 2.3 + 2.4: Playlist Optimizer (AI Automix) ─────────────
-        services.AddSingleton<Services.Playlist.PlaylistOptimizer>();
-
-        // ── Issue 7.1: Background Job Queue (Channel<T>) ──────────────────
+        // ── Background Job Queue (Channel<T>) ─────────────────────────────
         services.AddSingleton<Services.Jobs.BackgroundJobQueue>();
         services.AddSingleton<Services.Jobs.IBackgroundJobQueue>(sp =>
             sp.GetRequiredService<Services.Jobs.BackgroundJobQueue>());
@@ -1015,19 +860,6 @@ public partial class App : Application
             Serilog.Log.Warning(ex, "[Maintenance] Database vacuum failed");
         }
 
-        // Task 3: Schedule batch sync of embeddings
-        try
-        {
-            var embeddingService = Services?.GetService<Singularity.Services.Embeddings.IEmbeddingExtractionService>();
-            if (embeddingService != null)
-            {
-                embeddingService.ScheduleBatchSync();
-            }
-        }
-        catch (Exception ex)
-        {
-            Serilog.Log.Warning(ex, "[Maintenance] Failed to schedule embedding batch sync: {Message}", ex.Message);
-        }
         
         Serilog.Log.Information("[Maintenance] Daily maintenance completed");
     }

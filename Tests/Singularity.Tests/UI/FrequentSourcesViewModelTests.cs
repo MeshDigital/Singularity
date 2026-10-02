@@ -7,10 +7,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Singularity.Configuration;
 using Singularity.Services;
-using Singularity.Services.Input;
 using Singularity.Tests.Helpers;
 using Singularity.ViewModels;
-using Singularity.ViewModels.Settings;
 using Singularity.Views;
 using Xunit;
 
@@ -81,18 +79,6 @@ public class FrequentSourcesViewModelTests
         var credentialService = new Mock<ISoulseekCredentialService>();
         var lifecycle = new Mock<IConnectionLifecycleService>();
 
-        var keyboardMappingService = new Mock<IKeyboardMappingService>();
-        keyboardMappingService
-            .SetupGet(x => x.ActiveProfile)
-            .Returns(new KeyboardProfile { Name = "Test Profile", Bindings = new List<KeyboardBinding>() });
-        keyboardMappingService
-            .Setup(x => x.GetConflicts())
-            .Returns(Array.Empty<(KeyboardBinding a, KeyboardBinding b)>());
-
-        var keyboardMappings = new KeyboardMappingsViewModel(
-            keyboardMappingService.Object,
-            telemetry: null,
-            NullLogger<KeyboardMappingsViewModel>.Instance);
 
         var vm = new SettingsViewModel(
             NullLogger<SettingsViewModel>.Instance,
@@ -106,8 +92,7 @@ public class FrequentSourcesViewModelTests
             new EventBusService(),
             soulseek.Object,
             credentialService.Object,
-            lifecycle.Object,
-            keyboardMappings);
+            lifecycle.Object);
 
         return new SutContext(vm, fileInteraction, configPath);
     }

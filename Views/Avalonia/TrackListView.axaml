@@ -64,33 +64,8 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="4"/>
         </Style>
-        <!-- MixedInKey-style harmonic mixing highlight -->
-        <Style Selector="Border.track-row.harmonic-match:not(.selected)">
-            <Setter Property="Background" Value="#124EC9B0"/>
-        </Style>
         <Style Selector="Border.key-badge">
             <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-        <Style Selector="Border.key-badge.harmonic-match">
-            <Setter Property="BorderBrush" Value="#4EC9B0"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
-        </Style>
-        <Style Selector="Border.key-badge.exact-match">
-            <Setter Property="BorderBrush" Value="White"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
-        </Style>
-        <Style Selector="Button.insert-affordance">
-            <Setter Property="Opacity" Value="0"/>
-            <Setter Property="IsHitTestVisible" Value="False"/>
-            <Setter Property="Transitions">
-                <Transitions>
-                    <DoubleTransition Property="Opacity" Duration="0:0:0.12"/>
-                </Transitions>
-            </Setter>
-        </Style>
-        <Style Selector="Border.track-row:pointerover Button.insert-affordance">
-            <Setter Property="Opacity" Value="1"/>
-            <Setter Property="IsHitTestVisible" Value="True"/>
         </Style>
     </UserControl.Styles>
 
@@ -159,15 +134,6 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="10,0,0,0">
-                    <!-- Mix (Spotify-Mix-parity): toggles per-row transition badges below each track. -->
-                    <ToggleButton Classes="tool" Padding="8,5" FontSize="11" CornerRadius="6"
-                                  IsChecked="{Binding IsMixModeEnabled, Mode=TwoWay}"
-                                  ToolTip.Tip="Toggle Mix transition badges">
-                        <StackPanel Orientation="Horizontal" Spacing="5">
-                            <TextBlock Text="🎛" FontSize="12" VerticalAlignment="Center"/>
-                            <TextBlock Text="Mix" FontSize="11" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </ToggleButton>
                     <!-- Columns flyout (right-aligned) -->
                     <DropDownButton Classes="tool" Padding="8,5" FontSize="11" CornerRadius="6"
                                     ToolTip.Tip="Columns — choose which columns to show">
@@ -191,30 +157,6 @@
             </Grid>
         </Border>
 
-        <!-- Mix flow-health banner: shown when Mix mode notices several rough adjacent
-             transitions in the current order (see TrackListViewModel.UpdateMixTransitionBadgesAsync
-             / ShowFlowWarningBanner). Offers a one-click reorder via the same BPM/harmonic/
-             energy/genre-aware engine the Library's Automix feature already uses. -->
-        <Border Grid.Row="3"
-                Background="#331A1A1D"
-                BorderBrush="#FFA94B"
-                BorderThickness="0,0,0,1"
-                Padding="16,8"
-                IsVisible="{Binding ShowFlowWarningBanner}">
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                <TextBlock Grid.Column="0" Text="⚠" FontSize="13" Foreground="#FFA94B" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBlock Grid.Column="1" Text="{Binding FlowWarningSummary, StringFormat='This playlist isn\'t in ideal mix order — {0}.'}"
-                           VerticalAlignment="Center" FontSize="12" Foreground="#DDDDDD"/>
-                <Button Grid.Column="2" Command="{Binding SuggestReorderForBetterFlowCommand}"
-                        Content="Reorder for better flow"
-                        Padding="10,5" FontSize="11" Margin="0,0,8,0"
-                        Background="#FFA94B" Foreground="#1A1A1D" BorderThickness="0" CornerRadius="6" Cursor="Hand"/>
-                <Button Grid.Column="3" Command="{Binding DismissFlowWarningCommand}"
-                        Content="Dismiss"
-                        Padding="10,5" FontSize="11"
-                        Background="Transparent" Foreground="#AAAAAA" BorderThickness="1" BorderBrush="#444" CornerRadius="6" Cursor="Hand"/>
-            </Grid>
-        </Border>
 
         <!-- Inline Column Filters (Task 10.4) -->
         <Border Grid.Row="4"
@@ -299,7 +241,7 @@
                     <!-- Column 6: BPM / Key -->
                     <Button Grid.Column="6" Classes="sortableHeader" Margin="8,0"
                             Command="{Binding SortByColumnCommand}" CommandParameter="{x:Static models:TrackSortColumn.Bpm}"
-                            ToolTip.Tip="Sort by BPM. Click a track to highlight harmonically compatible keys">
+                            ToolTip.Tip="Sort by BPM">
                         <StackPanel Orientation="Horizontal" Spacing="3">
                             <TextBlock Classes="label" Text="BPM / KEY"/>
                             <TextBlock Classes="label" Text="▲" Foreground="#4EC9B0" IsVisible="{Binding IsSortedByBpmAscending}"/>
@@ -349,18 +291,6 @@
                         <MenuItem.Icon><TextBlock Text="📋" FontSize="12"/></MenuItem.Icon>
                     </MenuItem>
                     <Separator/>
-                    <MenuItem Header="Analyse Track" Command="{Binding Operations.AnalyseTrackCommand}" IsEnabled="{Binding Operations.AreDependenciesHealthy}">
-                         <MenuItem.Icon><TextBlock Text="🔬" FontSize="12"/></MenuItem.Icon>
-                    </MenuItem>
-                    <MenuItem Header="Regenerate Cues">
-                         <MenuItem.Icon><TextBlock Text="🎯" FontSize="12"/></MenuItem.Icon>
-                         <MenuItem Header="ORBIT analysis" Command="{Binding Operations.RegenerateCuesCommand}"
-                                   ToolTip.Tip="Re-maps cue points from this track's (or all selected tracks') already-analysed data — fast, no re-analysis. Also restores normal cues after trying CUE-DETR."/>
-                         <MenuItem Header="ORBIT + CUE-DETR (compare)" Command="{Binding Operations.GenerateCuesWithAiCommand}" CommandParameter="compare"
-                                   ToolTip.Tip="ORBIT's cues, marked ✓AI where the CUE-DETR model agrees (those are the most reliable), plus CUE-DETR's other points as cyan 'AI' cues. ~10 s per track the first time, then cached."/>
-                         <MenuItem Header="CUE-DETR only" Command="{Binding Operations.GenerateCuesWithAiCommand}" CommandParameter="ai"
-                                   ToolTip.Tip="Only the CUE-DETR model's cue points (snapped to the bar grid), in cyan — to judge the model on its own. Your own placed cues are kept."/>
-                    </MenuItem>
                     <MenuItem Header="Refresh BPM from Tags" Command="{Binding Operations.RefreshBpmFromTagsCommand}"
                               ToolTip.Tip="Re-reads the file's own embedded BPM tag (this track, or all selected) and trusts it over ORBIT's analysis — fixes breakbeat/DNB tracks Essentia's beat tracker consistently misreads.">
                          <MenuItem.Icon><TextBlock Text="🥁" FontSize="12"/></MenuItem.Icon>
@@ -379,14 +309,6 @@
                     <Separator/>
                     <MenuItem Header="Export to CSV" Command="{Binding BulkExportCsvCommand}">
                          <MenuItem.Icon><TextBlock Text="📊" FontSize="12"/></MenuItem.Icon>
-                    </MenuItem>
-                    <MenuItem Header="Edit Cues in Cue Forge" Command="{Binding Operations.OpenInCueForgeCommand}">
-                         <MenuItem.Icon><TextBlock Text="🎯" FontSize="12"/></MenuItem.Icon>
-                    </MenuItem>
-                    <MenuItem Header="Write Cues to Serato Tags">
-                        <MenuItem.Icon><TextBlock Text="🏷️" FontSize="12"/></MenuItem.Icon>
-                        <MenuItem Header="Add ORBIT cues (keep Serato's)" Command="{Binding Operations.WriteSeratoCuesCommand}" CommandParameter="keep"/>
-                        <MenuItem Header="Replace all cues with ORBIT's…" Command="{Binding Operations.WriteSeratoCuesCommand}" CommandParameter="replace"/>
                     </MenuItem>
                     <Separator/>
                     <MenuItem Header="Set Colour">
@@ -430,7 +352,6 @@
             <controls:VirtualGrid.ItemTemplate>
                 <DataTemplate DataType="vm:PlaylistTrackViewModel">
                     <Border Classes="track-row"
-                            Classes.harmonic-match="{Binding IsHarmonicMatch}"
                             Focusable="True">
                         <Grid RowDefinitions="48,Auto">
                         <Grid Grid.Row="0">
@@ -484,32 +405,6 @@
                                 <TextBlock Text="＋" FontSize="11" Foreground="#6F8192" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Button>
 
-                            <!-- Column 2: Smart Insert affordance. Was a permanently-reserved
-                                 124px "+ Add here" pill on every row — visually dominated the
-                                 whole tracklist. Shrunk to an icon-only button matching the Q
-                                 button's footprint (Column 2 is now 32px, same order of size as
-                                 Column 1's 44px); Classes="insert-affordance" still gates it to
-                                 opacity 0 / non-hit-testable until the row is hovered (see the
-                                 Button.insert-affordance styles above), so it stays invisible
-                                 until needed either way — this only fixes its size when visible
-                                 and the dead space it always reserved. -->
-                            <Button Grid.Column="2"
-                                    Command="{Binding $parent[views:LibraryPage].DataContext.PrepareSmartInsertAfterTrackCommand}"
-                                    CommandParameter="{Binding}"
-                                    Classes="insert-affordance"
-                                    Width="22"
-                                    Height="22"
-                                    Padding="0"
-                                    Margin="5,0,0,0"
-                                    HorizontalAlignment="Left"
-                                    VerticalAlignment="Center"
-                                    Background="#143A4A"
-                                    BorderBrush="#2D7D93"
-                                    BorderThickness="1"
-                                    CornerRadius="11"
-                                    ToolTip.Tip="Add track that fits between this row and the next row">
-                                <TextBlock Text="+" FontSize="12" FontWeight="SemiBold" Foreground="#9ED9C8" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Button>
 
                             <!-- Column 3: Artist -->
                             <TextBlock Grid.Column="3" Text="{Binding Artist}" VerticalAlignment="Center" Margin="12,0" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" TextTrimming="CharacterEllipsis"/>
@@ -535,8 +430,6 @@
                             <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="8,0" IsVisible="{Binding HasBpm}">
                                 <TextBlock Text="{Binding BpmDisplay}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11" Width="26" TextAlignment="Right" VerticalAlignment="Center"/>
                                 <Border Classes="key-badge"
-                                        Classes.harmonic-match="{Binding IsHarmonicMatch}"
-                                        Classes.exact-match="{Binding IsExactKeyMatch}"
                                         Background="{Binding ColorBrush}"
                                         CornerRadius="4"
                                         Padding="5,2"
@@ -596,28 +489,6 @@
                             </StackPanel>
                         </Grid>
 
-                        <!-- Mix (Spotify-Mix-parity) transition badge: shown between this row and
-                             the next when Mix mode is on. Anchored left under the artwork/queue
-                             columns, matching Spotify's badge placement. -->
-                        <Button Grid.Row="1"
-                                IsVisible="{Binding ShowMixTransitionBadge}"
-                                Command="{Binding $parent[UserControl].DataContext.OpenMixTransitionCommand}"
-                                CommandParameter="{Binding}"
-                                Classes="mix-transition-badge"
-                                Margin="60,2,0,6"
-                                Padding="8,3"
-                                CornerRadius="10"
-                                HorizontalAlignment="Left"
-                                Background="{Binding TransitionBadgeColor}"
-                                BorderThickness="0"
-                                Cursor="Hand"
-                                ToolTip.Tip="{Binding TransitionTooltip}">
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="⚠" FontSize="9" Foreground="White" IsVisible="{Binding HasTransitionWarning}"/>
-                                <TextBlock Text="✎" FontSize="9" Foreground="White" Opacity="0.85" IsVisible="{Binding !HasTransitionWarning}"/>
-                                <TextBlock Text="{Binding TransitionPresetLabel}" FontSize="10" FontWeight="SemiBold" Foreground="White"/>
-                            </StackPanel>
-                        </Button>
                         </Grid>
                     </Border>
                 </DataTemplate>

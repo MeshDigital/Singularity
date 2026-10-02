@@ -206,22 +206,6 @@
                                                         <TextBlock Text="✕" FontSize="10" Foreground="{StaticResource BrushError}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     </Button>
                                                 </Grid>
-                                                <!-- This row's transition into the next one — same Spotify-Mix-parity
-                                                     badge/data as the Library track list; click to open the Mix tab. -->
-                                                <Button IsVisible="{Binding ShowMixTransitionBadge}"
-                                                        Command="{Binding $parent[UserControl].DataContext.OpenMixTransitionCommand}"
-                                                        CommandParameter="{Binding}"
-                                                        Padding="6,2" CornerRadius="8"
-                                                        HorizontalAlignment="Left"
-                                                        Background="{Binding TransitionBadgeColor}"
-                                                        BorderThickness="0"
-                                                        Cursor="Hand"
-                                                        ToolTip.Tip="Edit transition into the next track">
-                                                    <StackPanel Orientation="Horizontal" Spacing="4">
-                                                        <TextBlock Text="✎" FontSize="8" Foreground="White" Opacity="0.85"/>
-                                                        <TextBlock Text="{Binding TransitionPresetLabel}" FontSize="9" FontWeight="SemiBold" Foreground="White"/>
-                                                    </StackPanel>
-                                                </Button>
                                             </StackPanel>
                                         </Border>
                                     </DataTemplate>
@@ -276,31 +260,11 @@
                             <TextBlock Text="⋮" FontSize="15" Foreground="{StaticResource BrushText1}" HorizontalAlignment="Center"/>
                             <DropDownButton.Flyout>
                                 <MenuFlyout>
-                                    <MenuItem Header="Analyze Track" Command="{Binding AnalyzeCurrentTrackCommand}">
-                                        <MenuItem.Icon><TextBlock Text="📊"/></MenuItem.Icon>
-                                    </MenuItem>
-                                    <MenuItem Header="Extract Stems" Command="{Binding SeparateCurrentTrackStemsCommand}">
-                                        <MenuItem.Icon><TextBlock Text="🎵"/></MenuItem.Icon>
-                                    </MenuItem>
                                     <MenuItem Header="Open Inspector" Command="{Binding OpenCurrentTrackInspectorCommand}">
                                         <MenuItem.Icon><TextBlock Text="🔍"/></MenuItem.Icon>
                                     </MenuItem>
                                     <Separator/>
-                                    <MenuItem Header="Send To Workstation" Command="{Binding OpenCurrentTrackWorkstationCommand}">
-                                        <MenuItem.Icon><TextBlock Text="🎛"/></MenuItem.Icon>
-                                    </MenuItem>
-                                    <MenuItem Header="Open In Flow" Command="{Binding OpenCurrentTrackFlowCommand}">
-                                        <MenuItem.Icon><TextBlock Text="🌊"/></MenuItem.Icon>
-                                    </MenuItem>
-                                    <Separator/>
-                                    <MenuItem Header="Load To Deck A" Command="{Binding LoadCurrentTrackToDeckACommand}">
-                                        <MenuItem.Icon><TextBlock Text="A"/></MenuItem.Icon>
-                                    </MenuItem>
-                                    <MenuItem Header="Load To Deck B" Command="{Binding LoadCurrentTrackToDeckBCommand}">
-                                        <MenuItem.Icon><TextBlock Text="B"/></MenuItem.Icon>
-                                    </MenuItem>
-                                    <Separator/>
-                                    <MenuItem Header="Add To Mix" Command="{Binding AddCurrentTrackToProjectCommand}">
+                                    <MenuItem Header="Add To Playlist" Command="{Binding AddCurrentTrackToProjectCommand}">
                                         <MenuItem.Icon><TextBlock Text="➕"/></MenuItem.Icon>
                                     </MenuItem>
                                     <MenuItem Header="Reveal In Explorer" Command="{Binding RevealCurrentTrackCommand}">
@@ -342,20 +306,6 @@
                                 BoxShadow="{StaticResource ShadowMd}"
                                 DragDrop.AllowDrop="True">
                             <Panel>
-                                <controls:OrbitVisualizerCanvas
-                                    SpectrumData="{Binding SpectrumData}"
-                                    VuLeft="{Binding VuLeft}"
-                                    VuRight="{Binding VuRight}"
-                                    Energy="{Binding CurrentTrack.Energy, FallbackValue=0.5}"
-                                    Bpm="{Binding CurrentTrack.BPM, FallbackValue=120}"
-                                    BeatPulse="{Binding BeatPulse}"
-                                    MoodTag="{Binding CurrentTrack.MoodTag}"
-                                    IsPlaying="{Binding IsPlaying}"
-                                    Preset="{Binding CurrentVisualizerPreset}"
-                                    EngineMode="{Binding VisualizerEngineMode}"
-                                    AlbumHue="{Binding AlbumArtHue}"
-                                    HorizontalAlignment="Stretch"
-                                    VerticalAlignment="Stretch"/>
 
                                 <Border Width="140" Height="140"
                                         CornerRadius="70"
@@ -377,23 +327,6 @@
                                     </Panel>
                                 </Border>
 
-                                <!-- Preset name + cycle button — bottom overlay strip, only shown
-                                     once there's actually something drawing behind the art. -->
-                                <Border VerticalAlignment="Bottom"
-                                        Background="#99000000"
-                                        Padding="8,4"
-                                        IsVisible="{Binding IsPlaying}">
-                                    <Grid ColumnDefinitions="*,Auto">
-                                        <TextBlock Grid.Column="0" Text="{Binding CurrentVisualizerPreset}"
-                                                   FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource BrushText1}"
-                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                        <Button Grid.Column="1" Classes="iconGhost" Width="20" Height="20"
-                                                Command="{Binding CycleVisualizerPresetCommand}"
-                                                ToolTip.Tip="Cycle visualizer style">
-                                            <TextBlock Text="✦" FontSize="11" Foreground="{StaticResource BrushAccent}" HorizontalAlignment="Center"/>
-                                        </Button>
-                                    </Grid>
-                                </Border>
                             </Panel>
                         </Border>
 
@@ -471,80 +404,8 @@
                         </Grid>
                     </Border>
 
-                    <!-- Status + cue readiness — de-emphasized, one line -->
-                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource SpaceSm}" HorizontalAlignment="Center">
-                        <TextBlock Text="{Binding CurrentTrackStatusBadge}" FontSize="10" Foreground="{StaticResource BrushText2}"/>
-                        <TextBlock Text="•" FontSize="10" Foreground="{StaticResource BrushText2}"/>
-                        <TextBlock Text="{Binding CurrentTrackCueBadge}" FontSize="10" Foreground="{StaticResource BrushText2}"/>
-                    </StackPanel>
 
-                    <!-- MIX module — lives on the Now Playing screen itself instead of only in a
-                         separate CONTEXT-sidepanel tab. Collapsed, it's a compact status row: idle
-                         with nothing upcoming, "Next: via <preset>" once one's resolved, or a live
-                         glowing progress row while a crossfade is actually in flight. Expanded, it
-                         hosts the exact same dual-waveform/preset/trigger editor the sidepanel's
-                         "Mix" tab uses (same shared MixTransitionVm instance) — so tuning how the
-                         current track mixes into the next never requires leaving this screen. -->
-                    <Border Classes="mix-module" Classes.mixing="{Binding IsCrossfading}" IsVisible="{Binding HasUpNext}">
-                        <StackPanel Spacing="0">
-                            <Button Classes="mixHeader" Command="{Binding ToggleMixPanelCommand}">
-                                <Grid ColumnDefinitions="Auto,*,Auto">
-                                    <Border Grid.Column="0" Classes="mix-icon-bubble" Margin="0,0,10,0">
-                                        <Panel>
-                                            <TextBlock FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                       IsVisible="{Binding IsCrossfading}"
-                                                       Text="{Binding ActiveCrossfadePresetName, Converter={StaticResource MixPresetIconConverter}}"/>
-                                            <TextBlock FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                       IsVisible="{Binding !IsCrossfading}"
-                                                       Text="{Binding UpcomingTransitionPresetName, Converter={StaticResource MixPresetIconConverter}}"/>
-                                        </Panel>
-                                    </Border>
 
-                                    <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
-                                        <StackPanel IsVisible="{Binding IsCrossfading}" Spacing="3">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <TextBlock Text="MIXING NOW" Classes="caption" Foreground="{StaticResource BrushAccent}"/>
-                                                <TextBlock Text="{Binding ActiveCrossfadePresetName}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource BrushText0}"/>
-                                            </StackPanel>
-                                            <ProgressBar Value="{Binding CrossfadeProgressPercent}" Maximum="100" Height="3"
-                                                         Foreground="{StaticResource BrushAccent}" Background="{StaticResource BrushBg3}"/>
-                                        </StackPanel>
-
-                                        <StackPanel IsVisible="{Binding !IsCrossfading}" Spacing="1">
-                                            <TextBlock Text="MIX" Classes="caption"/>
-                                            <TextBlock FontSize="11" Foreground="{StaticResource BrushText1}">
-                                                <Run Text="Next: via "/>
-                                                <Run Text="{Binding UpcomingTransitionPresetName, FallbackValue='Auto', TargetNullValue='Auto'}" FontWeight="SemiBold" Foreground="{StaticResource BrushText0}"/>
-                                            </TextBlock>
-                                        </StackPanel>
-                                    </StackPanel>
-
-                                    <TextBlock Grid.Column="2" Classes="mix-chevron"
-                                               Text="{Binding IsMixPanelExpanded, Converter={StaticResource BoolToTextConverter}, ConverterParameter='⌃|⌄'}"/>
-                                </Grid>
-                            </Button>
-
-                            <Border IsVisible="{Binding IsMixPanelExpanded}"
-                                    BorderBrush="{StaticResource BrushBorder0}" BorderThickness="0,1,0,0">
-                                <views:MixTransitionPanel DataContext="{Binding MixTransitionVm}" Height="440" Background="Transparent"/>
-                            </Border>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Workflow/routing detail — collapsed by default -->
-                    <Expander Header="Track Details" IsExpanded="False" Padding="0" Margin="0"
-                              HorizontalAlignment="Stretch"
-                              IsVisible="{Binding IsLoading, Converter={StaticResource BoolInverseConverter}}">
-                        <Border Classes="card" Margin="0,6,0,0">
-                            <StackPanel Spacing="{StaticResource SpaceXs}">
-                                <TextBlock Text="{Binding CurrentTrackWorkflowHint}" FontSize="10" Foreground="{StaticResource BrushSuccess}" TextWrapping="Wrap"/>
-                                <TextBlock Text="{Binding CurrentTrackWorkstationPrepSummary}" FontSize="10" Foreground="{StaticResource BrushAccent}" TextWrapping="Wrap"/>
-                                <TextBlock Text="{Binding CurrentTrackRoutingSummary}" FontSize="10" Foreground="{StaticResource BrushSuccess}" TextWrapping="Wrap"/>
-                                <TextBlock Text="{Binding CurrentTrackTransitionPlanSummary}" FontSize="10" Foreground="{StaticResource BrushWarning}" TextWrapping="Wrap"/>
-                                <TextBlock Text="{Binding AnalysisLaneSummary}" FontSize="10" Foreground="{StaticResource BrushInfo}" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                    </Expander>
 
                     <!-- Waveform — the centerpiece -->
                     <StackPanel Spacing="{StaticResource SpaceSm}">
@@ -554,7 +415,6 @@
                                                            LowBand="{Binding CurrentTrack.LowData}"
                                                            MidBand="{Binding CurrentTrack.MidData}"
                                                            HighBand="{Binding CurrentTrack.HighData}"
-                                                           PhraseSegments="{Binding CurrentTrack.PhraseSegments}"
                                                            Progress="{Binding Position}"
                                                            IsRolling="False"
                                                            Background="Transparent"
@@ -564,7 +424,6 @@
                                                            Gain="{Binding WaveformGain}"
                                                            ShowEnergyCurve="{Binding WaveformShowEnergyCurve}"
                                                            ShowVocalGhost="{Binding WaveformShowVocalGhost}"
-                                                           ShowPhraseSections="{Binding WaveformShowPhraseSections}"
                                                            VerticalAlignment="Stretch"
                                                            HorizontalAlignment="Stretch"/>
                             </Panel>
@@ -575,26 +434,6 @@
                             <TextBlock Grid.Column="1" Text="{Binding TotalTimeStr}" Classes="mono" FontSize="10" HorizontalAlignment="Right"/>
                         </Grid>
 
-                        <!-- Phrase navigation as a single segmented control instead of 4 separate boxed buttons -->
-                        <Border Classes="card" Padding="2">
-                            <Grid ColumnDefinitions="*,*,*,*">
-                                <Button Grid.Column="0" Classes="phraseTab" Command="{Binding JumpToIntroCommand}" IsEnabled="{Binding HasCurrentTrack}" ToolTip.Tip="Jump to intro">
-                                    <TextBlock Text="INTRO" FontSize="9" FontWeight="SemiBold" LetterSpacing="0.5" Foreground="{StaticResource BrushText1}" HorizontalAlignment="Center"/>
-                                </Button>
-                                <Border Grid.Column="0" Classes="divider" Width="1" Height="14" HorizontalAlignment="Right"/>
-                                <Button Grid.Column="1" Classes="phraseTab" Command="{Binding JumpToBuildCommand}" IsEnabled="{Binding HasCurrentTrack}" ToolTip.Tip="Jump to build">
-                                    <TextBlock Text="BUILD" FontSize="9" FontWeight="SemiBold" LetterSpacing="0.5" Foreground="{StaticResource BrushText1}" HorizontalAlignment="Center"/>
-                                </Button>
-                                <Border Grid.Column="1" Classes="divider" Width="1" Height="14" HorizontalAlignment="Right"/>
-                                <Button Grid.Column="2" Classes="phraseTab" Command="{Binding JumpToDropCommand}" IsEnabled="{Binding HasCurrentTrack}" ToolTip.Tip="Jump to drop">
-                                    <TextBlock Text="DROP" FontSize="9" FontWeight="SemiBold" LetterSpacing="0.5" Foreground="{StaticResource BrushAccent}" HorizontalAlignment="Center"/>
-                                </Button>
-                                <Border Grid.Column="2" Classes="divider" Width="1" Height="14" HorizontalAlignment="Right"/>
-                                <Button Grid.Column="3" Classes="phraseTab" Command="{Binding JumpToOutroCommand}" IsEnabled="{Binding HasCurrentTrack}" ToolTip.Tip="Jump to outro">
-                                    <TextBlock Text="OUTRO" FontSize="9" FontWeight="SemiBold" LetterSpacing="0.5" Foreground="{StaticResource BrushText1}" HorizontalAlignment="Center"/>
-                                </Button>
-                            </Grid>
-                        </Border>
                     </StackPanel>
 
                     <!-- Transport -->
@@ -751,15 +590,6 @@
                         <StackPanel Spacing="{StaticResource SpaceSm}">
                             <Grid ColumnDefinitions="*,Auto,Auto">
                                 <TextBlock Grid.Column="0" Text="UP NEXT" Classes="caption" VerticalAlignment="Center"/>
-                                <!-- Resolved as soon as SchedulePreloadNext finds a saved transition
-                                     for (current, next) — visible ahead of the crossfade actually
-                                     starting, not just once it's already happening. -->
-                                <Border Grid.Column="1" Margin="0,0,6,0" Padding="6,2" CornerRadius="8"
-                                        Background="{StaticResource BrushAccent}"
-                                        IsVisible="{Binding UpcomingTransitionPresetName, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                        ToolTip.Tip="Preset that will drive the crossfade into the next track">
-                                    <TextBlock Text="{Binding UpcomingTransitionPresetName, StringFormat='via {0}'}" FontSize="9" FontWeight="SemiBold" Foreground="White"/>
-                                </Border>
                                 <Button Grid.Column="2" Classes="iconGhost" Padding="6,2" Command="{Binding ToggleQueueCommand}" ToolTip.Tip="Open full queue">
                                     <TextBlock Text="See all" FontSize="10" Foreground="{StaticResource BrushAccent}"/>
                                 </Button>
@@ -787,23 +617,6 @@
                                                         <TextBlock Text="{Binding ArtistName}" FontSize="10" Foreground="{StaticResource BrushText1}" TextTrimming="CharacterEllipsis"/>
                                                     </StackPanel>
                                                 </Grid>
-                                            </Button>
-                                            <!-- This row's own transition into the NEXT one (Spotify-Mix-parity badge,
-                                                 same data the Library track list's badges use) — click to open the Mix
-                                                 tab and adjust it without leaving the player. -->
-                                            <Button IsVisible="{Binding ShowMixTransitionBadge}"
-                                                    Command="{Binding $parent[UserControl].DataContext.OpenMixTransitionCommand}"
-                                                    CommandParameter="{Binding}"
-                                                    Margin="17,0,0,0" Padding="6,2" CornerRadius="8"
-                                                    HorizontalAlignment="Left"
-                                                    Background="{Binding TransitionBadgeColor}"
-                                                    BorderThickness="0"
-                                                    Cursor="Hand"
-                                                    ToolTip.Tip="Edit transition into the next track">
-                                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                                    <TextBlock Text="✎" FontSize="8" Foreground="White" Opacity="0.85"/>
-                                                    <TextBlock Text="{Binding TransitionPresetLabel}" FontSize="9" FontWeight="SemiBold" Foreground="White"/>
-                                                </StackPanel>
                                             </Button>
                                         </StackPanel>
                                     </DataTemplate>

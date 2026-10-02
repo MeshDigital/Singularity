@@ -39,20 +39,8 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="6"/>
         </Style>
-        <!-- MixedInKey-style harmonic mixing highlight -->
-        <Style Selector="Border.track-row.harmonic-match:not(.selected)">
-            <Setter Property="Background" Value="#124EC9B0"/>
-        </Style>
         <Style Selector="Border.key-badge">
             <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-        <Style Selector="Border.key-badge.harmonic-match">
-            <Setter Property="BorderBrush" Value="#4EC9B0"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
-        </Style>
-        <Style Selector="Border.key-badge.exact-match">
-            <Setter Property="BorderBrush" Value="White"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
         </Style>
     </UserControl.Styles>
 
@@ -82,7 +70,7 @@
             <TextBlock Text="No tracks match the current filters." FontSize="13" Foreground="#666" HorizontalAlignment="Center"/>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" ScrollChanged="OnTrackScrollChanged">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <ItemsRepeater ItemsSource="{Binding FilteredTracks}">
                 <ItemsRepeater.Layout>
                     <StackLayout Spacing="0"/>
@@ -92,7 +80,6 @@
                         <StackPanel Spacing="0">
                             <Border Classes="track-row"
                                     Classes.selected="{Binding IsSelected}"
-                                    Classes.harmonic-match="{Binding IsHarmonicMatch}"
                                     Padding="16,8"
                                     Focusable="True"
                                     PointerPressed="OnTrackRowPointerPressed"
@@ -151,8 +138,6 @@
                                     <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,10,0" IsVisible="{Binding HasBpm}">
                                         <TextBlock Text="{Binding BpmDisplay}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11" Width="26" TextAlignment="Right" VerticalAlignment="Center"/>
                                         <Border Classes="key-badge"
-                                                Classes.harmonic-match="{Binding IsHarmonicMatch}"
-                                                Classes.exact-match="{Binding IsExactKeyMatch}"
                                                 Background="{Binding ColorBrush}"
                                                 CornerRadius="4"
                                                 Padding="5,2"
@@ -212,13 +197,6 @@
                                     </StackPanel>
                                 </Grid>
                             </Border>
-
-                            <controls:InsertBetweenRowControl
-                                InsertBetweenCommand="{Binding $parent[views:LibraryPage].DataContext.PrepareSmartInsertAfterTrackCommand}"
-                                InsertBetweenCommandParameter="{Binding}"
-                                PointerEntered="OnInsertGapPointerEntered"
-                                PointerMoved="OnInsertGapPointerMoved"
-                                PointerExited="OnInsertGapPointerExited"/>
                         </StackPanel>
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>

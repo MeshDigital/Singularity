@@ -288,23 +288,6 @@ public class DialogService : IDialogService
         });
     }
 
-    public async Task ShowSuggestedFlowImpactAsync(SuggestedFlowImpactViewModel vm)
-    {
-        await Dispatcher.UIThread.InvokeAsync(async () =>
-        {
-            var dialog = new Views.Avalonia.Dialogs.SuggestedFlowImpactDialog
-            {
-                DataContext = vm
-            };
-
-            var owner = GetOwnerWindow();
-            if (owner != null)
-            {
-                await dialog.ShowDialog(owner);
-            }
-        });
-    }
-
     public async Task ShowSpectralForensicsAsync(UnifiedTrackViewModel vm)
     {
         await Dispatcher.UIThread.InvokeAsync(async () =>

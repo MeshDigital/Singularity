@@ -7,8 +7,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Singularity.Models;
-using Singularity.Services.Audio;
-using Singularity.Services.Timeline;
 using SkiaSharp;
 using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
@@ -54,22 +52,6 @@ namespace Singularity.Views.Avalonia.Controls
             set => SetValue(PlayheadBrushProperty, value);
         }
 
-        public static readonly StyledProperty<double?> TriggerPointSecondsProperty =
-            AvaloniaProperty.Register<WaveformControl, double?>(nameof(TriggerPointSeconds));
-
-        /// <summary>
-        /// Fixed marker for "where this side's mix actually starts/ends" (Mix Transition Editor),
-        /// drawn as a persistent flag independent of playback Progress — previously the trigger
-        /// point and the played-progress playhead were the same line, so there was no way to see
-        /// where the trigger point was once playback moved past or before it, or before playback
-        /// started at all. Null hides the marker (every caller except the Mix editor).
-        /// </summary>
-        public double? TriggerPointSeconds
-        {
-            get => GetValue(TriggerPointSecondsProperty);
-            set => SetValue(TriggerPointSecondsProperty, value);
-        }
-
         public static readonly StyledProperty<System.Windows.Input.ICommand?> SeekCommandProperty =
             AvaloniaProperty.Register<WaveformControl, System.Windows.Input.ICommand?>(nameof(SeekCommand));
 
@@ -91,39 +73,6 @@ namespace Singularity.Views.Avalonia.Controls
         public IBrush? Foreground { get => GetValue(ForegroundProperty); set => SetValue(ForegroundProperty, value); }
         public static readonly StyledProperty<IBrush?> BackgroundProperty = AvaloniaProperty.Register<WaveformControl, IBrush?>(nameof(Background));
         public IBrush? Background { get => GetValue(BackgroundProperty); set => SetValue(BackgroundProperty, value); }
-
-        public static readonly StyledProperty<System.Collections.Generic.IEnumerable<OrbitCue>?> CuesProperty =
-            AvaloniaProperty.Register<WaveformControl, System.Collections.Generic.IEnumerable<OrbitCue>?>(nameof(Cues));
-
-        public System.Collections.Generic.IEnumerable<OrbitCue>? Cues
-        {
-            get => GetValue(CuesProperty);
-            set => SetValue(CuesProperty, value);
-        }
-
-        /// <summary>Whether a pointer-down hit on a cue marker starts a drag (CueForge's normal
-        /// "reposition this cue" behavior). Default true preserves existing behavior everywhere
-        /// this control is already used. A consumer that only wants click-to-select (e.g. the Mix
-        /// transition editor picking a cue as a trigger point, never rewriting the track's real
-        /// shared CuePointEntity row) sets this false — CueClickedCommand still fires on the
-        /// initial hit either way, only the drag-and-persist path is suppressed.</summary>
-        public static readonly StyledProperty<bool> CuesAreDraggableProperty =
-            AvaloniaProperty.Register<WaveformControl, bool>(nameof(CuesAreDraggable), defaultValue: true);
-
-        public bool CuesAreDraggable
-        {
-            get => GetValue(CuesAreDraggableProperty);
-            set => SetValue(CuesAreDraggableProperty, value);
-        }
-
-        public static readonly StyledProperty<System.Collections.Generic.IEnumerable<PhraseSegment>?> PhraseSegmentsProperty =
-            AvaloniaProperty.Register<WaveformControl, System.Collections.Generic.IEnumerable<PhraseSegment>?>(nameof(PhraseSegments));
-
-        public System.Collections.Generic.IEnumerable<PhraseSegment>? PhraseSegments
-        {
-            get => GetValue(PhraseSegmentsProperty);
-            set => SetValue(PhraseSegmentsProperty, value);
-        }
 
         public static readonly StyledProperty<System.Collections.Generic.IEnumerable<float>?> EnergyCurveProperty =
             AvaloniaProperty.Register<WaveformControl, System.Collections.Generic.IEnumerable<float>?>(nameof(EnergyCurve));
@@ -150,42 +99,6 @@ namespace Singularity.Views.Avalonia.Controls
         {
             get => GetValue(SegmentedEnergyProperty);
             set => SetValue(SegmentedEnergyProperty, value);
-        }
-
-        public static readonly StyledProperty<bool> IsEditingProperty =
-            AvaloniaProperty.Register<WaveformControl, bool>(nameof(IsEditing), false);
-
-        public bool IsEditing
-        {
-            get => GetValue(IsEditingProperty);
-            set => SetValue(IsEditingProperty, value);
-        }
-
-        public static readonly StyledProperty<SnappingMode> SnappingModeProperty =
-            AvaloniaProperty.Register<WaveformControl, SnappingMode>(nameof(SnappingMode), SnappingMode.Soft);
-
-        public SnappingMode SnappingMode
-        {
-            get => GetValue(SnappingModeProperty);
-            set => SetValue(SnappingModeProperty, value);
-        }
-
-        public static readonly StyledProperty<float> BpmProperty =
-            AvaloniaProperty.Register<WaveformControl, float>(nameof(Bpm), 0f);
-
-        public float Bpm
-        {
-            get => GetValue(BpmProperty);
-            set => SetValue(BpmProperty, value);
-        }
-
-        public static readonly StyledProperty<System.Windows.Input.ICommand?> SegmentUpdatedCommandProperty =
-            AvaloniaProperty.Register<WaveformControl, System.Windows.Input.ICommand?>(nameof(SegmentUpdatedCommand));
-
-        public System.Windows.Input.ICommand? SegmentUpdatedCommand
-        {
-            get => GetValue(SegmentUpdatedCommandProperty);
-            set => SetValue(SegmentUpdatedCommandProperty, value);
         }
 
         // Sprint 2: Zoom Properties
@@ -217,57 +130,6 @@ namespace Singularity.Views.Avalonia.Controls
             set => SetValue(EnableScrollZoomProperty, value);
         }
 
-        // Defaults false so every existing caller (Now Playing, Cue Forge) keeps today's
-        // background-drag-to-seek behavior unchanged. The Mix Transition Editor sets this true:
-        // dragging on those waveforms should pan the zoomed view (this control already has a
-        // dedicated pan Slider bound to ViewOffset — this is the same action, just reachable by
-        // grabbing the waveform directly), not set an arbitrary, off-cue trigger point. Setting
-        // the trigger point itself now only happens by clicking an actual cue marker or one of
-        // MixPreviewComponent's cue-chip buttons — an arbitrary drag-to-anywhere point makes for
-        // a bad transition (not beat/phrase aligned), which is exactly the behavior this replaces.
-        public static readonly StyledProperty<bool> PanOnBackgroundDragProperty =
-            AvaloniaProperty.Register<WaveformControl, bool>(nameof(PanOnBackgroundDrag), false);
-
-        public bool PanOnBackgroundDrag
-        {
-            get => GetValue(PanOnBackgroundDragProperty);
-            set => SetValue(PanOnBackgroundDragProperty, value);
-        }
-
-        /// <summary>Fired on a plain click (press+release with negligible movement) on the
-        /// waveform background — not a cue, not a real drag. Takes the clicked time in seconds.
-        /// Lets the user audition an arbitrary point of the individual track (distinct from
-        /// setting the trigger point, which only ever happens via an actual cue now) to find
-        /// where a drop/phrase lands before deciding where a cue belongs.</summary>
-        public static readonly StyledProperty<System.Windows.Input.ICommand?> PreviewSeekCommandProperty =
-            AvaloniaProperty.Register<WaveformControl, System.Windows.Input.ICommand?>(nameof(PreviewSeekCommand));
-        public System.Windows.Input.ICommand? PreviewSeekCommand
-        {
-            get => GetValue(PreviewSeekCommandProperty);
-            set => SetValue(PreviewSeekCommandProperty, value);
-        }
-
-        /// <summary>Right-click on the waveform background shows an "Add cue here" item wired to
-        /// this command (takes the clicked time in seconds) — null/unbound everywhere this
-        /// control is used except the Mix Transition Editor, so no context menu appears
-        /// elsewhere.</summary>
-        /// <summary>Right-click "◆ Drop here" (seconds) — the cue editors' one-click drop.</summary>
-        public static readonly StyledProperty<System.Windows.Input.ICommand?> SetDropAtCommandProperty =
-            AvaloniaProperty.Register<WaveformControl, System.Windows.Input.ICommand?>(nameof(SetDropAtCommand));
-        public System.Windows.Input.ICommand? SetDropAtCommand
-        {
-            get => GetValue(SetDropAtCommandProperty);
-            set => SetValue(SetDropAtCommandProperty, value);
-        }
-
-        public static readonly StyledProperty<System.Windows.Input.ICommand?> AddCueAtCommandProperty =
-            AvaloniaProperty.Register<WaveformControl, System.Windows.Input.ICommand?>(nameof(AddCueAtCommand));
-        public System.Windows.Input.ICommand? AddCueAtCommand
-        {
-            get => GetValue(AddCueAtCommandProperty);
-            set => SetValue(AddCueAtCommandProperty, value);
-        }
-
         public static readonly StyledProperty<double> ViewOffsetProperty =
             AvaloniaProperty.Register<WaveformControl, double>(nameof(ViewOffset), 0.0);
 
@@ -280,45 +142,6 @@ namespace Singularity.Views.Avalonia.Controls
             set => SetValue(ViewOffsetProperty, Math.Clamp(value, 0.0, Math.Max(0, 1.0 - (1.0 / ZoomLevel))));
         }
 
-        public static readonly StyledProperty<System.Windows.Input.ICommand?> CueClickedCommandProperty =
-            AvaloniaProperty.Register<WaveformControl, System.Windows.Input.ICommand?>(nameof(CueClickedCommand));
-
-        /// <summary>
-        /// Command triggered when a cue marker is clicked (for instant audition)
-        /// </summary>
-        public System.Windows.Input.ICommand? CueClickedCommand
-        {
-            get => GetValue(CueClickedCommandProperty);
-            set => SetValue(CueClickedCommandProperty, value);
-        }
-
-        /// <summary>
-        /// When <c>true</c>, cues released within <see cref="SnapRadiusSeconds"/>
-        /// of a beat are automatically snapped to that beat.
-        /// </summary>
-        public static readonly StyledProperty<bool> SnapToGridEnabledProperty =
-            AvaloniaProperty.Register<WaveformControl, bool>(nameof(SnapToGridEnabled), true);
-
-        public bool SnapToGridEnabled
-        {
-            get => GetValue(SnapToGridEnabledProperty);
-            set => SetValue(SnapToGridEnabledProperty, value);
-        }
-
-        /// <summary>
-        /// Maximum distance (seconds) within which a cue snaps to the nearest beat.
-        /// Default is 50 ms.
-        /// </summary>
-        public static readonly StyledProperty<double> SnapRadiusSecondsProperty =
-            AvaloniaProperty.Register<WaveformControl, double>(nameof(SnapRadiusSeconds), 0.05);
-
-        public double SnapRadiusSeconds
-        {
-            get => GetValue(SnapRadiusSecondsProperty);
-            set => SetValue(SnapRadiusSecondsProperty, Math.Max(0, value));
-        }
-
-
         static WaveformControl()
         {
             AffectsRender<WaveformControl>(
@@ -328,8 +151,6 @@ namespace Singularity.Views.Avalonia.Controls
                 LowBandProperty, 
                 MidBandProperty, 
                 HighBandProperty, 
-                CuesProperty, 
-                PhraseSegmentsProperty,
                 EnergyCurveProperty,
                 VocalDensityCurveProperty,
                 SegmentedEnergyProperty,
@@ -338,44 +159,11 @@ namespace Singularity.Views.Avalonia.Controls
                 PlayheadBrushProperty,
                 ZoomLevelProperty,
                 ViewOffsetProperty,
-                TriggerPointSecondsProperty,
                 FrequencyColorModeProperty);
         }
 
-
-        public static readonly StyledProperty<System.Windows.Input.ICommand?> CueUpdatedCommandProperty =
-            AvaloniaProperty.Register<WaveformControl, System.Windows.Input.ICommand?>(nameof(CueUpdatedCommand));
-
-        public System.Windows.Input.ICommand? CueUpdatedCommand
-        {
-            get => GetValue(CueUpdatedCommandProperty);
-            set => SetValue(CueUpdatedCommandProperty, value);
-        }
-
-        private OrbitCue? _draggedCue;
-        private PhraseSegment? _draggedSegment;
-        private bool _isDraggingStart; // True if dragging start handle, False if end
-        private bool _isDraggingCue;
         private bool _isDraggingProgress;
-        private bool _isDraggingSegment;
-        private bool _isDraggingPan;
-        private double _panDragStartX;
-        private double _panDragStartOffset;
         private double _hoverX = -1; // -1 = not hovering
-        private const double CueHitThreshold = 10.0;
-        private const double HandleWidth = 8.0;
-
-        private static readonly Pen PhraseGridPen = new Pen(new SolidColorBrush(Color.FromArgb(48, 255, 255, 255)), 1);
-        private static readonly IBrush IntroPhraseBrush = new SolidColorBrush(Color.Parse("#1E3A5F"), 0.18);
-        private static readonly IBrush BuildPhraseBrush = new SolidColorBrush(Color.Parse("#FFB347"), 0.18);
-        private static readonly IBrush DropPhraseBrush = new SolidColorBrush(Color.Parse("#DC143C"), 0.18);
-        private static readonly IBrush BreakPhraseBrush = new SolidColorBrush(Color.Parse("#6A0DAD"), 0.18);
-        private static readonly IBrush OutroPhraseBrush = new SolidColorBrush(Color.Parse("#708090"), 0.18);
-
-        // Beat-snap highlight state
-        private double _snapHighlightSeconds = -1.0; // ≥0 while highlight is active
-        private float _snapHighlightAlpha = 0f;
-        private DispatcherTimer? _snapHighlightTimer;
 
         // Bitmap Cache
         private RenderTargetBitmap? _baseBitmap;
@@ -442,15 +230,6 @@ namespace Singularity.Views.Avalonia.Controls
             set => SetValue(ShowEnergyCurveProperty, value);
         }
 
-        public static readonly StyledProperty<bool> ShowPhraseSectionsProperty =
-            AvaloniaProperty.Register<WaveformControl, bool>(nameof(ShowPhraseSections), true);
-
-        public bool ShowPhraseSections
-        {
-            get => GetValue(ShowPhraseSectionsProperty);
-            set => SetValue(ShowPhraseSectionsProperty, value);
-        }
-
         private DispatcherTimer? _ghostPulseTimer;
         private float _ghostOpacity = 0.6f;
         private bool _ghostPulseUp = true;
@@ -498,10 +277,7 @@ namespace Singularity.Views.Avalonia.Controls
             base.OnDetachedFromVisualTree(e);
             _ghostPulseTimer?.Stop();
             _ghostPulseTimer = null;
-            _snapHighlightTimer?.Stop();
-            _snapHighlightTimer = null;
         }
-
 
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
@@ -522,7 +298,6 @@ namespace Singularity.Views.Avalonia.Controls
                 InvalidateVisual();
             }
             else if (change.Property == ShowEnergyCurveProperty ||
-                     change.Property == ShowPhraseSectionsProperty ||
                      change.Property == ShowVocalGhostProperty)
             {
                 // Drawn directly in Render(), outside the cached bitmap — a redraw is enough.
@@ -553,7 +328,6 @@ namespace Singularity.Views.Avalonia.Controls
                 InvalidateVisual();
             }
         }
-
 
         // Sprint 2: Scroll-to-Zoom
         protected override void OnPointerWheelChanged(global::Avalonia.Input.PointerWheelEventArgs e)
@@ -593,199 +367,28 @@ namespace Singularity.Views.Avalonia.Controls
             e.Handled = true;
         }
 
-
         protected override void OnPointerPressed(global::Avalonia.Input.PointerPressedEventArgs e)
         {
             var point = e.GetPosition(this);
-            var data = WaveformData;
-            var cues = Cues;
-
-            // 0. Right-click — "Add cue here" (Mix Transition Editor only; AddCueAtCommand is
-            // null/unbound everywhere else, so nothing shows).
             if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
-            {
-                if ((AddCueAtCommand != null || SetDropAtCommand != null) && data != null && data.DurationSeconds > 0)
-                {
-                    double clickedSeconds = XToFraction(point.X, Bounds.Width) * data.DurationSeconds;
-                    ShowAddCueContextMenu(clickedSeconds);
-                }
-                e.Handled = true;
                 return;
-            }
 
-            // 1. Hit Test for Cues - Click triggers instant audition
-            if (cues != null && data != null && data.DurationSeconds > 0)
-            {
-                foreach (var cue in cues)
-                {
-                    double x = GetCueX(cue, data);
-                    if (Math.Abs(point.X - x) <= CueHitThreshold)
-                    {
-                        // Sprint 2: Instant Hot-Cue Audition on click — pass the timestamp (double)
-                        // because CueClickedCommand is bound to SeekCommand<double> in the workstation.
-                        if (CueClickedCommand != null && CueClickedCommand.CanExecute(cue.Timestamp))
-                        {
-                            CueClickedCommand.Execute(cue.Timestamp);
-                        }
-                        if (CuesAreDraggable)
-                        {
-                            _draggedCue = cue;
-                            _isDraggingCue = true;
-                            e.Pointer.Capture(this);
-                        }
-                        e.Handled = true;
-                        return;
-                    }
-                }
-            }
-
-
-            // 2. Hit Test for Phrase Boundaries (New: Phase 2)
-            if (IsEditing && PhraseSegments != null && data != null && data.DurationSeconds > 0)
-            {
-                foreach (var seg in PhraseSegments)
-                {
-                    double startX = (seg.Start / data.DurationSeconds) * Bounds.Width;
-                    double endX = ((seg.Start + seg.Duration) / data.DurationSeconds) * Bounds.Width;
-
-                    if (Math.Abs(point.X - startX) <= CueHitThreshold)
-                    {
-                        _draggedSegment = seg;
-                        _isDraggingSegment = true;
-                        _isDraggingStart = true;
-                        e.Pointer.Capture(this);
-                        e.Handled = true;
-                        return;
-                    }
-                    if (Math.Abs(point.X - endX) <= CueHitThreshold)
-                    {
-                        _draggedSegment = seg;
-                        _isDraggingSegment = true;
-                        _isDraggingStart = false;
-                        e.Pointer.Capture(this);
-                        e.Handled = true;
-                        return;
-                    }
-                }
-            }
-
-            // 3. Background drag — pans the zoomed view (Mix Editor) or seeks playback
-            // (everywhere else), per PanOnBackgroundDrag. A plain click (released with
-            // negligible movement) fires PreviewSeekCommand instead of panning — see
-            // OnPointerReleased.
-            if (PanOnBackgroundDrag)
-            {
-                _isDraggingPan = true;
-                _panDragStartX = point.X;
-                _panDragStartOffset = ViewOffset;
-                e.Pointer.Capture(this);
-                e.Handled = true;
-                return;
-            }
             _isDraggingProgress = true;
             e.Pointer.Capture(this);
             UpdateProgressFromPoint(point);
             e.Handled = true;
         }
 
-        private const double ClickMovementThreshold = 4.0;
-
-        private void ShowAddCueContextMenu(double seconds)
-        {
-            var span = TimeSpan.FromSeconds(Math.Max(0, seconds));
-            var menu = new ContextMenu();
-            if (SetDropAtCommand != null)
-            {
-                var drop = new MenuItem { Header = $"◆ Drop here ({span:mm\\:ss})" };
-                drop.Click += (_, _) => { if (SetDropAtCommand?.CanExecute(seconds) == true) SetDropAtCommand.Execute(seconds); };
-                menu.Items.Add(drop);
-            }
-            if (AddCueAtCommand != null)
-            {
-                var add = new MenuItem { Header = $"➕ Add cue here ({span:mm\\:ss})" };
-                add.Click += (_, _) => { if (AddCueAtCommand?.CanExecute(seconds) == true) AddCueAtCommand.Execute(seconds); };
-                menu.Items.Add(add);
-            }
-            ContextMenu = menu;
-            menu.Open(this);
-        }
-
         protected override void OnPointerMoved(global::Avalonia.Input.PointerEventArgs e)
         {
             var point = e.GetPosition(this);
-            var data = WaveformData;
-            var cues = Cues;
-
-            bool hoverCue = false;
-            if (cues != null && data != null && data.DurationSeconds > 0)
-            {
-                foreach (var cue in cues)
-                {
-                    double cx = GetCueX(cue, data);
-                    if (Math.Abs(point.X - cx) <= CueHitThreshold)
-                    {
-                        hoverCue = true;
-                        break;
-                    }
-                }
-            }
-            Cursor = hoverCue || _isDraggingCue ? new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.SizeWestEast) : null;
-
-            if (_isDraggingCue && _draggedCue != null && data != null && data.DurationSeconds > 0)
-            {
-                double x = Math.Clamp(point.X, 0, Bounds.Width);
-                if (IsRolling)
-                {
-                     // (Rolling logic)
-                }
-                else
-                {
-                    _draggedCue.Timestamp = XToFraction(x, Bounds.Width) * data.DurationSeconds;
-                }
-                InvalidateVisual();
-            }
-            else if (_isDraggingSegment && _draggedSegment != null && data != null && data.DurationSeconds > 0)
-            {
-                double x = Math.Clamp(point.X, 0, Bounds.Width);
-                float newTime = (float)(XToFraction(x, Bounds.Width) * data.DurationSeconds);
-                
-                // Landmarks for snapping
-                var landmarks = PhraseSegments?.SelectMany(s => new[] { s.Start, s.Start + s.Duration }) ?? Enumerable.Empty<float>();
-                newTime = SnappingEngine.Snap(newTime, SnappingMode, Bpm, landmarks);
-
-
-                if (_isDraggingStart)
-                {
-                    float maxStart = _draggedSegment.Start + _draggedSegment.Duration - 0.1f;
-                    _draggedSegment.Start = Math.Min(newTime, maxStart);
-                }
-                else
-                {
-                    float minEnd = _draggedSegment.Start + 0.1f;
-                    _draggedSegment.Duration = Math.Max(newTime - _draggedSegment.Start, 0.1f);
-                }
-                
-                InvalidateVisual();
-            }
-            else if (_isDraggingProgress)
+            if (_isDraggingProgress)
             {
                 UpdateProgressFromPoint(point);
             }
-            else if (_isDraggingPan && Bounds.Width > 0)
-            {
-                double zoom = Math.Max(1.0, ZoomLevel);
-                double deltaFraction = (point.X - _panDragStartX) / Bounds.Width / zoom;
-                ViewOffset = _panDragStartOffset - deltaFraction;
-                _isDirty = true;
-                InvalidateVisual();
-            }
 
-            // Update hover cursor (only when not dragging a cue or segment)
-            if (!_isDraggingCue && !_isDraggingSegment)
-            {
-                _hoverX = point.X;
-                InvalidateVisual();
-            }
+            _hoverX = point.X;
+            InvalidateVisual();
         }
 
         protected override void OnPointerEntered(global::Avalonia.Input.PointerEventArgs e)
@@ -824,91 +427,8 @@ namespace Singularity.Views.Avalonia.Controls
 
         protected override void OnPointerReleased(global::Avalonia.Input.PointerReleasedEventArgs e)
         {
-            if (_isDraggingCue)
-            {
-                _isDraggingCue = false;
-
-                // Magnetic beat-grid snapping: snap the cue to the nearest beat when
-                // within SnapRadiusSeconds (default 50 ms).
-                if (SnapToGridEnabled && _draggedCue != null && Bpm > 0 && WaveformData != null)
-                {
-                    double? snapped = BeatGridService.GetNearestBeatSeconds(
-                        _draggedCue.Timestamp, Bpm, SnapRadiusSeconds);
-                    if (snapped.HasValue)
-                    {
-                        _draggedCue.Timestamp = snapped.Value;
-                        ShowSnapHighlight(snapped.Value);
-                    }
-                }
-
-                // Mark as user-edited so auto-analysis never overwrites it
-                if (_draggedCue != null) _draggedCue.Source = CueSource.User;
-                if (CueUpdatedCommand != null && CueUpdatedCommand.CanExecute(_draggedCue))
-                    CueUpdatedCommand.Execute(_draggedCue);
-                _draggedCue = null;
-            }
-            else if (_isDraggingSegment)
-            {
-                _isDraggingSegment = false;
-                if (SegmentUpdatedCommand != null && SegmentUpdatedCommand.CanExecute(_draggedSegment))
-                    SegmentUpdatedCommand.Execute(_draggedSegment);
-                _draggedSegment = null;
-            }
-            else if (_isDraggingPan)
-            {
-                // Negligible movement between press and release = a plain click, not a pan —
-                // audition that point of the track instead of doing nothing.
-                double releaseX = e.GetPosition(this).X;
-                if (Math.Abs(releaseX - _panDragStartX) < ClickMovementThreshold &&
-                    WaveformData is { DurationSeconds: > 0 } data)
-                {
-                    double clickedSeconds = XToFraction(releaseX, Bounds.Width) * data.DurationSeconds;
-                    if (PreviewSeekCommand?.CanExecute(clickedSeconds) == true) PreviewSeekCommand.Execute(clickedSeconds);
-                }
-            }
             _isDraggingProgress = false;
-            _isDraggingPan = false;
             e.Pointer.Capture(null);
-        }
-
-        /// <summary>
-        /// Briefly flashes a cyan snap-indicator line at <paramref name="positionSeconds"/>
-        /// to give the user visual feedback that a cue was snapped to the beat grid.
-        /// The indicator fades over ~500 ms.
-        /// </summary>
-        private void ShowSnapHighlight(double positionSeconds)
-        {
-            _snapHighlightSeconds = positionSeconds;
-            _snapHighlightAlpha = 1.0f;
-            _snapHighlightTimer?.Stop();
-            _snapHighlightTimer = new DispatcherTimer(
-                TimeSpan.FromMilliseconds(33),
-                DispatcherPriority.Render,
-                (s, ev) =>
-                {
-                    _snapHighlightAlpha -= 0.065f; // ~500 ms fade (1.0 / 0.065 ≈ 15 ticks × 33 ms)
-                    if (_snapHighlightAlpha <= 0f)
-                    {
-                        _snapHighlightAlpha = 0f;
-                        _snapHighlightSeconds = -1.0;
-                        _snapHighlightTimer?.Stop();
-                        _snapHighlightTimer = null;
-                    }
-                    InvalidateVisual();
-                });
-            _snapHighlightTimer.Start();
-            InvalidateVisual();
-        }
-
-        private double GetCueX(OrbitCue cue, WaveformAnalysisData data)
-        {
-            if (IsRolling)
-            {
-                double center = Bounds.Width / 2;
-                double pixelsPerSec = Bounds.Width / 10.0; // 10s window
-                return center + (cue.Timestamp - (Progress * data.DurationSeconds)) * pixelsPerSec;
-            }
-            return FractionToX(cue.Timestamp / data.DurationSeconds, Bounds.Width);
         }
 
         /// <summary>
@@ -973,10 +493,8 @@ namespace Singularity.Views.Avalonia.Controls
                 _lastRenderSize = Bounds.Size;
             }
 
-
             var width = Bounds.Width;
             var height = Bounds.Height;
-
 
             // 0. Draw Vocal Ghost Layer (Behind everything)
             var vocalCurve = VocalDensityCurve?.ToList();
@@ -984,9 +502,6 @@ namespace Singularity.Views.Avalonia.Controls
             {
                 context.Custom(new VocalGhostDrawOperation(new Rect(0, 0, width, height), vocalCurve, data.DurationSeconds, Progress, _ghostOpacity, IsRolling, ZoomLevel, ViewOffset));
             }
-
-            // 1. Draw Phrase Segments (Background blocks)
-            RenderPhraseSegments(context, width, height);
 
             if (IsRolling)
             {
@@ -1014,7 +529,7 @@ namespace Singularity.Views.Avalonia.Controls
             RenderCurves(context, width, height);
 
             // Draw hover seek cursor (semi-transparent white line, only when not dragging)
-            if (_hoverX >= 0 && !_isDraggingProgress && !_isDraggingCue)
+            if (_hoverX >= 0 && !_isDraggingProgress)
             {
                 var hoverPen = new Pen(new SolidColorBrush(Colors.White, 0.35), 1);
                 context.DrawLine(hoverPen, new Point(_hoverX, 0), new Point(_hoverX, height));
@@ -1050,41 +565,7 @@ namespace Singularity.Views.Avalonia.Controls
                 context.DrawLine(new Pen(PlayheadBrush ?? Brushes.White, 2), new Point(playheadX, 0), new Point(playheadX, height));
             }
 
-            // Trigger-point marker (Mix Transition Editor) — a persistent flag distinct from the
-            // playhead, so "where does this side's mix start/end" stays visible regardless of
-            // playback state.
-            if (!IsRolling && TriggerPointSeconds.HasValue && data.DurationSeconds > 0)
-            {
-                double triggerX = FractionToX(TriggerPointSeconds.Value / data.DurationSeconds, width);
-                if (triggerX >= -1 && triggerX <= width + 1)
-                {
-                    var markerBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00)); // amber — distinct from the white playhead
-                    context.DrawLine(new Pen(markerBrush, 2), new Point(triggerX, 0), new Point(triggerX, height));
-                    const double flagSize = 8;
-                    var flag = new StreamGeometry();
-                    using (var ctx = flag.Open())
-                    {
-                        ctx.BeginFigure(new Point(triggerX, 0), true);
-                        ctx.LineTo(new Point(triggerX + flagSize, flagSize * 0.6));
-                        ctx.LineTo(new Point(triggerX, flagSize * 1.2));
-                        ctx.EndFigure(true);
-                    }
-                    context.DrawGeometry(markerBrush, null, flag);
-                }
-            }
 
-            RenderCues(context, width, height);
-
-            // Snap indicator: brief cyan glow fades after magnetic snap
-            if (_snapHighlightSeconds >= 0 && WaveformData != null &&
-                WaveformData.DurationSeconds > 0 && _snapHighlightAlpha > 0)
-            {
-                double snapX = (_snapHighlightSeconds / WaveformData.DurationSeconds) * width;
-                var glowBrush = new SolidColorBrush(Color.FromRgb(0, 207, 255), _snapHighlightAlpha * 0.25f);
-                context.DrawRectangle(glowBrush, null, new Rect(snapX - 4, 0, 8, height));
-                var linePen = new Pen(new SolidColorBrush(Color.FromRgb(0, 207, 255), _snapHighlightAlpha), 2);
-                context.DrawLine(linePen, new Point(snapX, 0), new Point(snapX, height));
-            }
         }
 
         private void UpdateBitmapCache(Size size)
@@ -1207,8 +688,6 @@ namespace Singularity.Views.Avalonia.Controls
             context.DrawGeometry(null, isActive ? StaticPlayedPen : StaticBasePen, geom);
         }
 
-
-
         // Optimzied TrueRGB: Renders FULL waveform with specific opacity/brightness
         private void RenderTrueRgb(DrawingContext context, WaveformAnalysisData data, double width, double height, double mid, int samples, double step, byte[] low, byte[] midB, byte[] high, bool isRolling, double currentXOffset = 0, bool isActive = true, double zoom = 1.0)
         {
@@ -1221,9 +700,6 @@ namespace Singularity.Views.Avalonia.Controls
             int targetColumns = Math.Max(1, (int)(width * Math.Max(1.0, zoom)));
             int stride = Math.Max(1, samples / targetColumns);
             
-            // Segmented Energy Tinting (Phase 25)
-            var energyList = SegmentedEnergy?.ToList();
-            var cuesList = Cues?.OrderBy(c => c.Timestamp).ToList();
             double duration = data.DurationSeconds > 0 ? data.DurationSeconds : samples / 100.0;
 
             // Palette — Neon (default) or Classic RGB, per the Waveform Appearance setting.
@@ -1253,19 +729,7 @@ namespace Singularity.Views.Avalonia.Controls
                 double x = (i * step) + currentXOffset;
                 if (x < -step || x > width + step) continue;
 
-                    // Resolve Energy Tint
-                    float energyTint = 0.5f; // Neutral 5
-                    if (energyList != null && cuesList != null)
-                    {
-                        double sec = (i / (double)samples) * duration;
-                        int segmentIdx = 0;
-                        for (int j = 0; j < cuesList.Count; j++)
-                        {
-                            if (sec >= cuesList[j].Timestamp) segmentIdx = j;
-                            else break;
-                        }
-                        if (segmentIdx < energyList.Count) energyTint = energyList[segmentIdx] / 10.0f;
-                    }
+                    float energyTint = 0.5f; // Neutral
 
                     // Intensity-based blending
                     double l = low[i] / 255.0;
@@ -1402,97 +866,6 @@ namespace Singularity.Views.Avalonia.Controls
             }
         }
 
-        // Caches RenderPhraseSegments' sorted-by-start list, keyed by reference to the source
-        // IEnumerable — PhraseSegments only gets reassigned when the underlying data actually
-        // changes, so a reference-equality check is enough to skip re-sorting. Without this, every
-        // single render call re-sorted and reallocated the list, including every hover-triggered
-        // InvalidateVisual() from OnPointerMoved (segments don't change between hover frames).
-        private System.Collections.Generic.IEnumerable<PhraseSegment>? _sortedPhraseSegmentsSource;
-        private List<PhraseSegment>? _sortedPhraseSegmentsCache;
-
-        private void RenderPhraseSegments(DrawingContext context, double width, double height)
-        {
-            if (!ShowPhraseSections) return;
-
-            var segments = PhraseSegments;
-            var data = WaveformData;
-            if (segments == null || data == null || data.DurationSeconds <= 0) return;
-
-            if (Bpm > 0)
-            {
-                double phraseSeconds = (16d * 4d * 60d) / Bpm;
-                if (phraseSeconds > 0)
-                {
-                    for (double t = 0; t < data.DurationSeconds; t += phraseSeconds)
-                    {
-                        double gridX = (t / data.DurationSeconds) * width;
-                        context.DrawLine(PhraseGridPen, new Point(gridX, 0), new Point(gridX, height));
-                    }
-                }
-            }
-
-            List<PhraseSegment> sorted;
-            if (ReferenceEquals(segments, _sortedPhraseSegmentsSource) && _sortedPhraseSegmentsCache != null)
-            {
-                sorted = _sortedPhraseSegmentsCache;
-            }
-            else
-            {
-                sorted = System.Linq.Enumerable.OrderBy(segments, s => s.Start).ToList();
-                _sortedPhraseSegmentsSource = segments;
-                _sortedPhraseSegmentsCache = sorted;
-            }
-            for (int i = 0; i < sorted.Count; i++)
-            {
-                var s = sorted[i];
-                double x = (s.Start / data.DurationSeconds) * width;
-                double nextX = width;
-
-                if (i < sorted.Count - 1)
-                    nextX = (sorted[i + 1].Start / data.DurationSeconds) * width;
-
-                if (x >= width || nextX <= 0) continue;
-
-                var (brush, labelColor) = ResolvePhraseVisuals(s);
-                context.DrawRectangle(brush, null, new Rect(x, 0, Math.Max(0, nextX - x), height));
-
-                if (IsEditing)
-                {
-                    var handleBrush = new SolidColorBrush(labelColor, 0.85f);
-                    var handlePen = new Pen(handleBrush, 2);
-
-                    context.DrawRectangle(handleBrush, null, new Rect(x - HandleWidth / 2, 0, HandleWidth, 15));
-                    context.DrawLine(handlePen, new Point(x, 15), new Point(x, height));
-
-                    context.DrawRectangle(handleBrush, null, new Rect(nextX - HandleWidth / 2, height - 15, HandleWidth, 15));
-                    context.DrawLine(handlePen, new Point(nextX, 0), new Point(nextX, height - 15));
-                }
-
-                var typeface = new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
-                var formattedText = new FormattedText(s.Label.ToUpper(), System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 9, new SolidColorBrush(labelColor, 0.72f));
-                context.DrawText(formattedText, new Point(x + 4, height - formattedText.Height - 4));
-            }
-        }
-
-        private static (IBrush Brush, Color LabelColor) ResolvePhraseVisuals(PhraseSegment segment)
-        {
-            var label = segment.Label ?? string.Empty;
-
-            if (label.Contains("intro", StringComparison.OrdinalIgnoreCase))
-                return (IntroPhraseBrush, Color.Parse("#7FB3FF"));
-            if (label.Contains("build", StringComparison.OrdinalIgnoreCase) || label.Contains("riser", StringComparison.OrdinalIgnoreCase))
-                return (BuildPhraseBrush, Color.Parse("#FFB347"));
-            if (label.Contains("drop", StringComparison.OrdinalIgnoreCase) || label.Contains("chorus", StringComparison.OrdinalIgnoreCase))
-                return (DropPhraseBrush, Color.Parse("#FF6A7A"));
-            if (label.Contains("break", StringComparison.OrdinalIgnoreCase) || label.Contains("bridge", StringComparison.OrdinalIgnoreCase))
-                return (BreakPhraseBrush, Color.Parse("#C084FC"));
-            if (label.Contains("outro", StringComparison.OrdinalIgnoreCase))
-                return (OutroPhraseBrush, Color.Parse("#AAB7C4"));
-
-            var parsed = !string.IsNullOrWhiteSpace(segment.Color) ? Color.Parse(segment.Color) : Color.Parse("#708090");
-            return (new SolidColorBrush(parsed, 0.16f), parsed);
-        }
-
         private void RenderCurves(DrawingContext context, double width, double height)
         {
             var energy = EnergyCurve;
@@ -1534,109 +907,6 @@ namespace Singularity.Views.Avalonia.Controls
             context.DrawGeometry(null, new Pen(brush, 1.5, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), geom);
         }
 
-        private void RenderCues(DrawingContext context, double width, double height)
-        {
-            var cues = Cues;
-            var data = WaveformData;
-            if (cues == null || data == null || data.DurationSeconds <= 0) return;
-
-            var typeface = new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
-
-            // Loop regions first (their in/out lines + label are wide apart by nature — the
-            // collision problem below is specific to regular point cues, which cluster tightly
-            // right before a drop).
-            foreach (var cue in cues)
-            {
-                if (!(cue.IsLoop && cue.LoopEndSeconds > cue.Timestamp)) continue;
-                double x = GetCueX(cue, data);
-                if (x > width) continue;
-
-                var color = Color.Parse(cue.Color ?? "#FFFFFF");
-                double xEnd = FractionToX(cue.LoopEndSeconds / data.DurationSeconds, width);
-                if (x < 0) x = 0;
-                if (xEnd > width) xEnd = width;
-                double bandWidth = xEnd - x;
-                if (bandWidth > 0)
-                {
-                    context.DrawRectangle(new SolidColorBrush(color, 0.18), null, new Rect(x, 0, bandWidth, height));
-                    context.DrawLine(new Pen(new SolidColorBrush(color, 1.0), 2), new Point(x, 0), new Point(x, height));
-                    context.DrawLine(new Pen(new SolidColorBrush(color, 0.7), 2), new Point(xEnd, 0), new Point(xEnd, height));
-                    var ft = new FormattedText(cue.Name ?? "Loop", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 10, new SolidColorBrush(color));
-                    context.DrawRectangle(new SolidColorBrush(Colors.Black, 0.6), null, new Rect(x + 4, 2, ft.Width + 4, ft.Height));
-                    context.DrawText(ft, new Point(x + 6, 2));
-                }
-            }
-
-            // Regular cue points: draw every vertical line first, at its true timestamp — line
-            // position must never move to make room for a label. Label PLACEMENT is a separate
-            // pass afterward, sorted left-to-right regardless of the Cues collection's own order,
-            // so tier assignment is stable and cues that cluster right before a drop (the classic
-            // "32 Beats to Drop 1" / "16 Beats to Drop 1" / "Drop 1" trio, a few seconds apart)
-            // stagger onto separate rows instead of stacking into illegible mush.
-            var regular = new List<(double X, OrbitCue Cue, Color Color)>();
-            foreach (var cue in cues)
-            {
-                if (cue.IsLoop && cue.LoopEndSeconds > cue.Timestamp) continue;
-                double x = GetCueX(cue, data);
-                if (x > width || x < 0) continue;
-
-                var color = Color.Parse(cue.Color ?? "#FFFFFF");
-                bool suggested = cue.IsSuggested;
-                context.DrawLine(new Pen(new SolidColorBrush(color, suggested ? 1.0 : 0.8), suggested ? 3 : 2), new Point(x, 0), new Point(x, height));
-                regular.Add((x, cue, color));
-            }
-
-            const double tierHeight = 13.0;
-            const int maxTiers = 3;
-            const double labelGap = 4.0;
-            var tierRightEdge = new double[maxTiers];
-            for (int i = 0; i < maxTiers; i++) tierRightEdge[i] = double.NegativeInfinity;
-
-            foreach (var (x, cue, color) in regular.OrderBy(c => c.X))
-            {
-                bool suggested = cue.IsSuggested;
-                var label = ShortenApproachMarkerLabel(cue.Name ?? cue.Role.ToString());
-                if (suggested) label = $"★ {label}";
-
-                IBrush labelBrush = suggested ? Brushes.Gold : new SolidColorBrush(color);
-                var ft = new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 10, labelBrush);
-
-                int tier = 0;
-                while (tier < maxTiers - 1 && x < tierRightEdge[tier] + labelGap) tier++;
-
-                double labelX = x + 4;
-                if (labelX < tierRightEdge[tier] + labelGap) labelX = tierRightEdge[tier] + labelGap;
-
-                double y = 2 + tier * tierHeight;
-
-                // Micro-stem: only needed when the label had to slide sideways to dodge a
-                // collision — a thin connector back to the cue's true x position, so an offset
-                // label still reads as "belongs to that line", not "belongs to wherever it landed".
-                if (labelX > x + 4 + 0.5)
-                {
-                    context.DrawLine(new Pen(new SolidColorBrush(color, 0.5), 1),
-                        new Point(x, y + ft.Height), new Point(labelX, y + ft.Height));
-                }
-
-                context.DrawRectangle(new SolidColorBrush(suggested ? Color.Parse("#553D2E") : Colors.Black, suggested ? 0.85 : 0.6), null, new Rect(labelX, y, ft.Width + 4, ft.Height));
-                context.DrawText(ft, new Point(labelX + 2, y));
-
-                tierRightEdge[tier] = labelX + ft.Width + 4;
-            }
-        }
-
-        /// <summary>CueGenerationService's real schema labels the bars-out-from-a-drop approach
-        /// markers "16 Bars to Drop 1" / "8 Bars to Drop 1" — descriptive, but three of these
-        /// (the two approach markers plus the actual "Drop 1" cue they lead into) land within a
-        /// few seconds of each other, which is exactly the case RenderCues most needs to keep
-        /// legible. Shortens the pattern to DJ shorthand ("-16", "-8"); leaves the destination
-        /// cue's own label ("Drop 1") untouched — that one still needs its full name.</summary>
-        private static string ShortenApproachMarkerLabel(string label)
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(
-                label, @"^(\d+)\s+(?:Bars?|Beats?)\s+to\s+.+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            return match.Success ? $"-{match.Groups[1].Value}" : label;
-        }
     }
 
     public class VocalGhostDrawOperation : ICustomDrawOperation

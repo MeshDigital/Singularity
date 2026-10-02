@@ -10,13 +10,6 @@ public enum PageType
     Settings,
     Import,
     TheaterMode,
-    Analysis,
     NowPlaying,
-    Decks,
-    Timeline,
-    Stems,
-    Workstation,
-    CueForge,
-    Users,
-    FlowBuilder
+    Users
 }

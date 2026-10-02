@@ -315,26 +315,6 @@
                     </Border>
                 </Grid>
 
-                <!-- Genre Galaxy (Phase 12.8 -> SkiaSharp Upgrade) -->
-                <Border Classes="glass" Padding="20" Height="220" Margin="0,0,0,4" ClipToBounds="True">
-                    <Grid RowDefinitions="Auto,*">
-                        <!-- SkiaSharp Animated Canvas -->
-                        <controls:GenreGalaxyCanvas Grid.Row="0" Grid.RowSpan="2"
-                                                     Genres="{Binding TopGenres}"
-                                                     SelectGenreCommand="{Binding SelectGenreCommand}"
-                                                     IsVisible="{Binding HasTopGenres}"
-                                                     HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="-20"/>
-
-                        <StackPanel Grid.Row="0" Grid.RowSpan="2" VerticalAlignment="Center" HorizontalAlignment="Center"
-                                    Spacing="6" IsVisible="{Binding !HasTopGenres}">
-                            <TextBlock Text="🌌" FontSize="28" HorizontalAlignment="Center" Opacity="0.5"/>
-                            <TextBlock Text="No genre data yet" FontSize="13" FontWeight="SemiBold" Foreground="#808080" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Scan or enrich your library to populate this view" FontSize="11" Foreground="#606060" HorizontalAlignment="Center"/>
-                        </StackPanel>
-
-                        <TextBlock Grid.Row="0" Text="GENRE GALAXY" FontSize="11" FontWeight="Bold" Foreground="#606060" LetterSpacing="1" Margin="0,0,0,16"/>
-                    </Grid>
-                </Border>
                 </StackPanel>
 
                 <!-- Discover: Recently Added / Downloaded / For You, unified into one tabbed panel -->
@@ -536,9 +516,6 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Panel>
-                                                <!-- Analysis Forensic Cockpit View -->
-                                                <controls:SonicTelemetryCard IsVisible="{Binding Type, Converter={StaticResource EqualityConverter}, ConverterParameter={x:Static Models:OperationType.Analysis}}"
-                                                                           DataContext="{Binding Track}"/>
 
                                                 <!-- Standard Download/Search View -->
                                                 <Border IsVisible="{Binding Type, Converter={StaticResource EqualityConverter}, ConverterParameter={x:Static Models:OperationType.Download}}"

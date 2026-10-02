@@ -10,7 +10,6 @@ using Singularity.Services;
 using Singularity.Services.Models;
 using Singularity.Services.Platform;
 using Singularity.Views; // For AsyncRelayCommand
-using Singularity.ViewModels.Settings;
 using Avalonia.Threading;
 
 using System.Collections.ObjectModel; // Added
@@ -588,20 +587,6 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public bool WaveformShowPhraseSections
-    {
-        get => _config.WaveformShowPhraseSections;
-        set
-        {
-            if (_config.WaveformShowPhraseSections != value)
-            {
-                _config.WaveformShowPhraseSections = value;
-                OnPropertyChanged();
-                SaveSettings();
-            }
-        }
-    }
-
     public bool WaveformShowBeatGrid
     {
         get => _config.WaveformShowBeatGrid;
@@ -645,9 +630,6 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
 
     private IEnumerable<float>? _waveformPreviewVocalCurve;
     public IEnumerable<float> WaveformPreviewVocalCurve => _waveformPreviewVocalCurve ??= BuildWaveformPreviewVocalCurve();
-
-    private List<PhraseSegment>? _waveformPreviewPhraseSegments;
-    public IEnumerable<PhraseSegment> WaveformPreviewPhraseSegments => _waveformPreviewPhraseSegments ??= BuildWaveformPreviewPhraseSegments();
 
     private const int WaveformPreviewSampleCount = 300;
     private const double WaveformPreviewDurationSeconds = 30.0;
@@ -712,14 +694,6 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
         }
         return curve;
     }
-
-    private static List<PhraseSegment> BuildWaveformPreviewPhraseSegments() => new()
-    {
-        new PhraseSegment { Label = "Intro", Start = 0f, Duration = 6f },
-        new PhraseSegment { Label = "Build", Start = 6f, Duration = 6f },
-        new PhraseSegment { Label = "Drop", Start = 12f, Duration = 10f },
-        new PhraseSegment { Label = "Outro", Start = 22f, Duration = 8f },
-    };
 
     public int AutoDownloadInitialWaitMs
     {
@@ -1790,9 +1764,6 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
 
     public ICommand RefreshShareNowCommand { get; private set; } = null!;
 
-    // ── Keyboard Mapping sub-ViewModel (Epic #119) ────────────────────────────
-    public KeyboardMappingsViewModel KeyboardMappings { get; private set; } = null!;
-
     // Soulseek Connection Commands
     public ICommand SoulseekConnectCommand { get; private set; } = null!;
     public ICommand SoulseekDisconnectCommand { get; private set; } = null!;
@@ -1821,7 +1792,6 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
         ISoulseekAdapter soulseek,
         ISoulseekCredentialService credentialService,
         IConnectionLifecycleService lifecycle,
-        KeyboardMappingsViewModel keyboardMappings,
         IDbContextFactory<AppDbContext>? dbFactory = null,
         ILibraryService? libraryService = null,
         IDialogService? dialogService = null,
@@ -1844,7 +1814,6 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
         _dbFactory = dbFactory;
         _lifecycle = lifecycle;
         _libraryService = libraryService;
-        KeyboardMappings = keyboardMappings;
         _dialogService = dialogService;
 
         // Ensure default Client ID is set if empty

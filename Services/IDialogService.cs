@@ -98,7 +98,5 @@ public interface IDialogService
     /// <returns>Selected folder path or null if cancelled.</returns>
     Task<string?> OpenFolderDialogAsync(string title);
 
-    Task ShowSuggestedFlowImpactAsync(SuggestedFlowImpactViewModel vm);
-
     Task ShowSpectralForensicsAsync(UnifiedTrackViewModel vm);
 }

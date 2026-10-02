@@ -74,15 +74,8 @@
                 <Border CornerRadius="6" ClipToBounds="True" Background="#0D0D0D">
                     <controls:WaveformControl
                         WaveformData="{Binding WaveformData}"
-                        Cues="{Binding Cues}"
-                        Height="56"
-                        IsEditing="False"/>
+                        Height="56"/>
                 </Border>
-                <controls:PhraseSegmentStrip
-                    Segments="{Binding PhraseSegments}"
-                    Height="8"
-                    IsVisible="{Binding HasPhraseSegments}"
-                    ToolTip.Tip="Track structure: Intro / Build / Drop / Outro"/>
             </StackPanel>
 
             <!-- ── Row 2: Tabs ──────────────────────────────────────── -->
@@ -166,39 +159,6 @@
 
                             <Separator Background="#252526" Height="1"/>
 
-                            <!-- Cue Points -->
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="CUE POINTS" FontSize="10" FontWeight="Black" Foreground="#444"/>
-                                <ItemsControl ItemsSource="{Binding Cues}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <StackPanel Spacing="4"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="#15FFFFFF" CornerRadius="6" Padding="10,6">
-                                                <Grid ColumnDefinitions="22,*,Auto">
-                                                    <Border Grid.Column="0" Width="12" Height="12"
-                                                            CornerRadius="6" Background="{Binding Color}"
-                                                            VerticalAlignment="Center"/>
-                                                    <TextBox Grid.Column="1" Text="{Binding Name}"
-                                                             FontSize="11" Background="Transparent"
-                                                             BorderThickness="0" Foreground="#CCC"
-                                                             Padding="0" VerticalAlignment="Center"/>
-                                                    <TextBlock Grid.Column="2"
-                                                               Text="{Binding Timestamp, StringFormat='{}{0:0.0}s'}"
-                                                               FontSize="10" Foreground="#888"
-                                                               VerticalAlignment="Center"
-                                                               FontFamily="JetBrains Mono, Consolas, monospace"/>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <TextBlock Text="No cue points" FontSize="11" Foreground="#444"
-                                           IsVisible="{Binding !HasCues}"/>
-                            </StackPanel>
 
                             <!-- Source provenance -->
                             <StackPanel Spacing="6"
@@ -252,138 +212,13 @@
                                 </Grid>
                             </StackPanel>
 
-                            <!-- Camelot Wheel -->
-                            <controls:CamelotWheelControl
-                                SelectedKey="{Binding CamelotDisplay}"
-                                KeyClickedCommand="{Binding FilterByKeyCommand}"
-                                Height="150"
-                                HorizontalAlignment="Center"
-                                IsVisible="{Binding HasKey}"
-                                Cursor="Hand"
-                                ToolTip.Tip="Click a Camelot position to filter the library to that key"/>
 
                             <Separator Background="#252526" Height="1"/>
 
-                            <!-- Sonic Profile bars -->
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="SONIC PROFILE" FontSize="10" FontWeight="Black" Foreground="#444"/>
-                                <Grid ColumnDefinitions="80,*,40">
-                                    <TextBlock Text="Energy" FontSize="10" Foreground="#666" VerticalAlignment="Center"/>
-                                    <ProgressBar Grid.Column="1" Value="{Binding Energy}" Minimum="0" Maximum="1"
-                                                 Height="6" Margin="4,0" Foreground="#E05C5C" Background="#1A1A1A"/>
-                                    <TextBlock Grid.Column="2" Text="{Binding Energy, StringFormat={}{0:P0}}"
-                                               FontSize="10" Foreground="#666" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                </Grid>
-                                <Grid ColumnDefinitions="80,*,40">
-                                    <TextBlock Text="Danceability" FontSize="10" Foreground="#666" VerticalAlignment="Center"/>
-                                    <ProgressBar Grid.Column="1" Value="{Binding Danceability}" Minimum="0" Maximum="1"
-                                                 Height="6" Margin="4,0" Foreground="#4EC9B0" Background="#1A1A1A"/>
-                                    <TextBlock Grid.Column="2" Text="{Binding Danceability, StringFormat={}{0:P0}}"
-                                               FontSize="10" Foreground="#666" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                </Grid>
-                            </StackPanel>
 
                             <Separator Background="#252526" Height="1"/>
 
-                            <!-- AI Genre & Mood (DiscogsEffnet embedding → MTG-Jamendo genre head +
-                                 5 independent mood classifier heads, run in-process via ONNX) -->
-                            <StackPanel Spacing="10" IsVisible="{Binding HasVibeData}">
-                                <TextBlock Text="GENRE &amp; MOOD" FontSize="10" FontWeight="Black" Foreground="#444"/>
 
-                                <!-- Ranked AI genre classification (top 3) -->
-                                <ItemsControl ItemsSource="{Binding TopGenres}" IsVisible="{Binding HasTopGenres}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <StackPanel Spacing="6"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid ColumnDefinitions="80,*,40">
-                                                <TextBlock Text="{Binding Label}" FontSize="10" Foreground="#999"
-                                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                <ProgressBar Grid.Column="1" Value="{Binding Confidence}" Minimum="0" Maximum="1"
-                                                             Height="6" Margin="4,0" Foreground="#CE93D8" Background="#1A1A1A"/>
-                                                <TextBlock Grid.Column="2" Text="{Binding Confidence, StringFormat={}{0:P0}}"
-                                                           FontSize="10" Foreground="#666" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <!-- Legacy fallback: a genre label with no ranked breakdown stored -->
-                                <Grid ColumnDefinitions="80,*" IsVisible="{Binding ShowLegacyGenreFallback}">
-                                    <TextBlock Text="Genre" FontSize="10" Foreground="#666" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding LegacyGenreLabel}" FontSize="11"
-                                               Foreground="#CCC" Margin="4,0" VerticalAlignment="Center"/>
-                                </Grid>
-
-                                <!-- Mood breakdown: 5 independent classifier scores, not one winner -->
-                                <StackPanel Spacing="6" IsVisible="{Binding HasMoodBreakdown}">
-                                    <Grid ColumnDefinitions="80,*,40">
-                                        <TextBlock Text="Party" FontSize="10" Foreground="#666" VerticalAlignment="Center"/>
-                                        <ProgressBar Grid.Column="1" Value="{Binding MoodPartyNorm}" Minimum="0" Maximum="1"
-                                                     Height="6" Margin="4,0" Foreground="#E0A85C" Background="#1A1A1A"/>
-                                        <TextBlock Grid.Column="2" Text="{Binding MoodPartyNorm, StringFormat={}{0:P0}}"
-                                                   FontSize="10" Foreground="#666" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                    <Grid ColumnDefinitions="80,*,40">
-                                        <TextBlock Text="Aggressive" FontSize="10" Foreground="#666" VerticalAlignment="Center"/>
-                                        <ProgressBar Grid.Column="1" Value="{Binding MoodAggressiveNorm}" Minimum="0" Maximum="1"
-                                                     Height="6" Margin="4,0" Foreground="#D65C5C" Background="#1A1A1A"/>
-                                        <TextBlock Grid.Column="2" Text="{Binding MoodAggressiveNorm, StringFormat={}{0:P0}}"
-                                                   FontSize="10" Foreground="#666" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                    <Grid ColumnDefinitions="80,*,40">
-                                        <TextBlock Text="Happy" FontSize="10" Foreground="#666" VerticalAlignment="Center"/>
-                                        <ProgressBar Grid.Column="1" Value="{Binding MoodHappyNorm}" Minimum="0" Maximum="1"
-                                                     Height="6" Margin="4,0" Foreground="#D6C24E" Background="#1A1A1A"/>
-                                        <TextBlock Grid.Column="2" Text="{Binding MoodHappyNorm, StringFormat={}{0:P0}}"
-                                                   FontSize="10" Foreground="#666" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                    <Grid ColumnDefinitions="80,*,40">
-                                        <TextBlock Text="Relaxed" FontSize="10" Foreground="#666" VerticalAlignment="Center"/>
-                                        <ProgressBar Grid.Column="1" Value="{Binding MoodRelaxedNorm}" Minimum="0" Maximum="1"
-                                                     Height="6" Margin="4,0" Foreground="#5CB8E0" Background="#1A1A1A"/>
-                                        <TextBlock Grid.Column="2" Text="{Binding MoodRelaxedNorm, StringFormat={}{0:P0}}"
-                                                   FontSize="10" Foreground="#666" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                    <Grid ColumnDefinitions="80,*,40">
-                                        <TextBlock Text="Sad" FontSize="10" Foreground="#666" VerticalAlignment="Center"/>
-                                        <ProgressBar Grid.Column="1" Value="{Binding MoodSadNorm}" Minimum="0" Maximum="1"
-                                                     Height="6" Margin="4,0" Foreground="#6A7EC9" Background="#1A1A1A"/>
-                                        <TextBlock Grid.Column="2" Text="{Binding MoodSadNorm, StringFormat={}{0:P0}}"
-                                                   FontSize="10" Foreground="#666" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                </StackPanel>
-
-                                <TextBlock Text="{Binding GenresDisplay, StringFormat='Tagged: {0}'}" FontSize="11" Foreground="#555" TextWrapping="Wrap"
-                                           IsVisible="{Binding GenresDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                            </StackPanel>
-
-                            <!-- A10 pair snapshot (only when neighbor context exists) -->
-                            <StackPanel Spacing="8" IsVisible="{Binding HasInspectorA10PairwiseContext}">
-                                <Separator Background="#252526" Height="1"/>
-                                <TextBlock Text="A10 PAIR" FontSize="10" FontWeight="Black" Foreground="#444"/>
-                                <Border Background="#12FFFFFF" CornerRadius="6" Padding="10,8">
-                                    <StackPanel Spacing="6">
-                                        <TextBlock Text="{Binding InspectorA10PairContextLabel}"
-                                                   FontSize="11" Foreground="#B8B8B8" TextWrapping="Wrap"/>
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <TextBlock Text="A10" FontSize="10" FontWeight="SemiBold" Foreground="#6AA9FF"/>
-                                            <TextBlock Text="{Binding InspectorA10OverallScore, StringFormat={}{0:P0}}" FontSize="10" Foreground="#E6E6E6"/>
-                                            <TextBlock Text="H" FontSize="10" FontWeight="SemiBold" Foreground="#CE93D8"/>
-                                            <TextBlock Text="{Binding InspectorA10HarmonicScore, StringFormat={}{0:P0}}" FontSize="10" Foreground="#E6E6E6"/>
-                                            <TextBlock Text="B" FontSize="10" FontWeight="SemiBold" Foreground="#9CDCFE"/>
-                                            <TextBlock Text="{Binding InspectorA10BeatScore, StringFormat={}{0:P0}}" FontSize="10" Foreground="#E6E6E6"/>
-                                            <TextBlock Text="D" FontSize="10" FontWeight="SemiBold" Foreground="#4EC9B0"/>
-                                            <TextBlock Text="{Binding InspectorA10DropScore, StringFormat={}{0:P0}}" FontSize="10" Foreground="#E6E6E6"/>
-                                        </StackPanel>
-                                        <TextBlock Text="{Binding InspectorA10ReasonTags}" FontSize="10" Foreground="#8A8A8A" TextWrapping="Wrap"
-                                                   IsVisible="{Binding InspectorA10ReasonTags, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
 
                             <!-- Deep Analysis (collapsible) -->
                             <Expander Header="Deep Analysis" IsExpanded="False" Padding="0" Margin="0"
@@ -413,7 +248,6 @@
                                     <Separator Background="#252526" Height="1"/>
                                     <TextBlock Text="ENERGY CURVE" FontSize="10" FontWeight="Black" Foreground="#444"/>
                                     <Border CornerRadius="4" Height="36" ClipToBounds="True">
-                                        <controls:EnergyCurveBar Points="{Binding EnergyCurvePoints}" Segments="{Binding PhraseSegments}"/>
                                     </Border>
                                     <Separator Background="#252526" Height="1"/>
                                     <TextBlock Text="VOCAL ANALYSIS" FontSize="10" FontWeight="Black" Foreground="#444"/>
@@ -460,15 +294,6 @@
                             <StackPanel Spacing="8" IsVisible="{Binding IsCompleted}">
                                 <TextBlock Text="FILE OPERATIONS" FontSize="10" FontWeight="Black" Foreground="#444" Margin="0,0,0,4"/>
 
-                                <Button Command="{Binding OpenWorkstationCommand}"
-                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                                        Background="#252526" Foreground="#CCC"
-                                        Padding="14,10" CornerRadius="6">
-                                    <StackPanel Orientation="Horizontal" Spacing="12">
-                                        <TextBlock Text="🎚" FontSize="16"/>
-                                        <TextBlock Text="Open in Workstation" FontSize="13"/>
-                                    </StackPanel>
-                                </Button>
 
                                 <Button Command="{Binding RevealFileCommand}"
                                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
@@ -497,19 +322,6 @@
                                 </StackPanel>
                             </Button>
 
-                            <!-- Analysis -->
-                            <StackPanel Spacing="8" IsVisible="{Binding IsCompleted}" Margin="0,4,0,0">
-                                <TextBlock Text="ANALYSIS" FontSize="10" FontWeight="Black" Foreground="#444" Margin="0,0,0,4"/>
-                                <Button Command="{Binding AnalyzeTrackCommand}"
-                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                                        Background="#252526" Foreground="#CCC"
-                                        Padding="14,10" CornerRadius="6">
-                                    <StackPanel Orientation="Horizontal" Spacing="12">
-                                        <TextBlock Text="🔬" FontSize="16"/>
-                                        <TextBlock Text="Re-analyse Track" FontSize="13"/>
-                                    </StackPanel>
-                                </Button>
-                            </StackPanel>
 
                             <Separator Background="#252526" Height="1" Margin="0,4"/>
 

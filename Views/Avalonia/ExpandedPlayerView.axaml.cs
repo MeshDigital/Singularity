@@ -165,10 +165,6 @@ public partial class ExpandedPlayerView : UserControl
             case Key.F:
                 Execute(_vm.ToggleTheaterModeCommand);
                 break;
-            case Key.V:
-                if (shift) _vm.PreviousVisualizerPresetCommand.Execute().Subscribe();
-                else _vm.CycleVisualizerPresetCommand.Execute().Subscribe();
-                break;
             default:
                 return;
         }

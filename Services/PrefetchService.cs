@@ -21,20 +21,17 @@ public sealed class PrefetchService
     private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
     private readonly DatabaseService _databaseService;
     private readonly AppConfig _appConfig;
-    private readonly TrackFingerprintBackfillService _fingerprintBackfillService;
     private readonly ILogger<PrefetchService> _logger;
 
     public PrefetchService(
         IDbContextFactory<AppDbContext> dbContextFactory,
         DatabaseService databaseService,
         AppConfig appConfig,
-        TrackFingerprintBackfillService fingerprintBackfillService,
         ILogger<PrefetchService> logger)
     {
         _dbContextFactory = dbContextFactory;
         _databaseService = databaseService;
         _appConfig = appConfig;
-        _fingerprintBackfillService = fingerprintBackfillService;
         _logger = logger;
     }
 
@@ -91,18 +88,6 @@ public sealed class PrefetchService
         item.BytesDownloaded = Math.Max(0, bytesDownloaded);
         item.CompletedAtUtc = DateTime.UtcNow;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-        if (!string.IsNullOrWhiteSpace(trackHash))
-        {
-            try
-            {
-                await _fingerprintBackfillService.BuildForTrackAsync(trackHash, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Prefetch completion fingerprint backfill failed for {TrackHash}", trackHash);
-            }
-        }
     }
 
     public async Task ClearAsync(CancellationToken cancellationToken = default)
