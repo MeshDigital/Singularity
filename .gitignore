@@ -95,7 +95,7 @@ Singularity_LEARNINGS.md
 SPOTIFY_PKCE_FLOW_ANALYSIS.md
 
 
-# AI models are large (~770 MB) and are NOT committed. Populate with:
+# The Demucs stem model (demucs-4s.onnx) is NOT committed. Populate with:
 #   pwsh ./Tools/fetch-models.ps1
 Tools/Essentia/models/
 
