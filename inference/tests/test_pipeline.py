@@ -171,3 +171,20 @@ def test_lrc_that_fits_nowhere_falls_back_to_transcription(tmp_path):
     result, events = run(cmd(tmp_path, lyrics=lrc, lyrics_kind=s.LyricsKind.SYNCED, language="en"), SilentVocals())
     assert STAGES.TRANSCRIPTION in [e.stage for e in events if isinstance(e, s.StageStartedEvent)]
     assert [[x.text for x in l.syllables] for l in result.lines] == [["la", "la"], ["na", "na"]]
+
+
+def test_octave_errors_are_folded_back_without_changing_note_names():
+    from singularity_inference.assemble import smooth_octaves
+
+    tones = [57, 59, 71, 57, None, 45, 60]  # 71 and 45 are octave errors around ~58
+    assert smooth_octaves(tones) == [57, 59, 59, 57, None, 57, 60]
+    assert all(a is None or (a - b) % 12 == 0 for a, b in zip(smooth_octaves(tones), tones) if b is not None)
+
+
+def test_sustained_vowel_extends_the_note_up_to_the_next_syllable():
+    track = PitchTrack(times_ms=[float(t) for t in range(0, 2000, 10)], hz=[220.0] * 200, confidence=[0.9] * 200)
+    track.hz[150:] = [0.0] * 50  # silence from 1500 ms
+    words = [[AlignedWord("one", 0, 200, 0.9), AlignedWord("two", 1000, 1100, 0.9)]]
+    a, b = build_lines(words, track, None)[0].syllables
+    assert a.end_ms == 1000 - 20      # held until just before "two"
+    assert b.end_ms == 1490           # held until the voice stops
