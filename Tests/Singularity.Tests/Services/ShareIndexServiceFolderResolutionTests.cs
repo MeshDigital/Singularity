@@ -20,7 +20,7 @@ namespace Singularity.Tests.Services;
 /// </summary>
 public sealed class ShareIndexServiceFolderResolutionTests : IDisposable
 {
-    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"ORBIT_ShareIndexTest_{Guid.NewGuid():N}");
+    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"SINGULARITY_ShareIndexTest_{Guid.NewGuid():N}");
 
     public ShareIndexServiceFolderResolutionTests() => Directory.CreateDirectory(_tempDir);
 

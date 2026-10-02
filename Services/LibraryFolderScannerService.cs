@@ -431,7 +431,7 @@ public class LibraryFolderScannerService
                 sampleRate = file.Properties.AudioSampleRate;
                 bitsPerSample = file.Properties.BitsPerSample;
 
-                // Trust a file-embedded BPM tag (written by Rekordbox/Serato/etc.) over ORBIT's own
+                // Trust a file-embedded BPM tag (written by Rekordbox/Serato/etc.) over Singularity's own
                 // Essentia analysis — confirmed this session that Essentia's beat tracker has a
                 // quantization bias on breakbeat/DNB content (two different tracks' raw estimates
                 // converged to 172.265xx to five decimal places, a fixed internal lag period, not a

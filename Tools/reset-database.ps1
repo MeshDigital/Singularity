@@ -1,10 +1,10 @@
 # Database Schema Update Script
 # This script helps update the database schema after code changes
 
-Write-Host "=== QMUSICSLSK Database Schema Update ===" -ForegroundColor Cyan
+Write-Host "=== Singularity Database Schema Update ===" -ForegroundColor Cyan
 Write-Host ""
 
-$dbPath = "$env:APPDATA\ORBIT\library.db"
+$dbPath = "$env:APPDATA\Singularity\library.db"
 
 if (Test-Path $dbPath) {
     Write-Host "Found existing database at: $dbPath" -ForegroundColor Yellow

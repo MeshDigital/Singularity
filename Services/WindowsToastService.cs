@@ -10,7 +10,7 @@ namespace Singularity.Services;
 /// Shell_NotifyIcon balloon API — Windows 10/11 render these as modern toasts automatically, no
 /// AppUserModelID/MSIX packaging registration required, unlike the WinRT toast APIs. Deliberately
 /// separate from <see cref="INotificationService"/>/<c>ToastRequestedEvent</c>, which is an
-/// in-app-only popup invisible whenever the ORBIT window isn't on screen — this exists specifically
+/// in-app-only popup invisible whenever the Singularity window isn't on screen — this exists specifically
 /// so peer chat messages are noticed even while the app is minimized or in the background.
 ///
 /// Owns a small tray icon purely as the anchor Shell_NotifyIcon requires for a balloon; it isn't a
@@ -193,7 +193,7 @@ public sealed class WindowsToastService : IDisposable
     }
 
     /// <summary>
-    /// Shows a real Windows toast, but only while the ORBIT window doesn't have focus — when it's
+    /// Shows a real Windows toast, but only while the Singularity window doesn't have focus — when it's
     /// focused/on-screen, the existing in-app toast already covers it, and popping both would be
     /// redundant. <paramref name="navigateUsername"/>/<paramref name="navigateRoomName"/> are
     /// optional — when set, clicking the balloon body navigates straight to that conversation/room

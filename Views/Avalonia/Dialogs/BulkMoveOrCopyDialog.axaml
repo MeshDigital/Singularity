@@ -19,11 +19,11 @@
         <!-- Mode choice -->
         <StackPanel Grid.Row="1" Spacing="12">
             <RadioButton GroupName="MoveCopy" Content="Move" IsChecked="{Binding !IsCopy}" Foreground="White" FontWeight="SemiBold"/>
-            <TextBlock Text="Relocates the file on disk and updates ORBIT's library path. Use this to reorganize your collection."
+            <TextBlock Text="Relocates the file on disk and updates Singularity's library path. Use this to reorganize your collection."
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="26,-6,0,0"/>
 
             <RadioButton GroupName="MoveCopy" Content="Copy" IsChecked="{Binding IsCopy}" Foreground="White" FontWeight="SemiBold" Margin="0,8,0,0"/>
-            <TextBlock Text="Duplicates the file to the destination for external use (e.g. staging a USB stick). ORBIT's library keeps pointing at the original."
+            <TextBlock Text="Duplicates the file to the destination for external use (e.g. staging a USB stick). Singularity's library keeps pointing at the original."
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="26,-6,0,0"/>
         </StackPanel>
 

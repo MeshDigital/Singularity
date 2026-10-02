@@ -190,7 +190,7 @@
                                          <MenuItem.Icon><TextBlock Text="📁"/></MenuItem.Icon>
                                      </MenuItem>
                                      <MenuItem Header="Library Health" Command="{Binding OpenLibraryHealthCommand}"
-                                               ToolTip.Tip="Disk usage, unplayed tracks, and files on disk ORBIT doesn't know about">
+                                               ToolTip.Tip="Disk usage, unplayed tracks, and files on disk Singularity doesn't know about">
                                          <MenuItem.Icon><TextBlock Text="🩺"/></MenuItem.Icon>
                                      </MenuItem>
                                      <MenuItem Header="Recently Deleted Playlists" Command="{Binding LoadDeletedProjectsCommand}"

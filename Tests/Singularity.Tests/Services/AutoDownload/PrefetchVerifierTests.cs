@@ -44,7 +44,7 @@ public class PrefetchVerifierTests
             Length = 330
         };
 
-        var filePath = Path.Combine(Path.GetTempPath(), $"orbit-prefetch-{Guid.NewGuid():N}.mp3");
+        var filePath = Path.Combine(Path.GetTempPath(), $"singularity-prefetch-{Guid.NewGuid():N}.mp3");
 
         try
         {
@@ -96,7 +96,7 @@ public class PrefetchVerifierTests
             Length = 246
         };
 
-        var filePath = Path.Combine(Path.GetTempPath(), $"orbit-prefetch-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(Path.GetTempPath(), $"singularity-prefetch-{Guid.NewGuid():N}");
 
         try
         {

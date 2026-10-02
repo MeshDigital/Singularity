@@ -13,7 +13,7 @@ public sealed record ShareIndexEntry(string LocalPath, long Size);
 
 /// <summary>
 /// Builds and caches a virtual-path -> local-file index from the configured share folders.
-/// This is the data source behind ORBIT's incoming Soulseek browse/search/directory-contents
+/// This is the data source behind Singularity's incoming Soulseek browse/search/directory-contents
 /// resolvers, download-enqueue validation and the share counts announced to the server.
 ///
 /// Rules (audited 2026-09-29 after a peer's leech check flagged this account):
@@ -181,7 +181,7 @@ public sealed class ShareIndexService
     }
 
     /// <summary>
-    /// Every folder ORBIT shares: all enabled Library Sources, plus the legacy single "Shared
+    /// Every folder Singularity shares: all enabled Library Sources, plus the legacy single "Shared
     /// Folder" and the download folder. Queries the DB directly since this runs from the Soulseek
     /// serving pipeline, independent of whether the Library Sources page has been opened.
     /// </summary>

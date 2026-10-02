@@ -5,7 +5,7 @@ namespace Singularity.ViewModels.Downloads;
 /// <summary>
 /// Minimal display contract shared by <see cref="DownloadRowViewModel"/> (live session rows) and
 /// <see cref="UnfindableTrackViewModel"/> (persisted OnHold rows) so both can render through one
-/// row template in the Download Center's Attention tab — the merge point for "why can't ORBIT
+/// row template in the Download Center's Attention tab — the merge point for "why can't Singularity
 /// find this track," previously split across two unrelated, independently-filtered UI sections
 /// (the runtime Failed/Stalled rows and the DB-driven Unfindable Tracks panel).
 /// </summary>

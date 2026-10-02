@@ -93,7 +93,7 @@ public partial class ErrorStreamWindow : Window, INotifyPropertyChanged
     {
         try
         {
-            var logDirectory = AppContext.GetData("Orbit.LogDirectory") as string;
+            var logDirectory = AppContext.GetData("Singularity.LogDirectory") as string;
 
             if (!string.IsNullOrWhiteSpace(logDirectory))
             {
@@ -164,7 +164,7 @@ public partial class ErrorStreamWindow : Window, INotifyPropertyChanged
                 {
                     Title = "Error Opening Logs",
                     Content = new TextBlock { 
-                        Text = $"Could not open logs folder: {ex.Message}\n\nLog directory detection failed. Please check manually in the application directory or %LOCALAPPDATA%\\ORBIT\\logs",
+                        Text = $"Could not open logs folder: {ex.Message}\n\nLog directory detection failed. Please check manually in the application directory or %LOCALAPPDATA%\\Singularity\\logs",
                         TextWrapping = TextWrapping.Wrap 
                     },
                     SizeToContent = SizeToContent.WidthAndHeight,
@@ -179,15 +179,15 @@ public partial class ErrorStreamWindow : Window, INotifyPropertyChanged
     {
         try
         {
-            var logDirectory = (AppContext.GetData("Orbit.LogDirectory") as string)
+            var logDirectory = (AppContext.GetData("Singularity.LogDirectory") as string)
                 ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Singularity", "logs");
 
             Directory.CreateDirectory(logDirectory);
 
-            var jsonPath = (AppContext.GetData("Orbit.RunJsonLogPath") as string)
+            var jsonPath = (AppContext.GetData("Singularity.RunJsonLogPath") as string)
                 ?? Path.Combine(logDirectory, $"run_{DateTime.Now:yyyyMMdd}.json");
 
-            var txtPath = (AppContext.GetData("Orbit.RunTxtLogPath") as string)
+            var txtPath = (AppContext.GetData("Singularity.RunTxtLogPath") as string)
                 ?? Path.Combine(logDirectory, $"run_{DateTime.Now:yyyyMMdd}.txt");
 
             var payload = new

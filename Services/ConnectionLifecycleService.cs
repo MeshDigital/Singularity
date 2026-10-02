@@ -314,7 +314,7 @@ public sealed class ConnectionLifecycleService : IConnectionLifecycleService, ID
                         _consecutiveLoginDrops, cooldownSecs);
                     _eventBus.Publish(new NotificationEvent(
                         "Connection Throttled",
-                        $"Soulseek server is rate-limiting login attempts ({_consecutiveLoginDrops}×). ORBIT will retry in {cooldownSecs / 60} min.",
+                        $"Soulseek server is rate-limiting login attempts ({_consecutiveLoginDrops}×). Singularity will retry in {cooldownSecs / 60} min.",
                         NotificationType.Warning,
                         TimeSpan.FromSeconds(10)));
                 }
@@ -400,7 +400,7 @@ public sealed class ConnectionLifecycleService : IConnectionLifecycleService, ID
             _logger.LogWarning("[LIFECYCLE] Session evicted by competing login (UNKNOWN_UNPLANNED_DROP_LOGGED_IN). Cooldown {Secs}s armed.", KickCooldownSeconds);
             _eventBus.Publish(new NotificationEvent(
                 "Session Conflict",
-                "Another Soulseek session is competing for your account. Close other Soulseek apps — ORBIT will retry automatically.",
+                "Another Soulseek session is competing for your account. Close other Soulseek apps — Singularity will retry automatically.",
                 NotificationType.Warning,
                 TimeSpan.FromSeconds(12)));
         }
@@ -580,7 +580,7 @@ public sealed class ConnectionLifecycleService : IConnectionLifecycleService, ID
                             _logger.LogWarning("[LIFECYCLE] Persistent session conflict — {Count} evictions. Extended cooldown 300s.", _reconnectRetryCount);
                             _eventBus.Publish(new NotificationEvent(
                                 "Persistent Session Conflict",
-                                $"ORBIT keeps getting evicted ({_reconnectRetryCount}×). Check for Soulseek running on another device or phone. Retrying in 5 min.",
+                                $"Singularity keeps getting evicted ({_reconnectRetryCount}×). Check for Soulseek running on another device or phone. Retrying in 5 min.",
                                 NotificationType.Warning,
                                 TimeSpan.FromSeconds(15)));
                             await Task.Delay(300_000);

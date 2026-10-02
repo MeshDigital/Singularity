@@ -31,7 +31,7 @@ namespace Singularity.Services
         private int _tickCounter = 0;
 
         // Self-process CPU sampler — no live-CPU measurement existed anywhere in the codebase
-        // previously; CurrentCpuLoad was hardcoded to 0. Samples ORBIT's own CPU usage (more
+        // previously; CurrentCpuLoad was hardcoded to 0. Samples Singularity's own CPU usage (more
         // relevant to "is the app healthy" than whole-machine CPU, which would need a
         // Windows-only PerformanceCounter and would include every other running program).
         private TimeSpan _lastCpuTime = TimeSpan.Zero;

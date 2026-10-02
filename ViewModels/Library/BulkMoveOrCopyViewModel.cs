@@ -19,8 +19,8 @@ public sealed class BulkMoveOrCopyViewModel : ReactiveObject
         TrackCount = trackCount;
     }
 
-    /// <summary>False = Move (relocates the file, updates ORBIT's library path). True = Copy
-    /// (duplicates the file for external use, e.g. staging a USB stick — ORBIT's library entry
+    /// <summary>False = Move (relocates the file, updates Singularity's library path). True = Copy
+    /// (duplicates the file for external use, e.g. staging a USB stick — Singularity's library entry
     /// keeps pointing at the original).</summary>
     public bool IsCopy
     {

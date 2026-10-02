@@ -18,7 +18,7 @@ namespace Singularity.Tests.ViewModels.Library;
 /// </summary>
 public class LibraryHealthViewModelTests : IDisposable
 {
-    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"ORBIT_HealthTest_{Guid.NewGuid():N}");
+    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"SINGULARITY_HealthTest_{Guid.NewGuid():N}");
 
     public LibraryHealthViewModelTests() => Directory.CreateDirectory(_tempDir);
 

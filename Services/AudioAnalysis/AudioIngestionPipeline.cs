@@ -49,7 +49,7 @@ public sealed class AudioIngestionPipeline
                 $"FFmpeg not found at '{_ffmpegPath}'. Install FFmpeg and ensure it is on PATH.");
 
         string tempFile = Path.Combine(Path.GetTempPath(),
-            $"orbit_ingest_{Guid.NewGuid():N}.wav");
+            $"singularity_ingest_{Guid.NewGuid():N}.wav");
 
         string args = BuildFfmpegArgs(source.FilePath, tempFile);
         _logger.LogDebug("[AudioIngestion] Decoding {File} → {Tmp}", source.FilePath, tempFile);

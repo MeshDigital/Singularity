@@ -9,7 +9,7 @@ namespace Singularity.Data;
 /// <c>new AppDbContext()</c> used to read and write the user's real library (2026-09-29: two
 /// test temp folders were left behind as enabled Library Sources and shared on Soulseek).
 /// </summary>
-public static class OrbitPaths
+public static class SingularityPaths
 {
     public const string DbPathEnvironmentVariable = "SINGULARITY_DB_PATH";
 

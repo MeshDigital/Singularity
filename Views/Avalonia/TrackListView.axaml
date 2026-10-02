@@ -292,7 +292,7 @@
                     </MenuItem>
                     <Separator/>
                     <MenuItem Header="Refresh BPM from Tags" Command="{Binding Operations.RefreshBpmFromTagsCommand}"
-                              ToolTip.Tip="Re-reads the file's own embedded BPM tag (this track, or all selected) and trusts it over ORBIT's analysis — fixes breakbeat/DNB tracks Essentia's beat tracker consistently misreads.">
+                              ToolTip.Tip="Re-reads the file's own embedded BPM tag (this track, or all selected) and trusts it over Singularity's analysis — fixes breakbeat/DNB tracks Essentia's beat tracker consistently misreads.">
                          <MenuItem.Icon><TextBlock Text="🥁" FontSize="12"/></MenuItem.Icon>
                     </MenuItem>
                     <MenuItem Header="Hard Retry" Command="{Binding Operations.HardRetryCommand}" IsEnabled="{Binding Operations.AreDependenciesHealthy}">

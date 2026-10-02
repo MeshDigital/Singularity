@@ -5,7 +5,7 @@
         xmlns:vm="clr-namespace:Singularity.Views"
         x:Class="Singularity.Views.Avalonia.SplashScreen"
         x:DataType="vm:MainViewModel"
-        Title="Loading ORBIT..."
+        Title="Loading Singularity..."
         Width="460" Height="280"
         WindowStartupLocation="CenterScreen"
         SystemDecorations="None"
@@ -19,7 +19,7 @@
         </Border.Effect>
 
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
-            <TextBlock Text="ORBIT" FontSize="48" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" LetterSpacing="8"/>
+            <TextBlock Text="Singularity" FontSize="48" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" LetterSpacing="8"/>
             <TextBlock Text="INITIALIZATION SEQUENCE" FontSize="12" FontWeight="SemiBold" Foreground="#4EC9B0" HorizontalAlignment="Center" LetterSpacing="2" Margin="0,-16,0,0"/>
             
             <StackPanel Spacing="16" Margin="0,24,0,0">

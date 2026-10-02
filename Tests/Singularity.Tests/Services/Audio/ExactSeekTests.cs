@@ -45,14 +45,14 @@ public class ExactSeekTests
     }
 
     /// <summary>
-    /// The real bug: FLAC through Media Foundation. Opt-in (ORBIT_LIVE_AUDIO_DIR = a folder of
+    /// The real bug: FLAC through Media Foundation. Opt-in (SINGULARITY_LIVE_AUDIO_DIR = a folder of
     /// FLAC files) because it needs real files. Checks ExactSeek lands on exactly the audio a
     /// straight decode reaches at 60 s — where a plain CurrentTime seek plays from 0:00.
     /// </summary>
     [Fact]
     public void Flac_SeeksExactly_WhereCurrentTimeFails()
     {
-        var dir = Environment.GetEnvironmentVariable("ORBIT_LIVE_AUDIO_DIR");
+        var dir = Environment.GetEnvironmentVariable("SINGULARITY_LIVE_AUDIO_DIR");
         if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
 
         foreach (var path in Directory.GetFiles(dir, "*.flac").Take(3))

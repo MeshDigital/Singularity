@@ -213,7 +213,7 @@ public sealed class DuplicateTrackCleanupService
         try
         {
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var dbPath = Singularity.Data.OrbitPaths.LibraryDbPath;
+            var dbPath = Singularity.Data.SingularityPaths.LibraryDbPath;
             var backupDir = Path.Combine(appData, "Singularity", "Backups");
 
             if (!File.Exists(dbPath))

@@ -57,7 +57,7 @@ public sealed class EssentiaRunner
         }
 
         string jsonOut = Path.Combine(Path.GetTempPath(),
-            $"orbit_essentia_{Guid.NewGuid():N}.json");
+            $"singularity_essentia_{Guid.NewGuid():N}.json");
 
         try
         {

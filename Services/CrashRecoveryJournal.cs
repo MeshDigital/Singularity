@@ -111,7 +111,7 @@ public class CrashRecoveryJournal : IDisposable, IAsyncDisposable
         {
             // Get database path
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var dbPath = Singularity.Data.OrbitPaths.LibraryDbPath;
+            var dbPath = Singularity.Data.SingularityPaths.LibraryDbPath;
             
             // Create table using main context
             using var context = new AppDbContext();

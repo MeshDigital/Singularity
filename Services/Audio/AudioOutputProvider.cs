@@ -137,7 +137,7 @@ public class AudioOutputProvider : IDisposable
         {
             AudioOutputMode.WaveOut => new WaveOutEvent { DesiredLatency = 100, NumberOfBuffers = 3 },
 
-            // Exclusive mode is played as Shared on the same device. ORBIT always needs several
+            // Exclusive mode is played as Shared on the same device. Singularity always needs several
             // streams on one device at once (two decks per crossfade, plus the preview players),
             // and an exclusive stream locks the device: the second deck failed to open (breaking
             // every mix and silently falling back to another device) and previews and every other

@@ -1,9 +1,9 @@
 @echo off
-REM ORBIT Build Cleanup Script
+REM Singularity Build Cleanup Script
 REM Kills lingering MSBuild worker nodes and .NET Host processes that lock files
 
 echo ================================================
-echo ORBIT Build Environment Cleanup
+echo Singularity Build Environment Cleanup
 echo ================================================
 echo.
 
@@ -38,6 +38,6 @@ echo.
 
 echo ================================================
 echo Cleanup Complete!
-echo You can now build ORBIT with a fresh slate.
+echo You can now build Singularity with a fresh slate.
 echo ================================================
 pause

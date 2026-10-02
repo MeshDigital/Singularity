@@ -40,9 +40,9 @@ namespace Singularity
             var runJsonLogPath = Path.Combine(logDirectory, $"run_{runId}.json");
             var runTxtLogPath = Path.Combine(logDirectory, $"run_{runId}.txt");
 
-            AppContext.SetData("Orbit.LogDirectory", logDirectory);
-            AppContext.SetData("Orbit.RunJsonLogPath", runJsonLogPath);
-            AppContext.SetData("Orbit.RunTxtLogPath", runTxtLogPath);
+            AppContext.SetData("Singularity.LogDirectory", logDirectory);
+            AppContext.SetData("Singularity.RunJsonLogPath", runJsonLogPath);
+            AppContext.SetData("Singularity.RunTxtLogPath", runTxtLogPath);
 
             // Initialize Serilog with proper log paths
             Log.Logger = new LoggerConfiguration()
@@ -68,7 +68,7 @@ namespace Singularity
 
             try
             {
-                Log.Information("Starting ORBIT application | RunJsonLog: {RunJsonLogPath} | RunTxtLog: {RunTxtLogPath}", runJsonLogPath, runTxtLogPath);
+                Log.Information("Starting Singularity application | RunJsonLog: {RunJsonLogPath} | RunTxtLog: {RunTxtLogPath}", runJsonLogPath, runTxtLogPath);
                 BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
             }
             catch (Exception ex)

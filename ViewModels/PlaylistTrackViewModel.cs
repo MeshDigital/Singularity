@@ -841,7 +841,7 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
     public bool IsPlaceholder { get; }
 
     /// <summary>Sentinel hash — deliberately not shaped like a real TrackUniqueHash, so it can never collide with one.</summary>
-    public const string PlaceholderGlobalId = "__orbit_placeholder__00000000-0000-0000-0000-000000000000";
+    public const string PlaceholderGlobalId = "__singularity_placeholder__00000000-0000-0000-0000-000000000000";
 
     private static readonly Lazy<PlaylistTrackViewModel> _placeholderInstance = new(() => new PlaylistTrackViewModel(
         new PlaylistTrack { TrackUniqueHash = PlaceholderGlobalId, Artist = string.Empty, Title = "Loading…" },

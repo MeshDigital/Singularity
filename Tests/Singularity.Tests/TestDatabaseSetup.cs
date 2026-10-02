@@ -6,10 +6,10 @@ using Singularity.Data;
 namespace Singularity.Tests;
 
 /// <summary>
-/// Runs before any test: points ORBIT at a throwaway database for this test run. Tests (and the
+/// Runs before any test: points Singularity at a throwaway database for this test run. Tests (and the
 /// services they exercise) that open <c>new AppDbContext()</c> used to hit the user's real
-/// %APPDATA%\ORBIT\library.db — an interrupted run left test temp folders behind as enabled
-/// Library Sources, which ORBIT then shared on Soulseek.
+/// %APPDATA%\Singularity\library.db — an interrupted run left test temp folders behind as enabled
+/// Library Sources, which Singularity then shared on Soulseek.
 /// </summary>
 internal static class TestDatabaseSetup
 {
@@ -18,9 +18,9 @@ internal static class TestDatabaseSetup
     [ModuleInitializer]
     internal static void Initialize()
     {
-        _directory = Path.Combine(Path.GetTempPath(), "orbit-tests", Guid.NewGuid().ToString("N"));
+        _directory = Path.Combine(Path.GetTempPath(), "singularity-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_directory);
-        Environment.SetEnvironmentVariable(OrbitPaths.DbPathEnvironmentVariable, Path.Combine(_directory, "library.db"));
+        Environment.SetEnvironmentVariable(SingularityPaths.DbPathEnvironmentVariable, Path.Combine(_directory, "library.db"));
 
         using (var context = new AppDbContext())
             context.Database.EnsureCreated();

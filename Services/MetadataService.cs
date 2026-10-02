@@ -36,7 +36,7 @@ public class MetadataService : IMetadataService
     private static readonly HttpClient _httpClient = new()
     {
         Timeout = TimeSpan.FromSeconds(10),
-        DefaultRequestHeaders = { { "User-Agent", "ORBIT-Music-Engine/1.0.0 ( https://github.com/MeshDigital/ORBIT )" } }
+        DefaultRequestHeaders = { { "User-Agent", "Singularity/0.1.0 ( https://github.com/MeshDigital/Singularity )" } }
     };
 
     public MetadataService(ILogger<MetadataService> logger, AppConfig config)

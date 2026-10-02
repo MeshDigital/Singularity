@@ -13,7 +13,7 @@ namespace Singularity.Views.Avalonia.Converters
             {
                 if (double.IsNegativeInfinity(score)) return Brushes.Red;
                 if (score > 1000) return new SolidColorBrush(Color.Parse("#1DB954")); // Spotify Green
-                if (score > 500) return new SolidColorBrush(Color.Parse("#00A3FF"));  // Orbit Blue
+                if (score > 500) return new SolidColorBrush(Color.Parse("#00A3FF"));  // Singularity Blue
                 if (score > 0) return Brushes.White;
                 return Brushes.Gray;
             }

@@ -29,8 +29,8 @@ public interface IUpdateCheckService
 /// </summary>
 public sealed class UpdateCheckService : IUpdateCheckService
 {
-    private const string ApiUrl = "https://api.github.com/repos/MeshDigital/Orbit-pure/releases/latest";
-    private const string UserAgent = "ORBIT-App/1.0.0 ( https://github.com/MeshDigital/Orbit-pure )";
+    private const string ApiUrl = "https://api.github.com/repos/MeshDigital/Singularity/releases/latest";
+    private const string UserAgent = "Singularity/0.1.0 ( https://github.com/MeshDigital/Singularity )";
     private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(12);
 
     private readonly AppConfig _config;
@@ -90,7 +90,7 @@ public sealed class UpdateCheckService : IUpdateCheckService
 
             var releaseUrl = doc.RootElement.TryGetProperty("html_url", out var urlProp)
                 ? urlProp.GetString() ?? ApiUrl
-                : "https://github.com/MeshDigital/Orbit-pure/releases/latest";
+                : "https://github.com/MeshDigital/Singularity/releases/latest";
 
             var currentVersionText = GetCurrentVersionText();
             var latestVersion = NormalizeToVersion(tagName);
@@ -108,7 +108,7 @@ public sealed class UpdateCheckService : IUpdateCheckService
 
             _notificationService.Show(
                 "Update Available",
-                $"ORBIT {tagName} is available — you're on {currentVersionText}. {releaseUrl}",
+                $"Singularity {tagName} is available — you're on {currentVersionText}. {releaseUrl}",
                 NotificationType.Information,
                 TimeSpan.FromSeconds(15));
         }

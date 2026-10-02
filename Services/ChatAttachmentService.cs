@@ -24,7 +24,9 @@ namespace Singularity.Services;
 /// </summary>
 public sealed class ChatAttachmentService
 {
-    private const string ImageOfferPrefix = "ORBIT_IMG_OFFER|";
+    private const string ImageOfferPrefix = "SINGULARITY_IMG_OFFER|";
+    // Offers sent by ORBIT clients are still accepted; ORBIT itself does not recognise ours.
+    private const string LegacyImageOfferPrefix = "ORBIT_IMG_OFFER|";
     private const long MaxImageBytes = 15 * 1024 * 1024; // 15 MB safety cap — this rides the same P2P transfer as downloads, no need to allow huge files
     private static readonly string[] AllowedImageExtensions = { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp" };
 
@@ -61,10 +63,16 @@ public sealed class ChatAttachmentService
         virtualPath = string.Empty;
         fileName = string.Empty;
 
-        if (string.IsNullOrEmpty(message) || !message.StartsWith(ImageOfferPrefix, StringComparison.Ordinal))
+        if (string.IsNullOrEmpty(message))
             return false;
 
-        var parts = message[ImageOfferPrefix.Length..].Split('|', 3);
+        var prefix = message.StartsWith(ImageOfferPrefix, StringComparison.Ordinal) ? ImageOfferPrefix
+            : message.StartsWith(LegacyImageOfferPrefix, StringComparison.Ordinal) ? LegacyImageOfferPrefix
+            : null;
+        if (prefix is null)
+            return false;
+
+        var parts = message[prefix.Length..].Split('|', 3);
         if (parts.Length != 3 || !long.TryParse(parts[0], out sizeBytes))
             return false;
 

@@ -77,7 +77,7 @@ public static class DownloadFailureReasonExtensions
             DownloadFailureReason.NetworkError => 
                 "Ensure your firewall allows Soulseek connections",
             DownloadFailureReason.RemoteQueueDenied =>
-                "Peer is overloaded. ORBIT will retry another lane later",
+                "Peer is overloaded. Singularity will retry another lane later",
             DownloadFailureReason.RemoteAccessDenied =>
                 "Peer denied access. Try another uploader",
             DownloadFailureReason.DiskFull => 

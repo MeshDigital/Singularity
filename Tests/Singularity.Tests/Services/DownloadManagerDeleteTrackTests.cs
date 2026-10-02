@@ -33,7 +33,7 @@ public class DownloadManagerDeleteTrackTests
         // The track is NOT seeded into _downloads — this is the common case the old code
         // silently no-op'd on.
         var globalId = Guid.NewGuid().ToString("N");
-        var tempFile = Path.Combine(Path.GetTempPath(), $"orbit-delete-test-{globalId}.flac");
+        var tempFile = Path.Combine(Path.GetTempPath(), $"singularity-delete-test-{globalId}.flac");
         await File.WriteAllTextAsync(tempFile, "not a real audio file, just needs to exist");
 
         var library = new Mock<ILibraryService>();

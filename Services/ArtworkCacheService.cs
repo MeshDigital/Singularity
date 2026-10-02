@@ -16,7 +16,7 @@ namespace Singularity.Services
     /// Uses WeakReferences to ensure bitmaps are eligible for collection when no longer referenced by active ViewModels.
     ///
     /// Remote (Spotify/MusicBrainz) artwork is additionally persisted to a disk cache keyed by a hash
-    /// of the URL, in %AppData%/ORBIT/artwork/ — previously there was no disk persistence at all, so
+    /// of the URL, in %AppData%/Singularity/artwork/ — previously there was no disk persistence at all, so
     /// every app restart (and every time a WeakReference-cached bitmap was GC'd mid-session) silently
     /// re-downloaded every album's art from the network. For a large playlist that meant hundreds of
     /// network round-trips just to redraw rows that had already been shown before.

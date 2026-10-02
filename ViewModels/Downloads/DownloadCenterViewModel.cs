@@ -109,7 +109,7 @@ public class DownloadCenterViewModel : ReactiveObject, IDisposable
     /// session-scoped) with UnfindableTracks (persisted OnHold, can outlive the session) into one
     /// filtered, sorted list. These used to be two unrelated UI sections with unrelated filtering
     /// (SearchText never touched UnfindableTracks at all) even though both answer the same user
-    /// question: "why can't ORBIT find this track." See RebuildAttentionRows.
+    /// question: "why can't Singularity find this track." See RebuildAttentionRows.
     /// </summary>
     public ObservableCollection<IHubRowDisplay> AttentionRows { get; } = new();
 

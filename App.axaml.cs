@@ -506,10 +506,10 @@ public partial class App : Application
         // EventBus - Unified event communication
         services.AddSingleton<IEventBus, EventBusService>();
         
-        // Phase 1A: SafeWrite Service - Atomic file operations (ORBIT v1.0)
+        // Phase 1A: SafeWrite Service - Atomic file operations (Singularity v1.0)
         services.AddSingleton<Singularity.Services.IO.IFileWriteService, Singularity.Services.IO.SafeWriteService>();
         
-        // Phase 2A: Crash Recovery - Journal & Recovery Services (ORBIT v1.0)
+        // Phase 2A: Crash Recovery - Journal & Recovery Services (Singularity v1.0)
         services.AddSingleton<CrashRecoveryJournal>();
         services.AddSingleton<CrashRecoveryService>();
         

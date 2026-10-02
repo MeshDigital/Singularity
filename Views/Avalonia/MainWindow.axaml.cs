@@ -89,7 +89,7 @@ namespace Singularity.Views.Avalonia
         }
 
         /// <summary>
-        /// Theater Mode used to only hide ORBIT's own chrome (nav/top bar) within whatever size
+        /// Theater Mode used to only hide Singularity's own chrome (nav/top bar) within whatever size
         /// the window already was — the taskbar and native window border stayed visible even in
         /// "fullscreen visualizer" mode. This makes it cover the whole screen with zero chrome.
         ///
@@ -270,7 +270,7 @@ namespace Singularity.Views.Avalonia
                             is Singularity.Services.WindowsToastService toastService)
                         {
                             toastService.ShowIfUnfocused(
-                                "ORBIT is still running",
+                                "Singularity is still running",
                                 "Downloads continue in the background. Right-click the tray icon to reopen or exit.");
                         }
                     }

@@ -10,7 +10,7 @@ using Singularity.Models;
 namespace Singularity.Services;
 
 /// <summary>
-/// Catch-all visibility layer for outbound network traffic that ORBIT's own Soulseek call-site
+/// Catch-all visibility layer for outbound network traffic that Singularity's own Soulseek call-site
 /// instrumentation (see <c>SoulseekAdapter.TrackNetworkCallAsync</c>) can't see: HTTP requests
 /// (Spotify/MusicBrainz/tracklist scraping — including SpotifyAPI.Web's opaque internal client,
 /// since <c>System.Net.Http</c>'s EventSource fires per logical request regardless of which

@@ -28,7 +28,7 @@ public class PlayerViewModelGaplessPreloadTests
     }
 
     // Real (empty) files: the player skips queued tracks whose file doesn't exist.
-    private static readonly string TrackDir = System.IO.Directory.CreateTempSubdirectory("orbit-preload-tests").FullName;
+    private static readonly string TrackDir = System.IO.Directory.CreateTempSubdirectory("singularity-preload-tests").FullName;
 
     private static PlaylistTrackViewModel CreateTrack(string fileName, bool exists = true)
     {

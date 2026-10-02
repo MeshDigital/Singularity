@@ -5,7 +5,7 @@
 .DESCRIPTION
     Singularity's only bundled model is demucs-4s.onnx (vocal/instrumental separation). It is
     kept out of git. By default it is copied from a sibling ORBIT-Pure checkout; pass -Source to
-    copy it from another folder. DemucsModelManager also looks in %APPDATA%\Antigravity\Models,
+    copy it from another folder. DemucsModelManager also looks in %APPDATA%\Singularity\Models,
     so placing the file there works too.
 #>
 param(

@@ -263,7 +263,7 @@
 
         <!-- Attention tab row template — merges runtime Failed/Stalled rows (DownloadRowViewModel)
              with persisted OnHold rows (UnfindableTrackViewModel) through the shared
-             IHubRowDisplay contract, so one tab shows everything "ORBIT couldn't get this track"
+             IHubRowDisplay contract, so one tab shows everything "Singularity couldn't get this track"
              instead of two unrelated, independently-filtered sections. Trimmed vs
              HubDownloadRowTemplate: no Priority-bump button or "⋯" overflow menu, since those
              bind to Track.* commands that don't exist on UnfindableTrackViewModel. -->
@@ -974,7 +974,7 @@
                                 </ScrollViewer>
                             </TabItem>
 
-                            <!-- TAB 1 — ATTENTION: everything ORBIT couldn't get — Failed/Stalled this
+                            <!-- TAB 1 — ATTENTION: everything Singularity couldn't get — Failed/Stalled this
                                  session plus OnHold tracks the background searcher gave up on, merged
                                  through IHubRowDisplay so search narrows both at once. -->
                             <TabItem>

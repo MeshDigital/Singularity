@@ -8,12 +8,12 @@ namespace Singularity.Services
     public static class DragContext
     {
         // Data format identifiers
-        public const string QueueTrackFormat = "ORBIT_QueueTrack";
-        public const string LibraryTrackFormat = "ORBIT_LibraryTrack";
+        public const string QueueTrackFormat = "SINGULARITY_QueueTrack";
+        public const string LibraryTrackFormat = "SINGULARITY_LibraryTrack";
 
         // Playlist folder tree: dragging a playlist card or folder node to reorganize the tree
-        public const string PlaylistCardNodeFormat = "ORBIT_PlaylistCardNode";
-        public const string PlaylistFolderNodeFormat = "ORBIT_PlaylistFolderNode";
+        public const string PlaylistCardNodeFormat = "SINGULARITY_PlaylistCardNode";
+        public const string PlaylistFolderNodeFormat = "SINGULARITY_PlaylistFolderNode";
         
         /// <summary>
         /// Temporary storage for drag data (fallback for platforms that don't support custom formats).

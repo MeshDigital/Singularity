@@ -41,7 +41,7 @@ public class FrequentSourcesViewModelTests
 
     private static SutContext BuildSut(bool enableFrequentSources, string frequentSourcesStagingPath)
     {
-        var configPath = Path.Combine(Path.GetTempPath(), $"orbit-frequent-sources-settings-{Guid.NewGuid():N}.ini");
+        var configPath = Path.Combine(Path.GetTempPath(), $"singularity-frequent-sources-settings-{Guid.NewGuid():N}.ini");
         var config = new AppConfig
         {
             EnableFrequentSources = enableFrequentSources,
@@ -100,10 +100,10 @@ public class FrequentSourcesViewModelTests
     [ProfileTest("frequent-sources")]
     public void ViewModelLoadsSourcesWhenEnabled()
     {
-        using var sut = BuildSut(enableFrequentSources: true, frequentSourcesStagingPath: @"C:\Orbit\FrequentSources");
+        using var sut = BuildSut(enableFrequentSources: true, frequentSourcesStagingPath: @"C:\Singularity\FrequentSources");
 
         Assert.True(sut.ViewModel.EnableFrequentSources);
-        Assert.Equal(@"C:\Orbit\FrequentSources", sut.ViewModel.FrequentSourcesStagingPath);
+        Assert.Equal(@"C:\Singularity\FrequentSources", sut.ViewModel.FrequentSourcesStagingPath);
         Assert.NotNull(sut.ViewModel.BrowseFrequentSourcesStagingPathCommand);
     }
 
@@ -111,7 +111,7 @@ public class FrequentSourcesViewModelTests
     public async Task BrowseCommandOpensDialog()
     {
         using var sut = BuildSut(enableFrequentSources: false, frequentSourcesStagingPath: string.Empty);
-        var selectedPath = @"C:\Orbit\PrefetchStage";
+        var selectedPath = @"C:\Singularity\PrefetchStage";
 
         sut.FileInteraction
             .Setup(x => x.OpenFolderDialogAsync("Select Frequent Sources Staging Folder"))

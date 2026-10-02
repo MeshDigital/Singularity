@@ -235,7 +235,7 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>Matches <see cref="Singularity.Services.Audio.AudioOutputMode"/>'s member names. No
-    /// WasapiExclusive: an exclusive stream locks the device, and ORBIT always plays several
+    /// WasapiExclusive: an exclusive stream locks the device, and Singularity always plays several
     /// streams at once (two decks per crossfade, plus previews) — it broke every mix.</summary>
     public static string[] AvailableAudioOutputModes { get; } = { "WasapiShared", "WaveOut", "Asio" };
 
@@ -2741,7 +2741,7 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"=== ORBIT Diagnostics Snapshot — {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+            sb.AppendLine($"=== Singularity Diagnostics Snapshot — {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
             sb.AppendLine();
 
             // Search pressure

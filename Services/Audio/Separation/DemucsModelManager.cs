@@ -10,7 +10,7 @@ namespace Singularity.Services.Audio.Separation;
 ///
 /// Expected model layout:
 ///   Tools/Essentia/models/demucs-4s.onnx   (primary)
-///   [AppData]/Antigravity/Models/demucs-4s.onnx  (user-downloaded)
+///   [AppData]/Singularity/Models/demucs-4s.onnx  (user-downloaded)
 /// </summary>
 public sealed class DemucsModelManager
 {
@@ -66,7 +66,7 @@ public sealed class DemucsModelManager
     {
         string dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Antigravity", "Models");
+            "Singularity", "Models");
         Directory.CreateDirectory(dir);
         return dir;
     }

@@ -22,7 +22,7 @@ namespace Singularity.Tests.Services;
 /// </summary>
 public class MetadataTaggerServiceTests : IDisposable
 {
-    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"ORBIT_TaggerTest_{Guid.NewGuid():N}");
+    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"SINGULARITY_TaggerTest_{Guid.NewGuid():N}");
 
     public MetadataTaggerServiceTests() => Directory.CreateDirectory(_tempDir);
 

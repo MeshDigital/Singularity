@@ -19,7 +19,7 @@ public class ConnectionViewModelTests
         ISoulseekAdapter? soulseek = null)
     {
         config ??= new AppConfig { Username = "test", AutoConnectEnabled = false, RememberPassword = false };
-        var configPath     = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"orbit-test-{Guid.NewGuid():N}.ini");
+        var configPath     = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"singularity-test-{Guid.NewGuid():N}.ini");
         var configManager  = new ConfigManager(configPath);
         var soulseekMock   = soulseek ?? Mock.Of<ISoulseekAdapter>(s => s.IsConnected == false);
             var credsMock      = new Mock<ISoulseekCredentialService>();

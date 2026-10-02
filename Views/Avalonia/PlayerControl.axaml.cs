@@ -61,7 +61,7 @@ public partial class PlayerControl : UserControl
         // Accept tracks or albums from library or queue
         if (e.Data.Contains(DragContext.LibraryTrackFormat) || 
             e.Data.Contains(DragContext.QueueTrackFormat) ||
-            e.Data.Contains("ORBIT_LibraryAlbum"))
+            e.Data.Contains("SINGULARITY_LibraryAlbum"))
         {
             e.DragEffects = DragDropEffects.Copy;
             
@@ -96,9 +96,9 @@ public partial class PlayerControl : UserControl
         {
             trackGlobalId = e.Data.Get(DragContext.QueueTrackFormat) as string;
         }
-        else if (e.Data.Contains("ORBIT_LibraryAlbum"))
+        else if (e.Data.Contains("SINGULARITY_LibraryAlbum"))
         {
-            albumIdStr = e.Data.Get("ORBIT_LibraryAlbum") as string;
+            albumIdStr = e.Data.Get("SINGULARITY_LibraryAlbum") as string;
         }
 
         if (string.IsNullOrEmpty(trackGlobalId) && string.IsNullOrEmpty(albumIdStr))

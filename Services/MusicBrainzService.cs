@@ -34,7 +34,7 @@ public class MusicBrainzService : IMusicBrainzService
     private readonly HttpClient _httpClient;
 
     private const string BaseUrl = "https://musicbrainz.org/ws/2/";
-    private const string UserAgent = "ORBIT-Music-Engine/1.0.0 ( https://github.com/MeshDigital/ORBIT )";
+    private const string UserAgent = "Singularity/0.1.0 ( https://github.com/MeshDigital/Singularity )";
 
     // Respect MusicBrainz guidelines: max 1 request per second.
     private readonly SemaphoreSlim _rateLimitSemaphore = new(1, 1);

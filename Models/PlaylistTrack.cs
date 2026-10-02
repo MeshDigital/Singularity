@@ -134,7 +134,7 @@ public class PlaylistTrack
     /// </summary>
     public string? ColorTag { get; set; }
 
-    // Phase 0.1: Musical Intelligence & Antigravity
+    // Phase 0.1: Musical Intelligence
     public string? MusicalKey { get; set; }
     public string? Key => MusicalKey; // Alias for UI binding
     public string? Tonality => MusicalKey; // Alias for PlaylistTrackViewModel

@@ -91,7 +91,7 @@ public class LibraryFolderScannerServiceTagBpmTests
     /// is given, tags it via TagLib — same library/API this fix reads with.</summary>
     private static string CreateTaggedWavFile(uint? bpm)
     {
-        var path = Path.Combine(Path.GetTempPath(), $"orbit-tagbpm-test-{Guid.NewGuid():N}.wav");
+        var path = Path.Combine(Path.GetTempPath(), $"singularity-tagbpm-test-{Guid.NewGuid():N}.wav");
 
         const int sampleRate = 44100;
         const short bitsPerSample = 16;

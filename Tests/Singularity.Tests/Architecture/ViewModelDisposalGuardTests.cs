@@ -26,8 +26,8 @@ public class ViewModelDisposalGuardTests
 {
     private readonly ITestOutputHelper _output;
     
-    // The main ORBIT assembly
-    private static readonly Assembly OrbitAssembly = typeof(Singularity.Services.EventBusService).Assembly;
+    // The main Singularity assembly
+    private static readonly Assembly AppAssembly = typeof(Singularity.Services.EventBusService).Assembly;
     
     // Source root for file-level analysis
     private static readonly string SourceRoot = FindSourceRoot();
@@ -180,14 +180,14 @@ public class ViewModelDisposalGuardTests
 
     /// <summary>
     /// GUARDRAIL 4: Reflection-based audit — verify IDisposable at the type level.
-    /// Scans all types in the ORBIT assembly that have fields of type IEventBus.
+    /// Scans all types in the Singularity assembly that have fields of type IEventBus.
     /// </summary>
     [Fact]
     public void AllTypes_WithEventBusField_MustImplementIDisposable()
     {
         var violations = new List<string>();
         
-        var typesWithEventBus = OrbitAssembly.GetTypes()
+        var typesWithEventBus = AppAssembly.GetTypes()
             .Where(t => t.IsClass && !t.IsAbstract)
             .Where(t => t.DeclaringType == null) // Only top-level types — skip all nested/inner classes
             .Where(t => !t.Name.Contains("<")) // Skip compiler-generated closure/display classes
@@ -240,7 +240,7 @@ public class ViewModelDisposalGuardTests
         var viewModelFiles = FindViewModelSourceFiles();
         
         _output.WriteLine("═══════════════════════════════════════════════════");
-        _output.WriteLine("  ORBIT Subscription Health Report");
+        _output.WriteLine("  Singularity Subscription Health Report");
         _output.WriteLine($"  Generated: {DateTime.Now:yyyy-MM-dd HH:mm}");
         _output.WriteLine("═══════════════════════════════════════════════════");
 

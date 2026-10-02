@@ -194,7 +194,7 @@ public class LibraryFolderScannerServiceTests
 
     private static string CreateTempFolder()
     {
-        var folder = Path.Combine(Path.GetTempPath(), "orbit-folder-scanner-tests", Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(Path.GetTempPath(), "singularity-folder-scanner-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         return folder;
     }

@@ -14,7 +14,7 @@ namespace Singularity.Tests.Services.Import;
 /// </summary>
 public class CsvInputSourceTests : IDisposable
 {
-    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"ORBIT_CSV_{Guid.NewGuid():N}");
+    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"SINGULARITY_CSV_{Guid.NewGuid():N}");
 
     public CsvInputSourceTests() => Directory.CreateDirectory(_tempDir);
 

@@ -21,7 +21,7 @@ public class ConfigManagerPersistenceGapTests
     [Fact]
     public void SaveLoad_RoundTripsPreviouslyStaleSettings()
     {
-        var tempPath = Path.Combine(Path.GetTempPath(), $"orbit-config-persistence-gap-{Guid.NewGuid():N}.ini");
+        var tempPath = Path.Combine(Path.GetTempPath(), $"singularity-config-persistence-gap-{Guid.NewGuid():N}.ini");
 
         try
         {
@@ -58,7 +58,7 @@ public class ConfigManagerPersistenceGapTests
     [Fact]
     public void Load_MissingFile_UsesCompiledDefaults()
     {
-        var tempPath = Path.Combine(Path.GetTempPath(), $"orbit-config-persistence-gap-defaults-{Guid.NewGuid():N}.ini");
+        var tempPath = Path.Combine(Path.GetTempPath(), $"singularity-config-persistence-gap-defaults-{Guid.NewGuid():N}.ini");
 
         try
         {

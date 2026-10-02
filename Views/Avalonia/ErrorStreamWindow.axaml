@@ -50,7 +50,7 @@
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <TextBlock Grid.Column="0" Text="🚨" FontSize="24" VerticalAlignment="Center" Margin="0,0,12,0"/>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="ORBIT-Pure Error Stream" FontSize="18" FontWeight="SemiBold"/>
+                    <TextBlock Text="Singularity Error Stream" FontSize="18" FontWeight="SemiBold"/>
                     <TextBlock Text="Real-time error monitoring and reporting" FontSize="12" Foreground="#888" Margin="0,4,0,0"/>
                 </StackPanel>
                 <TextBlock Grid.Column="2" Text="{Binding ErrorCount, StringFormat='Errors: {0}'}" 
@@ -108,7 +108,7 @@
         <!-- Footer -->
         <Border Grid.Row="2" Background="#252526" Padding="20" BorderBrush="#3E3E42" BorderThickness="0,1,0,0">
             <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-                <TextBlock Grid.Column="0" Text="Errors are logged to help improve ORBIT-Pure" 
+                <TextBlock Grid.Column="0" Text="Errors are logged to help improve Singularity" 
                           VerticalAlignment="Center" FontSize="12" Foreground="#888"/>
                 <Button Grid.Column="1" Content="📁 Open Logs" Classes="secondary" 
                         Command="{Binding OpenLogsCommand}" Margin="0,0,8,0"/>

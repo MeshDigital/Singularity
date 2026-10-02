@@ -1476,7 +1476,7 @@ public partial class LibraryViewModel
 
     /// <summary>
     /// Moves or copies every selected track's physical file into a chosen destination folder.
-    /// Move relocates the file and updates ORBIT's stored path (the reorganization case); Copy
+    /// Move relocates the file and updates Singularity's stored path (the reorganization case); Copy
     /// duplicates the file for external use (e.g. staging a USB stick) and leaves the DB untouched
     /// — a linked-library "copy" has no single unambiguous meaning otherwise, so this deliberately
     /// doesn't create a second tracked library entry for the copy.
@@ -1807,7 +1807,7 @@ public partial class LibraryViewModel
         {
             var outputPath = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                $"orbit-playlist-{DateTime.Now:yyyyMMdd-HHmmss}.m3u8");
+                $"singularity-playlist-{DateTime.Now:yyyyMMdd-HHmmss}.m3u8");
             var tracks = selected.Select(t => new Models.PlaylistTrack
             {
                 Id               = t.Id,
@@ -1817,7 +1817,7 @@ public partial class LibraryViewModel
                 BPM              = t.BPM > 0 ? t.BPM : null,
                 MusicalKey       = t.MusicalKey,
             });
-            await _exportService.ExportToM3uAsync("ORBIT Batch Export", tracks, outputPath);
+            await _exportService.ExportToM3uAsync("Singularity Batch Export", tracks, outputPath);
             _notificationService.Show(
                 "M3U Export Complete",
                 $"{selected.Count} track(s) exported to {outputPath}",

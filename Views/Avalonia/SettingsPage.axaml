@@ -172,7 +172,7 @@
 
             <!-- NEW REFACORTED SPOTIFY INTEGRATION -->
             <Border Background="#252526" CornerRadius="8" Padding="20" BorderBrush="#3E3E3E" BorderThickness="1"
-                    Tag="Spotify Integration||Connect your Spotify account to import Liked Songs and playlists. Orbit uses the Spotify API to match tracks so it knows what to search for. Your Spotify credentials are only used to read your library — no data is modified."
+                    Tag="Spotify Integration||Connect your Spotify account to import Liked Songs and playlists. Singularity uses the Spotify API to match tracks so it knows what to search for. Your Spotify credentials are only used to read your library — no data is modified."
                     IsVisible="{Binding SettingsSearchText, Converter={StaticResource SettingsSearchMatchConverter}, ConverterParameter='Spotify Integration import playlists liked songs matching connect disconnect'}">
                 <StackPanel Spacing="16">
                     <Grid ColumnDefinitions="*,Auto">
@@ -200,7 +200,7 @@
 
                     <!-- Panel 1: Disconnected State -->
                     <StackPanel IsVisible="{Binding IsSpotifyDisconnected}" Spacing="12">
-                        <TextBlock Text="Unlock the full power of ORBIT by connecting your Spotify account."
+                        <TextBlock Text="Unlock the full power of Singularity by connecting your Spotify account."
                                    TextWrapping="Wrap" Foreground="#CCC"/>
 
                         <Button Command="{Binding ConnectSpotifyCommand}"
@@ -280,7 +280,7 @@
                             <!-- Client ID Override -->
                             <Grid ColumnDefinitions="120,*">
                                 <TextBlock Grid.Column="0" Text="Client ID:" VerticalAlignment="Center" Foreground="#666"/>
-                                <TextBox Grid.Column="1" Text="{Binding SpotifyClientId}" Watermark="Default (QMUSICSLSK)" Background="#111" BorderThickness="0"/>
+                                <TextBox Grid.Column="1" Text="{Binding SpotifyClientId}" Watermark="Default (Singularity)" Background="#111" BorderThickness="0"/>
                             </Grid>
                         </StackPanel>
                      </Expander>
@@ -296,7 +296,7 @@
 
             <!-- Download Settings -->
             <Border Background="#252526" CornerRadius="8" Padding="20" BorderBrush="#3E3E3E" BorderThickness="1"
-                    Tag="Download Settings||Configure where Orbit saves downloaded files, how many simultaneous downloads to allow, and which file formats to accept. The download folder is created automatically if it does not exist."
+                    Tag="Download Settings||Configure where Singularity saves downloaded files, how many simultaneous downloads to allow, and which file formats to accept. The download folder is created automatically if it does not exist."
                     IsVisible="{Binding SettingsSearchText, Converter={StaticResource SettingsSearchMatchConverter}, ConverterParameter='Download Settings download path file name format check duplicates verification challenges'}">
                 <StackPanel Spacing="16">
                     <TextBlock Text="Download Settings" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
@@ -620,7 +620,7 @@
 
             <!-- Library Sharing -->
             <Border Background="#0D1117" CornerRadius="8" Padding="20" BorderBrush="#1DB954" BorderThickness="1"
-                    Tag="Library Sharing||When enabled, Orbit shares every folder in your Library Sources (Library tab) with other Soulseek users, plus any additional folder you add below. Set upload speed limits to avoid saturating your connection."
+                    Tag="Library Sharing||When enabled, Singularity shares every folder in your Library Sources (Library tab) with other Soulseek users, plus any additional folder you add below. Set upload speed limits to avoid saturating your connection."
                     IsVisible="{Binding SettingsSearchText, Converter={StaticResource SettingsSearchMatchConverter}, ConverterParameter='Library Sharing share folders reputation upload additional folder'}">
                 <StackPanel Spacing="16">
                     <Grid ColumnDefinitions="*,Auto">
@@ -738,7 +738,7 @@
 
             <!-- Library Folders -->
             <Border Background="#252526" CornerRadius="8" Padding="20" BorderBrush="#3E3E3E" BorderThickness="1"
-                    Tag="Library Folders||Add the folders where your music files live. Orbit will scan these directories recursively to build your library. Changes take effect after the next library rescan."
+                    Tag="Library Folders||Add the folders where your music files live. Singularity will scan these directories recursively to build your library. Changes take effect after the next library rescan."
                     IsVisible="{Binding SettingsSearchText, Converter={StaticResource SettingsSearchMatchConverter}, ConverterParameter='Library Folders add remove browse'}">
                 <StackPanel Spacing="16">
                     <Grid ColumnDefinitions="*,Auto">
@@ -784,7 +784,7 @@
 
             <!-- Library Navigation Behavior -->
             <Border Background="#252526" CornerRadius="8" Padding="20" BorderBrush="#3E3E3E" BorderThickness="1"
-                    Tag="Library Navigation||Controls how Orbit behaves when you select a track in the library. You can choose whether clicking a track adds it to the workstation deck, opens the inspector, or does nothing until you explicitly drag it."
+                    Tag="Library Navigation||Controls how Singularity behaves when you select a track in the library. You can choose whether clicking a track adds it to the workstation deck, opens the inspector, or does nothing until you explicitly drag it."
                     IsVisible="{Binding SettingsSearchText, Converter={StaticResource SettingsSearchMatchConverter}, ConverterParameter='Library Navigation Behavior auto-hide collapsed sidebar activation'}">
                 <StackPanel Spacing="16">
                     <StackPanel Spacing="4">
@@ -1004,7 +1004,7 @@
 
             <!-- Search Filter Defaults -->
             <Border Background="#252526" CornerRadius="8" Padding="20" BorderBrush="#3E3E3E" BorderThickness="1"
-                    Tag="Default Search Filters||Set the default quality thresholds used when Orbit evaluates search results. Stricter settings mean fewer results but higher confidence that files are genuine high-quality audio."
+                    Tag="Default Search Filters||Set the default quality thresholds used when Singularity evaluates search results. Stricter settings mean fewer results but higher confidence that files are genuine high-quality audio."
                     IsVisible="{Binding SettingsSearchText, Converter={StaticResource SettingsSearchMatchConverter}, ConverterParameter='Search Filter Defaults preferred formats bitrate minimum maximum'}">
                 <StackPanel Spacing="16">
                     <TextBlock Text="Default Search Filters" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
@@ -1090,7 +1090,7 @@
 
             <!-- Brain 2.0 & Quality Guard -->
             <Border Background="#252526" CornerRadius="8" Padding="20" BorderBrush="#3E3E3E" BorderThickness="1"
-                    Tag="Smart Features &amp; Integrity||These controls govern Orbit's adaptive search intelligence and fake-lossless detection. Spectral scanning detects transcoded files disguised as lossless. Auto-retry requeues failed downloads from a different peer."
+                    Tag="Smart Features &amp; Integrity||These controls govern Singularity's adaptive search intelligence and fake-lossless detection. Spectral scanning detects transcoded files disguised as lossless. Auto-retry requeues failed downloads from a different peer."
                     IsVisible="{Binding SettingsSearchText, Converter={StaticResource SettingsSearchMatchConverter}, ConverterParameter='Brain 2.0 Quality Guard fuzzy normalization relaxation strategy timeout VBR fraud detection'}">
                 <StackPanel Spacing="16">
                     <StackPanel Spacing="4">
@@ -1211,7 +1211,7 @@
                             <TextBlock Text="🎯" FontSize="20" VerticalAlignment="Center"/>
                             <TextBlock Text="Search Strategy" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
                         </StackPanel>
-                        <TextBlock Text="Choose how ORBIT prioritizes search results. This replaces the old slider system."
+                        <TextBlock Text="Choose how Singularity prioritizes search results. This replaces the old slider system."
                                    Foreground="#AAA" FontSize="12"/>
                     </StackPanel>
 

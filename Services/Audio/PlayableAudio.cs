@@ -16,7 +16,7 @@ namespace Singularity.Services.Audio;
 /// could not be played at all. Playback just stopped, while the UI kept the previous track's
 /// length and playhead (analysis/waveforms use ffmpeg, so those tracks looked fine in the library).
 ///
-/// Such files are decoded once with ffmpeg into a cached WAV (%LOCALAPPDATA%\ORBIT\PlaybackCache,
+/// Such files are decoded once with ffmpeg into a cached WAV (%LOCALAPPDATA%\Singularity\PlaybackCache,
 /// size-capped, oldest removed first) and played from there — exact length, exact seeking.
 /// </summary>
 public static class PlayableAudio

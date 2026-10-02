@@ -19,7 +19,7 @@ namespace Singularity.Tests.Services;
 /// </summary>
 public sealed class ArtworkCacheServiceDiskCacheTests : IDisposable
 {
-    private readonly string _tempDiskCacheDir = Path.Combine(Path.GetTempPath(), $"ORBIT_ArtworkCacheTest_{Guid.NewGuid():N}");
+    private readonly string _tempDiskCacheDir = Path.Combine(Path.GetTempPath(), $"SINGULARITY_ArtworkCacheTest_{Guid.NewGuid():N}");
 
     public void Dispose()
     {
@@ -79,7 +79,7 @@ public sealed class ArtworkCacheServiceDiskCacheTests : IDisposable
     [Fact]
     public async Task ResolveBytesAsync_LocalFilePath_DoesNotTouchNetwork()
     {
-        var localFile = Path.Combine(Path.GetTempPath(), $"ORBIT_ArtworkCacheTest_LocalFile_{Guid.NewGuid():N}.jpg");
+        var localFile = Path.Combine(Path.GetTempPath(), $"SINGULARITY_ArtworkCacheTest_LocalFile_{Guid.NewGuid():N}.jpg");
         await File.WriteAllBytesAsync(localFile, FakeImageBytes);
         try
         {

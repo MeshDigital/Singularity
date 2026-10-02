@@ -1,6 +1,6 @@
-# 🤝 Contributing to ORBIT-Pure
+# 🤝 Contributing to Singularity
 
-Welcome! We're excited that you're interested in contributing to ORBIT-Pure. This document provides guidelines and information for contributors.
+Welcome! We're excited that you're interested in contributing to Singularity. This document provides guidelines and information for contributors.
 
 ## 📋 Table of Contents
 - [Code of Conduct](#code-of-conduct)
@@ -36,8 +36,8 @@ This project follows a code of conduct to ensure a welcoming environment for all
 ### Quick Setup
 ```bash
 # Clone the repository
-git clone https://github.com/MeshDigital/Orbit-pure.git
-cd Orbit-pure
+git clone https://github.com/MeshDigital/Singularity.git
+cd Singularity
 
 # Restore dependencies
 dotnet restore
@@ -67,7 +67,7 @@ dotnet run
 
 ### Project Structure
 ```
-ORBIT-Pure/
+Singularity/
 ├── Views/           # Avalonia UI components
 ├── ViewModels/      # MVVM view models
 ├── Services/        # Business logic and integrations
@@ -147,7 +147,7 @@ For new features, please provide:
 
 ### Security Issues
 - **DO NOT** report security vulnerabilities publicly
-- Email security concerns to: [security@orbit-pure.dev](mailto:security@orbit-pure.dev)
+- Email security concerns to: [security@singularity-pure.dev](mailto:security@singularity-pure.dev)
 - Include detailed reproduction steps and potential impact
 
 ---
@@ -276,7 +276,7 @@ Contributors are recognized in several ways:
 
 ---
 
-Thank you for contributing to ORBIT-Pure! Your efforts help make high-fidelity music management accessible to everyone.
+Thank you for contributing to Singularity! Your efforts help make high-fidelity music management accessible to everyone.
 
 *For questions or assistance, please open an issue on GitHub.*
 2.  Increase the version numbers in any examples files and the README.md to the new version that this Pull Request would represent.

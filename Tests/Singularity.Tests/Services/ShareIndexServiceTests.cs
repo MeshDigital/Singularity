@@ -9,11 +9,11 @@ using Xunit;
 namespace Singularity.Tests.Services;
 
 /// <summary>
-/// What ORBIT shares on Soulseek (audited 2026-09-29 after a peer's leech check flagged the account).
+/// What Singularity shares on Soulseek (audited 2026-09-29 after a peer's leech check flagged the account).
 /// </summary>
 public class ShareIndexServiceTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "orbit-share-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "singularity-share-tests", Guid.NewGuid().ToString("N"));
 
     public void Dispose()
     {

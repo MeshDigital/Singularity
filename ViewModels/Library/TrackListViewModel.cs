@@ -1448,7 +1448,7 @@ public class TrackListViewModel : ReactiveObject, IDisposable
                 var dialog = new Avalonia.Platform.Storage.FilePickerSaveOptions
                 {
                     Title = "Export Tracks to CSV",
-                    SuggestedFileName = $"orbit_export_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
+                    SuggestedFileName = $"singularity_export_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
                     FileTypeChoices = new[]
                     {
                         new Avalonia.Platform.Storage.FilePickerFileType("CSV Files") { Patterns = new[] { "*.csv" } }

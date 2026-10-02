@@ -15,7 +15,7 @@ namespace Singularity.ViewModels;
 ///
 /// Detects image-attachment offers (see <see cref="ChatAttachmentService"/>) embedded in the
 /// plain-text message — Soulseek chat has no native attachment support, so an "offer" is just a
-/// specially-formatted string both ORBIT clients recognize. Loading is manual (tap to load), not
+/// specially-formatted string both Singularity clients recognize. Loading is manual (tap to load), not
 /// automatic, so scrolling through old history with many images doesn't hammer possibly-offline
 /// peers with redundant download attempts.
 /// </summary>

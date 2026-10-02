@@ -14,7 +14,7 @@
                 <TextBlock Text="🩺" FontSize="18"/>
                 <TextBlock Text="Library Health" FontSize="15" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
             </StackPanel>
-            <TextBlock Grid.Row="1" Text="Disk usage, stale tracks, and files ORBIT hasn't indexed yet."
+            <TextBlock Grid.Row="1" Text="Disk usage, stale tracks, and files Singularity hasn't indexed yet."
                        Foreground="#888" FontSize="11" Margin="0,0,0,12"/>
 
             <ScrollViewer Grid.Row="2" MaxHeight="540">
@@ -104,11 +104,11 @@
                     <!-- ── Untracked files ────────────────────────────────────── -->
                     <StackPanel Spacing="8">
                         <Grid ColumnDefinitions="*,Auto">
-                            <TextBlock Grid.Column="0" Text="FILES NOT IN ORBIT" FontSize="11" FontWeight="Bold" Foreground="#666" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="0" Text="FILES NOT IN Singularity" FontSize="11" FontWeight="Bold" Foreground="#666" VerticalAlignment="Center"/>
                             <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshUntrackedCommand}"
                                     Padding="10,4" FontSize="11" CornerRadius="6" Background="#1AFFFFFF" Foreground="#DDD" BorderThickness="0"/>
                         </Grid>
-                        <TextBlock Text="Files sitting inside a registered library folder that ORBIT hasn't imported yet — the reverse of Orphaned Tracks."
+                        <TextBlock Text="Files sitting inside a registered library folder that Singularity hasn't imported yet — the reverse of Orphaned Tracks."
                                    Foreground="#888" FontSize="11" TextWrapping="Wrap"/>
                         <TextBlock Text="Computing…" Foreground="#888" FontSize="11" IsVisible="{Binding IsUntrackedLoading}"/>
                         <TextBlock Text="No untracked files found." Foreground="#4EC9B0" FontSize="11"

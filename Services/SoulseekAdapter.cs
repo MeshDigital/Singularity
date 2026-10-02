@@ -130,7 +130,7 @@ public partial class SoulseekAdapter : ISoulseekAdapter, IDisposable
     // Was hardcoded to Math.Clamp(_config.MaxConcurrentDownloads, 1, 10) — silently overriding
     // any user setting above 10 even though the Settings/Downloads-page slider allows up to 20
     // and DownloadManager's own app-level semaphore allows up to 50. Soulseek.NET has no inherent
-    // limit here (library default is int.MaxValue) — 10 was an ORBIT-side ceiling that just never
+    // limit here (library default is int.MaxValue) — 10 was an Singularity-side ceiling that just never
     // got raised to match the UI. This value is fixed for the lifetime of the connection —
     // SoulseekClientOptionsPatch (used for live reconfiguration) does not include
     // MaximumConcurrentDownloads, so a change here only takes full effect after reconnecting.
@@ -279,7 +279,7 @@ public partial class SoulseekAdapter : ISoulseekAdapter, IDisposable
             {
                 var discoverer = new NatDiscoverer();
                 var natDevice = await discoverer.DiscoverDeviceAsync(PortMapper.Upnp, timeoutCts);
-                var mapping = new Mapping(Open.Nat.Protocol.Tcp, listenPort, listenPort, 3600, "ORBIT Soulseek listener");
+                var mapping = new Mapping(Open.Nat.Protocol.Tcp, listenPort, listenPort, 3600, "Singularity Soulseek listener");
                 await natDevice.CreatePortMapAsync(mapping);
 
                 _upnpPortMapped = true;

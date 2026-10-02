@@ -73,7 +73,7 @@ public class TrackEntity
     /// <summary>Track-level colour tag (hex, e.g. "#FF0000"), independent of any cue colours.</summary>
     public string? ColorTag { get; set; }
 
-    // Phase 0.1: Musical Intelligence & Antigravity
+    // Phase 0.1: Musical Intelligence
     public string? MusicalKey { get; set; } // e.g. "8A"
     public double? BPM { get; set; } // e.g. 128.0
     public double? Energy { get; set; } // 0.0 - 1.0 (Spotify)

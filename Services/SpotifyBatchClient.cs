@@ -45,7 +45,7 @@ public class SpotifyBatchClient
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (!_http.DefaultRequestHeaders.Contains("User-Agent"))
         {
-            _http.DefaultRequestHeaders.Add("User-Agent", "Orbit/1.2.2 (Singularity)");
+            _http.DefaultRequestHeaders.Add("User-Agent", "Singularity/0.1.0");
         }
     }
 

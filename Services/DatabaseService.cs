@@ -2291,7 +2291,7 @@ public class DatabaseService
 
     public async Task BackupDatabaseAsync(string backupPath)
     {
-        var dbPath = Singularity.Data.OrbitPaths.LibraryDbPath;
+        var dbPath = Singularity.Data.SingularityPaths.LibraryDbPath;
         
         if (!File.Exists(dbPath))
         {

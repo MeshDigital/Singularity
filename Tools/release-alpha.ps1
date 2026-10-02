@@ -28,8 +28,8 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 $artifactsRoot = Join-Path $repoRoot "artifacts"
 $publishRoot = Join-Path $artifactsRoot "alpha\$Runtime\publish"
 $flavorSuffix = if ($Lite) { "-lite" } else { "" }
-$zipPath = Join-Path $artifactsRoot ("ORBIT-{0}-{1}{2}.zip" -f $Version, $Runtime, $flavorSuffix)
-$manifestPath = Join-Path $artifactsRoot ("ORBIT-{0}-{1}{2}-manifest.txt" -f $Version, $Runtime, $flavorSuffix)
+$zipPath = Join-Path $artifactsRoot ("Singularity-{0}-{1}{2}.zip" -f $Version, $Runtime, $flavorSuffix)
+$manifestPath = Join-Path $artifactsRoot ("Singularity-{0}-{1}{2}-manifest.txt" -f $Version, $Runtime, $flavorSuffix)
 
 if (Test-Path $publishRoot) {
     Remove-Item $publishRoot -Recurse -Force
@@ -69,14 +69,14 @@ try {
     }
 
     @(
-        "ORBIT alpha package"
+        "Singularity alpha package"
         "Version: $Version"
         "Runtime: $Runtime"
         "Configuration: $Configuration"
         "Flavor: $(if ($Lite) { 'Lite' } else { 'Full' })"
         "Published: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
         ""
-        "Entry point: ORBIT.exe"
+        "Entry point: Singularity.exe"
         "Notes: appsettings.json is required at runtime; Tools and Data are preserved intentionally."
         "Notes: Lite flavor removes Tools/Essentia/models/*.pb and may disable advanced analysis features."
     ) | Set-Content -Path $manifestPath
@@ -106,12 +106,12 @@ try {
             Write-Host "Inno Setup (ISCC.exe) not found — skipping installer build. Install via 'winget install JRSoftware.InnoSetup' to enable it." -ForegroundColor Yellow
         }
         else {
-            $issScript = Join-Path $PSScriptRoot "ORBIT.iss"
+            $issScript = Join-Path $PSScriptRoot "Singularity.iss"
             & $isccPath $issScript "/DMyAppVersion=$Version"
             if ($LASTEXITCODE -ne 0) {
                 throw "Inno Setup compilation failed with exit code $LASTEXITCODE"
             }
-            $setupPath = Join-Path $artifactsRoot ("ORBIT-Setup-{0}-win-x64.exe" -f $Version)
+            $setupPath = Join-Path $artifactsRoot ("Singularity-Setup-{0}-win-x64.exe" -f $Version)
             Write-Host "  Installer:      $setupPath" -ForegroundColor Green
         }
     }
