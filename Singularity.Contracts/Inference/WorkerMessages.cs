@@ -22,6 +22,15 @@ public enum PipelineStage
     Tempo,
 }
 
+/// <summary>What <see cref="ProcessTrackCommand.Lyrics"/> holds, written as "plain" / "synced".</summary>
+public enum LyricsKind
+{
+    /// <summary>Plain text, one lyric line per text line. The worker transcribes to find where lines are.</summary>
+    Plain,
+    /// <summary>LRC ("[mm:ss.xx] line"). Line times are known, so the worker skips transcription.</summary>
+    Synced,
+}
+
 public enum TaskOutcome
 {
     Succeeded,
@@ -49,14 +58,16 @@ public abstract record WorkerCommand;
 /// <param name="TaskId">Chosen by the app; echoed on every event about this task.</param>
 /// <param name="AudioPath">Absolute path of the master audio.</param>
 /// <param name="OutputFolder">Where the worker writes vocals.wav / instrumental.wav.</param>
-/// <param name="Lyrics">Reference lyrics, one lyric line per text line. When present the worker aligns them instead of transcribing.</param>
-/// <param name="Language">ISO 639-1 code, e.g. "en"; null lets the worker detect it.</param>
+/// <param name="Lyrics">Reference lyrics (e.g. from LRCLIB); null when none were found and the worker must transcribe.</param>
+/// <param name="LyricsKind">Whether <paramref name="Lyrics"/> is plain text or LRC.</param>
+/// <param name="Language">ISO 639-1 code, e.g. "en"; null lets the worker detect it (only possible when it transcribes).</param>
 /// <param name="ReuseStems">Skip separation when stems already exist in <paramref name="OutputFolder"/>.</param>
 public sealed record ProcessTrackCommand(
     string TaskId,
     string AudioPath,
     string OutputFolder,
     string? Lyrics = null,
+    LyricsKind LyricsKind = LyricsKind.Plain,
     string? Language = null,
     bool ReuseStems = true) : WorkerCommand;
 
@@ -79,11 +90,13 @@ public abstract record WorkerEvent;
 /// <summary>First line the worker writes once models are loadable and it accepts commands.</summary>
 /// <param name="Device">Compute device in use, e.g. "cuda:0", "directml", "cpu".</param>
 /// <param name="Models">Model name per pipeline role, e.g. { "separation": "htdemucs_ft" }.</param>
+/// <param name="MissingModels">Models not downloaded yet; a task that needs one fails until they are fetched.</param>
 public sealed record ReadyEvent(
     int ProtocolVersion,
     string WorkerVersion,
     string Device,
-    IReadOnlyDictionary<string, string> Models) : WorkerEvent;
+    IReadOnlyDictionary<string, string> Models,
+    IReadOnlyList<string>? MissingModels = null) : WorkerEvent;
 
 public sealed record StageStartedEvent(string TaskId, PipelineStage Stage) : WorkerEvent;
 

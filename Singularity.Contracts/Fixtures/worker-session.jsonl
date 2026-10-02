@@ -1,5 +1,5 @@
-{"command":"process_track","taskId":"t-001","audioPath":"C:/Songs/Queen - Bohemian Rhapsody/audio.flac","outputFolder":"C:/Songs/Queen - Bohemian Rhapsody","lyrics":"Is this the real life\nIs this just fantasy","language":"en","reuseStems":true}
-{"event":"ready","protocolVersion":1,"workerVersion":"0.1.0","device":"cuda:0","models":{"separation":"htdemucs_ft","alignment":"wav2vec2-large-960h","pitch":"swiftf0"}}
+{"command":"process_track","taskId":"t-001","audioPath":"C:/Songs/Queen - Bohemian Rhapsody/audio.flac","outputFolder":"C:/Songs/Queen - Bohemian Rhapsody","lyrics":"[00:01.25] Is this the real life\n[00:04.10] Is this just fantasy","lyricsKind":"synced","language":"en","reuseStems":true}
+{"event":"ready","protocolVersion":1,"workerVersion":"0.1.0","device":"cuda:0","models":{"separation":"htdemucs_ft","alignment":"wav2vec2-large-960h","pitch":"swiftf0"},"missingModels":["large-v3"]}
 {"event":"stage_started","taskId":"t-001","stage":"separation"}
 {"event":"progress_update","taskId":"t-001","stage":"separation","progress":0.5,"message":"chunk 3/6"}
 {"taskId":"t-001","stage":"separation","durationMs":41200,"event":"stage_completed"}

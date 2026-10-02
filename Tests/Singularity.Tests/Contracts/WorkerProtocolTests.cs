@@ -25,6 +25,8 @@ public class WorkerProtocolTests
 
         var ready = Assert.IsType<ReadyEvent>(events[0]);
         Assert.Equal(WorkerProtocol.Version, ready.ProtocolVersion);
+        Assert.Equal(new[] { "large-v3" }, ready.MissingModels);
+        Assert.Equal(LyricsKind.Synced, process.LyricsKind);
         Assert.Equal(PipelineStage.Separation, Assert.IsType<StageStartedEvent>(events[1]).Stage);
         Assert.Equal(0.5, Assert.IsType<ProgressUpdateEvent>(events[2]).Progress);
         Assert.Equal(41200, Assert.IsType<StageCompletedEvent>(events[3]).DurationMs); // discriminator last

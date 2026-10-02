@@ -113,12 +113,18 @@ class WorkerLogLevel(str, Enum):
     ERROR = "error"
 
 
+class LyricsKind(str, Enum):
+    PLAIN = "plain"
+    SYNCED = "synced"
+
+
 class ProcessTrackCommand(Contract):
     command: Literal["process_track"] = "process_track"
     task_id: str
     audio_path: str
     output_folder: str
     lyrics: str | None = None
+    lyrics_kind: LyricsKind = LyricsKind.PLAIN
     language: str | None = None
     reuse_stems: bool = True
 
@@ -164,6 +170,7 @@ class ReadyEvent(Contract):
     worker_version: str
     device: str
     models: dict[str, str]
+    missing_models: list[str] | None = None
 
 
 class StageStartedEvent(Contract):

@@ -9,8 +9,8 @@ Singularity reads and writes standard UltraStar `song.txt` files (format 1.1.0),
 | # | Phase | Delivers | Status |
 |---|---|---|---|
 | 0 | Contracts | `Singularity.Contracts`: song package metadata, the quality rubric, the 3-window video-gap rule, the `song.txt` reader/writer (solo, duet, legacy relative), conversion from AI output to a chart, and the worker JSONL protocol. Includes the Pydantic mirror in `inference/` and shared fixtures. | Done |
-| 1 | Inference worker | Python worker: Demucs stems, forced alignment of LRCLIB lyrics (Whisper only when no lyrics are found), SwiftF0 pitch, tempo. A C# host that launches it, reads events and supports cancellation. | Next |
-| 2 | Ingestion | Track request → existing Soulseek search/download → fpcalc + AcoustID check → lyrics → worker → chart → song package. Video fetch with 3-window correlation. Quality tier shown in the library. | |
+| 1 | Inference worker | Python worker: Demucs stems, forced alignment of LRCLIB lyrics (Whisper only without synced lyrics), SwiftF0 pitch, tempo. C# host with cancellation, process-tree kill and a kill-on-close job object. LRCLIB client. | Built; first run with real models pending |
+| 2 | Ingestion | Track request → existing Soulseek search/download → fpcalc + AcoustID check → lyrics → worker → chart → song package. Video fetch with 3-window correlation. Quality tier shown in the library. | Next |
 | 3 | Sing core | Song player with a single audio clock and video rendered *inside* the Skia scene (avoids LibVLC's native-window airspace problem). Mic capture and pitch detection per player, a note lane, a lyric line, UltraStar scoring. 1–6 players, duets. | |
 | 4 | UltraStar parity | Everything in the checklist below. | |
 | 5 | Second screen | A second monitor as the audience/score view, plus a phone companion app (mic over Wi-Fi, remote control, QR pairing) with per-device latency calibration. | |

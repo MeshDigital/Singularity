@@ -1,0 +1,109 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Singularity.Contracts.Inference;
+
+namespace Singularity.Services.Lyrics;
+
+/// <summary>One LRCLIB record. <see cref="DurationSeconds"/> is the recording length LRCLIB has on file.</summary>
+public sealed record LrclibLyrics(
+    long Id,
+    string TrackName,
+    string ArtistName,
+    string? AlbumName,
+    [property: JsonPropertyName("duration")] double DurationSeconds,
+    bool Instrumental,
+    string? PlainLyrics,
+    string? SyncedLyrics)
+{
+    public bool HasSynced => !string.IsNullOrWhiteSpace(SyncedLyrics);
+    public bool HasPlain => !string.IsNullOrWhiteSpace(PlainLyrics);
+
+    /// <summary>
+    /// The best lyrics for the inference worker. Synced lyrics come first because they let it skip
+    /// transcription, then plain text. Null for instrumentals and records with no lyrics.
+    /// </summary>
+    public (string Text, LyricsKind Kind)? ForWorker() =>
+        Instrumental ? null
+        : HasSynced ? (SyncedLyrics!, LyricsKind.Synced)
+        : HasPlain ? (PlainLyrics!, LyricsKind.Plain)
+        : null;
+}
+
+/// <summary>
+/// Client for lrclib.net, a free lyrics database with no API key. LRCLIB has no ISRC lookup.
+/// The exact signature endpoint (artist, title, album, duration) is tried first, then a search,
+/// keeping only results whose duration is within <see cref="DurationToleranceSeconds"/>. A wrong
+/// song's lyrics would misalign the whole chart, so a duration mismatch is treated as no result.
+/// </summary>
+public sealed class LrclibClient
+{
+    public const string DefaultBaseAddress = "https://lrclib.net/";
+    public const double DurationToleranceSeconds = 2.0;
+
+    private const string UserAgent = "Singularity/0.1.0 ( https://github.com/MeshDigital/Singularity )";
+
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    {
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+    };
+
+    private readonly HttpClient _http;
+    private readonly ILogger<LrclibClient> _logger;
+
+    public LrclibClient(HttpClient http, ILogger<LrclibClient> logger)
+    {
+        _http = http;
+        _logger = logger;
+        _http.BaseAddress ??= new Uri(DefaultBaseAddress);
+        if (!_http.DefaultRequestHeaders.UserAgent.Any())
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent); // LRCLIB asks clients to identify themselves
+    }
+
+    /// <summary>Lyrics for a recording, or null when LRCLIB has none that match its duration.</summary>
+    /// <exception cref="HttpRequestException">LRCLIB returned an error other than "not found".</exception>
+    public async Task<LrclibLyrics?> FindAsync(string artist, string title, string? album, int? durationMs, CancellationToken ct = default)
+    {
+        if (album is { Length: > 0 } && durationMs is > 0)
+        {
+            var exact = await GetJsonAsync<LrclibLyrics>(
+                $"api/get?artist_name={Uri.EscapeDataString(artist)}&track_name={Uri.EscapeDataString(title)}" +
+                $"&album_name={Uri.EscapeDataString(album)}&duration={(durationMs.Value / 1000.0).ToString("0", CultureInfo.InvariantCulture)}", ct).ConfigureAwait(false);
+            if (exact is not null && Matches(exact, durationMs)) return exact;
+        }
+
+        var results = await GetJsonAsync<List<LrclibLyrics>>(
+            $"api/search?artist_name={Uri.EscapeDataString(artist)}&track_name={Uri.EscapeDataString(title)}", ct).ConfigureAwait(false);
+        var best = Pick(results ?? new List<LrclibLyrics>(), durationMs);
+        if (best is null) _logger.LogDebug("LRCLIB has no lyrics for {Artist} - {Title}", artist, title);
+        return best;
+    }
+
+    /// <summary>Among search results, prefer a duration match, then synced lyrics, then the closest duration.</summary>
+    internal static LrclibLyrics? Pick(IEnumerable<LrclibLyrics> results, int? durationMs) =>
+        results
+            .Where(r => Matches(r, durationMs) && (r.Instrumental || r.HasSynced || r.HasPlain))
+            .OrderByDescending(r => r.HasSynced)
+            .ThenBy(r => durationMs is null ? 0 : Math.Abs(r.DurationSeconds - durationMs.Value / 1000.0))
+            .FirstOrDefault();
+
+    private static bool Matches(LrclibLyrics r, int? durationMs) =>
+        durationMs is null || Math.Abs(r.DurationSeconds - durationMs.Value / 1000.0) <= DurationToleranceSeconds;
+
+    private async Task<T?> GetJsonAsync<T>(string relativeUri, CancellationToken ct) where T : class
+    {
+        using var response = await _http.GetAsync(relativeUri, ct).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<T>(Json, ct).ConfigureAwait(false);
+    }
+}

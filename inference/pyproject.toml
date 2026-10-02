@@ -7,10 +7,23 @@ name = "singularity-inference"
 version = "0.1.0"
 description = "Singularity's AI song-creation worker: stem separation, lyric alignment and pitch tracking over a JSONL protocol."
 requires-python = ">=3.11"
-dependencies = ["pydantic>=2.7,<3"]
+dependencies = ["pydantic>=2.7,<3", "pyphen>=0.14"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# The model stages. Install torch/torchaudio first from the CUDA index that matches the GPU
+# (RTX 50-series needs CUDA 12.8 wheels), see README. torchaudio stays below 2.9, which removed or
+# moved much of its API, until the alignment stage has been checked against it.
+ml = [
+    "torch>=2.7",
+    "torchaudio>=2.7,<2.9",
+    "demucs>=4.0.1",
+    "faster-whisper>=1.1",
+    "swift-f0>=0.1",
+    "librosa>=0.10",
+    "soundfile>=0.12",
+    "numpy>=1.26",
+]
 
 [tool.setuptools.packages.find]
 include = ["singularity_inference*"]
