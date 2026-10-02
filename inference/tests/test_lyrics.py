@@ -138,3 +138,16 @@ def test_lrc_offset_with_nothing_to_compare():
 def test_shift_lines_clamps_at_zero():
     shifted = shift_lines([LyricLineText("a", 1000, 3000)], -2000)
     assert (shifted[0].start_ms, shifted[0].end_ms) == (0, 1000)
+
+
+def test_lrc_offset_keeps_a_correct_lrc_in_a_mostly_sung_song():
+    # Regression (Adele - Rolling In The Deep): the LRC was right, but a +30 s shift scored slightly
+    # higher because lines pushed past the end stopped counting. Sung ~70% of the time, with a gap
+    # the shifted version happens to dodge.
+    lines = parse_lrc("\n".join(f"[{m:02d}:{s:02d}.00] line" for m, s in
+                                [(0, 5), (0, 10), (0, 15), (0, 20), (0, 25), (0, 30), (0, 35), (0, 40), (0, 45), (0, 50)])
+                      + "\n[00:55.00]")
+    sung = _activity([(4, 9.5), (10, 20), (22, 31), (33, 60)], total_s=60)
+    sync = lrc_offset(lines, sung)
+    assert sync.offset_ms == 0
+    assert sync.fit > 0.8

@@ -228,44 +228,46 @@ class LrcSync:
     fit: float  # share of the (shifted) LRC line time that lands on sung frames, 0..1
 
 
+# An LRC is usually timed right; only move it when a shift is clearly better (Wonderwall: +0.21).
+MIN_SHIFT_GAIN = 0.1
+
+
 def lrc_offset(lines: list[LyricLineText], activity: list[bool], max_shift_ms: int = 30_000) -> LrcSync:
     """Finds the shift of the LRC timeline that best matches where the vocal stem is active.
 
     LRCLIB files are often timed for another release of the song: a longer intro or a radio edit
-    moves every line by seconds, which defeats per-line alignment. Each candidate shift scores
-    the zero-mean activity summed over the shifted lines, so a long line spanning a pause neither
-    helps nor hurts. A prefix sum makes each shift cost one step per line.
+    moves every line by seconds, which defeats per-line alignment. Each candidate shift is scored by
+    the share of line time that lands on sung frames. Time shifted past either end of the recording
+    counts as unsung, so a big shift can't win by pushing awkward lines off the end. The shift is
+    only taken when it beats the LRC as-is by MIN_SHIFT_GAIN: in a song that is sung most of the
+    time, every shift fits somewhat, and repeated choruses make far shifts look plausible.
+    A prefix sum makes each shift cost one step per line.
     """
-    n = len(activity)
-    if n == 0 or not lines:
-        return LrcSync(0, 0.0)
-    mean = sum(activity) / n
-    prefix = [0.0]
-    for a in activity:
-        prefix.append(prefix[-1] + (1.0 - mean if a else -mean))
-    ones = [0]
-    for a in activity:
-        ones.append(ones[-1] + (1 if a else 0))
-
     spans = [(l.start_ms // ACTIVITY_FRAME_MS, (l.end_ms if l.end_ms is not None else l.start_ms + 5000) // ACTIVITY_FRAME_MS)
              for l in lines if l.start_ms is not None]
-
-    def total(table: list, shift: int) -> tuple[float, int]:
-        got, length = 0.0, 0
-        for a, b in spans:
-            lo, hi = min(max(a + shift, 0), n), min(max(b + shift, 0), n)
-            got += table[hi] - table[lo]
-            length += hi - lo
-        return got, length
+    spans = [(a, b) for a, b in spans if b > a]
+    if not activity or not spans:
+        return LrcSync(0, 0.0)
 
     max_shift = max_shift_ms // ACTIVITY_FRAME_MS
-    best_shift, best_score = 0, total(prefix, 0)[0]
+    pad = max_shift + max(b for _, b in spans)  # room for every shifted span; padding is unsung
+    sung = [0]
+    for a in [False] * pad + list(activity) + [False] * pad:
+        sung.append(sung[-1] + (1 if a else 0))
+    length = sum(b - a for a, b in spans)
+
+    def fit(shift: int) -> float:
+        return sum(sung[b + shift + pad] - sung[a + shift + pad] for a, b in spans) / length
+
+    as_is = fit(0)
+    best_shift, best_fit = 0, as_is
     for shift in sorted(range(-max_shift, max_shift + 1), key=abs):  # ties go to the smallest shift
-        score = total(prefix, shift)[0]
-        if score > best_score + 1e-9:
-            best_shift, best_score = shift, score
-    sung, length = total(ones, best_shift)
-    return LrcSync(best_shift * ACTIVITY_FRAME_MS, sung / length if length else 0.0)
+        f = fit(shift)
+        if f > best_fit + 1e-9:
+            best_shift, best_fit = shift, f
+    if best_fit - as_is < MIN_SHIFT_GAIN:
+        return LrcSync(0, as_is)
+    return LrcSync(best_shift * ACTIVITY_FRAME_MS, best_fit)
 
 
 def shift_lines(lines: list[LyricLineText], offset_ms: int) -> list[LyricLineText]:
