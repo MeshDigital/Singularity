@@ -80,13 +80,18 @@ def smooth_octaves(tones: list[int | None], context: int = OCTAVE_CONTEXT) -> li
 MIN_SEGMENT_MS = 120
 # Median filter width over voiced frames before quantising, against frame-to-frame jitter.
 SMOOTH_FRAMES = 5
+# Leave the current note only when the pitch is more than this far from it (semitones). 0.5 is
+# plain rounding. 0.75 (with 7-frame smoothing) cut Elvis's 201 vibrato "~" notes to 156, but over
+# 32 benchmark songs it traded recall for precision one for one (F1 64.0 vs 63.9), so it stays 0.5.
+HYSTERESIS = 0.5
 
 
 def pitch_segments(track: PitchTrack, start_ms: int, end_ms: int, base_tone: int) -> list[tuple[int, int, int]] | None:
     """Splits a syllable into the notes it is sung on, as (start_ms, end_ms, midi_tone).
 
-    Voiced frames are median-smoothed, rounded to semitones and folded to the octave of `base_tone`
-    (the syllable's own, octave-smoothed tone). Runs of equal notes shorter than MIN_SEGMENT_MS merge
+    Voiced frames are median-smoothed and folded to the octave of `base_tone` (the syllable's own,
+    octave-smoothed tone); a new note starts only when the pitch moves more than HYSTERESIS from
+    the current one. Runs of equal notes shorter than MIN_SEGMENT_MS merge
     into their longer neighbour. Returns None when the syllable stays on a single note.
     """
     lo = bisect.bisect_left(track.times_ms, start_ms)
@@ -101,10 +106,10 @@ def pitch_segments(track: PitchTrack, start_ms: int, end_ms: int, base_tone: int
     runs: list[list] = []  # [start_ms, tone]
     for k, (t, _) in enumerate(frames):
         window = sorted(values[max(0, k - half):k + half + 1])
-        tone = int(round(window[len(window) // 2]))
-        tone += 12 * round((base_tone - tone) / 12)
-        if not runs or runs[-1][1] != tone:
-            runs.append([t, tone])
+        value = window[len(window) // 2]
+        value += 12 * round((base_tone - value) / 12)
+        if not runs or abs(value - runs[-1][1]) > HYSTERESIS:
+            runs.append([t, int(round(value))])
 
     # Each run lasts until the next starts; the first starts at the syllable, the last ends with it.
     bounds = [start_ms] + [int(r[0]) for r in runs[1:]] + [end_ms]

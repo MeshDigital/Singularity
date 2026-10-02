@@ -151,3 +151,14 @@ def test_lrc_offset_keeps_a_correct_lrc_in_a_mostly_sung_song():
     sync = lrc_offset(lines, sung)
     assert sync.offset_ms == 0
     assert sync.fit > 0.8
+
+
+def test_backing_vocals_in_parentheses_are_dropped():
+    from singularity_inference.lyrics import lead_only
+
+    assert lead_only("Love Shack, baby (the Love Shack, baby)") == "Love Shack, baby"
+    assert lead_only("(ooh) Is this (yeah) the real life") == "Is this the real life"
+    assert lead_only("(love, baby, that's where it's at)") == ""
+    lines = parse_lrc("[00:01.00] Love Shack (Love Shack!)\n[00:03.00] (whoo)\n[00:05.00] baby", 9000)
+    assert [(l.text, l.start_ms, l.end_ms) for l in lines] == [("Love Shack", 1000, 3000), ("baby", 5000, 9000)]
+    assert [l.text for l in parse_plain("Love Shack (Love Shack!)\n(whoo)\nbaby")] == ["Love Shack", "baby"]

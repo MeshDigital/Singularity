@@ -224,3 +224,14 @@ def test_build_lines_attaches_segments():
     track = _track([(0, 400, 64), (400, 800, 60)])
     syl = build_lines([[AlignedWord("oh", 0, 800, 0.9)]], track, None)[0].syllables[0]
     assert [(x.start_ms, x.end_ms, x.midi_tone) for x in syl.segments] == [(0, 400, 64), (400, 800, 60)]
+
+
+def test_vibrato_across_a_semitone_boundary_stays_one_note():
+    from singularity_inference.assemble import pitch_segments
+    import math
+
+    # 6 Hz vibrato of +-0.6 semitone around 60.4: crosses the 60/61 boundary every cycle.
+    times = [float(t) for t in range(0, 1200, 16)]
+    midi = [60.4 + 0.6 * math.sin(2 * math.pi * 6 * t / 1000) for t in times]
+    track = PitchTrack(times, [440.0 * 2 ** ((m - 69) / 12) for m in midi], [0.9] * len(times))
+    assert pitch_segments(track, 0, 1200, 60) is None

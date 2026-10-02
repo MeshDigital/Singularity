@@ -14,6 +14,14 @@ from functools import lru_cache
 _LRC_TIME = re.compile(r"\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]")
 _LRC_WORD_TIME = re.compile(r"<\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?>")
 _SECTION_HEADER = re.compile(r"^\s*[\[(][^\])]*[\])]\s*$")  # "[Chorus]", "(Verse 2)"
+_BACKING = re.compile(r"\s*\([^()]*\)")  # "(ooh, baby)": backing vocals / ad-libs
+
+
+def lead_only(text: str) -> str:
+    """Drops parenthesised parts, which lyric sites use for backing vocals and ad-libs. UltraStar
+    charts the lead vocal only: in Love Shack, LRCLIB's "(the Love Shack, baby)" echoes made the
+    generated chart 2.3x as dense as the human one."""
+    return re.sub(r"\s{2,}", " ", _BACKING.sub("", text)).strip()
 
 
 @dataclass(frozen=True)
@@ -56,7 +64,7 @@ def parse_lrc(text: str, duration_ms: int | None = None) -> list[LyricLineText]:
         stamps = list(_LRC_TIME.finditer(raw))
         if not stamps:
             continue
-        lyric = _LRC_WORD_TIME.sub("", raw[stamps[-1].end():]).strip()
+        lyric = lead_only(_LRC_WORD_TIME.sub("", raw[stamps[-1].end():]))
         for m in stamps:
             minutes, seconds, frac = int(m.group(1)), int(m.group(2)), m.group(3) or "0"
             frac_ms = int(frac.ljust(3, "0")[:3])
@@ -74,11 +82,8 @@ def parse_lrc(text: str, duration_ms: int | None = None) -> list[LyricLineText]:
 
 def parse_plain(text: str) -> list[LyricLineText]:
     """Non-empty lines, without section headers like "[Chorus]"."""
-    return [
-        LyricLineText(line.strip())
-        for line in text.splitlines()
-        if line.strip() and not _SECTION_HEADER.match(line)
-    ]
+    lines = (lead_only(line) for line in text.splitlines() if not _SECTION_HEADER.match(line))
+    return [LyricLineText(line) for line in lines if line]
 
 
 def normalize(word: str) -> str:
