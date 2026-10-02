@@ -236,15 +236,6 @@ public class SpotifyEnrichmentService
         return await GetRecommendationsForSeedsAsync(null, limit);
     }
 
-    /// <summary>
-    /// Fetches recommendations using a specific track as a seed.
-    /// </summary>
-    public async Task<System.Collections.Generic.List<SpotifyTrackViewModel>> GetRecommendationsForTrackAsync(string spotifyId, int limit = 20)
-    {
-        if (string.IsNullOrEmpty(spotifyId)) return new();
-        return await GetRecommendationsForSeedsAsync(new System.Collections.Generic.List<string> { spotifyId }, limit);
-    }
-
     private async Task<System.Collections.Generic.List<SpotifyTrackViewModel>> GetRecommendationsForSeedsAsync(System.Collections.Generic.List<string>? seedIds, int limit = 10)
     {
         // 1. Circuit Breaker Check

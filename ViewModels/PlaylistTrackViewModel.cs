@@ -310,20 +310,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
     public double BPM => Model.BPM ?? 0.0;
     public string MusicalKey => Model.MusicalKey ?? "—";
 
-    /// <summary>Applies a BPM edit already persisted elsewhere (e.g. TrackRepository.UpdateBpmAsync)
-    /// to THIS view-model instance and re-raises the properties that read it. Callers that hold a
-    /// different PlaylistTrackViewModel instance for the same track (e.g. a Flow Builder card,
-    /// which wraps its own separate instance — see MixTransitionViewModel.LoadPairAsync's
-    /// freshly-constructed pair) won't see this change; publish TrackMetadataUpdatedEvent for
-    /// those to pick up.</summary>
-    public void ApplyBpmUpdate(double bpm)
-    {
-        Model.BPM = bpm;
-        OnPropertyChanged(nameof(BPM));
-        OnPropertyChanged(nameof(BpmDisplay));
-        OnPropertyChanged(nameof(HasBpm));
-    }
-    
     public string GlobalId { get; set; } // TrackUniqueHash
     
     // Properties linked to Model and Notification
@@ -439,7 +425,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
     public bool IsCompleted => State == PlaylistTrackState.Completed;
     public bool IsStalled => State == PlaylistTrackState.Stalled;
     public string? StalledReason => Model.StalledReason;
-    public bool IsOnHold => Model.Status == TrackStatus.OnHold;
     
     // UI Layout Bools (For clean XAML)
     public bool IsSearching => State == PlaylistTrackState.Searching || State == PlaylistTrackState.Pending;
@@ -765,13 +750,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
     public byte[] MidData => WaveformData.MidData;
     public byte[] HighData => WaveformData.HighData;
 
-    /// <summary>
-    /// True when the track has stored waveform data suitable for the library row underlay.
-    /// Checks the base model bytes so no lazy-load is required.
-    /// </summary>
-    public bool HasWaveformData =>
-        (Model.RmsData?.Length > 0) || (Model.WaveformData?.Length > 0);
-    
     // Technical Stats
     public int SampleRate => Model.SpectralSampleRateHz ?? 0;
     public string SampleRateDisplay => Model.SpectralSampleRateHz.HasValue && Model.SpectralSampleRateHz.Value > 0

@@ -1678,23 +1678,6 @@
                             </StackPanel>
                         </Button>
                     </Grid>
-
-                    <Separator Background="#1B263B" Height="1"/>
-
-                    <!-- Keyboard Telemetry opt-in (Epic #119 Task 19) -->
-                    <Grid ColumnDefinitions="*,Auto">
-                        <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                            <TextBlock Text="Keyboard Usage Statistics (Local Only)"
-                                       FontWeight="SemiBold" Foreground="#E0E1DD"/>
-                            <TextBlock Text="Count which keyboard shortcuts you use most. Data is stored only on this device and never sent anywhere."
-                                       Foreground="#778DA9" FontSize="11" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding EnableKeyboardTelemetry, Mode=TwoWay}"
-                                  VerticalAlignment="Center"
-                                  AutomationProperties.Name="Enable local keyboard usage statistics"
-                                  Margin="16,0,0,0"/>
-                    </Grid>
                 </StackPanel>
             </Border>
             </Expander>

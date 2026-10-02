@@ -168,44 +168,12 @@ public class AppConfig
     public bool DashboardIsNavigationCollapsed { get; set; } = false; // Whether the left navigation is collapsed
     public bool DashboardIsRightPanelOpen { get; set; } = true; // Whether the right panel is visible
 
-    // Workstation overlay persistence
-    public string WorkstationOverlaySizeMode { get; set; } = "Auto"; // Auto | Compact | Comfort | Full | Manual
-    public double WorkstationOverlayManualWidth { get; set; } = 0;
-    public double WorkstationOverlayManualHeight { get; set; } = 0;
-    public bool WorkstationOverlayIsOpen { get; set; } = false;
-    public int WorkstationDrawerTabIndex { get; set; } = 0;
-    public string? WorkstationActivePlaylistId { get; set; }
-    public string WorkstationDensityMode { get; set; } = "Auto"; // Auto | Compact | Normal | Touch
-
-    // Flow Builder persistence
-    public string? FlowBuilderSelectedPlaylistId { get; set; }
-    public bool FlowBuilderRestoreContentOnStartup { get; set; } = true;
-
-    /// <summary>Countdown cues placed automatically before a Drop cue when one is set or moved:
-    /// "Off", "Auto" (by genre family: breakbeat/DnB 32,16,8 bars; four-on-the-floor 32,16), or a
-    /// fixed comma-separated bar list such as "32,16,8". See Engine.Cueing.DropCountdownCues.</summary>
-    public string DropCountdownMode { get; set; } = "Auto";
-
-    /// <summary>Bars before the drop for the "Custom" cue template, e.g. "32,16,8".</summary>
-    public string CustomCountdownBars { get; set; } = "32,16,8";
-
-    /// <summary>Playlist Discover panel sources (public Beatport pages / Deezer API).</summary>
-    public bool DiscoverUseBeatport { get; set; } = true;
-
     /// <summary>Width of the right-hand context panel (pixels), resizable by dragging its edge.</summary>
     public int ContextPanelWidth { get; set; } = 400;
-    public bool DiscoverUseDeezer { get; set; } = true;
-    public bool EnableFlowBuilderSuggestedFlowTelemetry { get; set; } = true;
 
     // Frequent Sources (privacy-first, local-only, opt-in)
     public bool EnableFrequentSources { get; set; } = false;
     public string FrequentSourcesStagingPath { get; set; } = string.Empty;
-
-    // Five-column desktop layout – Epic 12 (#110)
-    public double TimelinePanelWidth { get; set; } = 300;
-    public bool IsTimelinePanelOpen { get; set; } = false;
-    public double OverlaysPanelWidth { get; set; } = 250;
-    public bool IsOverlaysPanelOpen { get; set; } = false;
 
     // Library Management
     public List<string> LibraryRootPaths { get; set; } = new(); // Root directories to scan for music files
@@ -231,9 +199,6 @@ public class AppConfig
     // Phase 8: Dependency Management
     public bool IsFfmpegAvailable { get; set; } = false; // Updated on startup and manual checks
     public string FfmpegVersion { get; set; } = ""; // Detected version (e.g., "6.0.1")
-
-    // Audio Analysis Parallelism
-    public int MaxConcurrentAnalyses { get; set; } = 0; // 0 = auto-detect based on CPU/RAM, 1 = sequential, >1 = parallel
 
     // Hyper-Drive: Adaptive lane autotuning
     public bool EnableAdaptiveLanes { get; set; } = true;
@@ -276,43 +241,10 @@ public class AppConfig
     public string WaveformPalette { get; set; } = "NeonRgb"; // "NeonRgb" or "ClassicRgb"
     public bool WaveformShowEnergyCurve { get; set; } = true;
     public bool WaveformShowVocalGhost { get; set; } = true;
-    public bool WaveformShowPhraseSections { get; set; } = true;
-    public bool WaveformShowBeatGrid { get; set; } = true;
     public float WaveformGain { get; set; } = 1.0f;
-
-    // Library smart insert (segment-aware playlist intelligence)
-    // Confidence threshold: 0.80 strict, 0.72 normal, 0.65 loose/experimental
-    public double LibrarySmartInsertMinConfidence { get; set; } = 0.72;
-    // Structure sensitivity slider (0..100): higher values prioritize intro/drop/breakdown/outro continuity
-    public int LibrarySmartInsertStructureSensitivity { get; set; } = 55;
-
-    // Cue Forge last session
-    public string? CueForgeLastTrackHash { get; set; }
-    public string? CueForgeLastTrackTitle { get; set; }
-    public string? CueForgeLastTrackArtist { get; set; }
 
     public override string ToString()
     {
         return $"AppConfig(User={Username}, Port={ListenPort}, Downloads={DownloadDirectory})";
     }
-
-    // ── Automix Configuration (Task 3.4 / #77) ───────────────────────────
-    public double AutomixMinBpm { get; set; } = 100;
-    public double AutomixMaxBpm { get; set; } = 160;
-    public bool   AutomixMatchKey { get; set; } = true;
-    public int    AutomixMaxEnergyJump { get; set; } = 3;
-    public int    AutomixMaxTracks { get; set; } = 20;
-    /// <summary>"None" | "Rising" | "Wave" | "Peak"</summary>
-    public string AutomixEnergyCurve { get; set; } = "Wave";
-    public double AutomixHarmonicWeight { get; set; } = 3.0;
-    public double AutomixTempoWeight    { get; set; } = 1.0;
-    public double AutomixEnergyWeight   { get; set; } = 0.5;
-
-    // ── Privacy / Telemetry (Task 19 / Epic #119) ─────────────────────────
-    /// <summary>
-    /// When true, keyboard action usage is counted locally in LiteDB.
-    /// No data is ever sent externally. Default off (opt-in).
-    /// </summary>
-    public bool EnableKeyboardTelemetry { get; set; } = false;
-
 }

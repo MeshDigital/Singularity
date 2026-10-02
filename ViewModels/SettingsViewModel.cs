@@ -145,21 +145,6 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    /// <summary>Opt-in toggle for local keyboard-action usage tracking (Task 19).</summary>
-    public bool EnableKeyboardTelemetry
-    {
-        get => _config.EnableKeyboardTelemetry;
-        set
-        {
-            if (_config.EnableKeyboardTelemetry != value)
-            {
-                _config.EnableKeyboardTelemetry = value;
-                OnPropertyChanged();
-                SaveSettings();
-            }
-        }
-    }
-
     /// <summary>Toggle for the live network-activity feed (Soulseek + HTTP + socket/DNS). Local-only.</summary>
     public bool EnableNetworkActivityMonitor
     {
@@ -581,20 +566,6 @@ public class SettingsViewModel : INotifyPropertyChanged, IDisposable
             if (_config.WaveformShowVocalGhost != value)
             {
                 _config.WaveformShowVocalGhost = value;
-                OnPropertyChanged();
-                SaveSettings();
-            }
-        }
-    }
-
-    public bool WaveformShowBeatGrid
-    {
-        get => _config.WaveformShowBeatGrid;
-        set
-        {
-            if (_config.WaveformShowBeatGrid != value)
-            {
-                _config.WaveformShowBeatGrid = value;
                 OnPropertyChanged();
                 SaveSettings();
             }

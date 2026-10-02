@@ -304,13 +304,6 @@ namespace Singularity.ViewModels
         public WaveformAnalysisData? WaveformData => _currentTrack?.WaveformData;
         public bool HasCurrentTrack => _currentTrack is not null;
 
-        /// <summary>
-        /// The file path actually loaded into the audio engine right now — ad-hoc PlayTrack()
-        /// calls first, falling back to the queued CurrentTrack's resolved path. Lets other
-        /// pages (e.g. Cue Forge) check whether they need to (re)load this track before trying
-        /// to play/seek/audition it, without duplicating the resolution order used internally.
-        /// </summary>
-        public string? CurrentFilePath => _currentFilePath ?? CurrentTrack?.Model?.ResolvedFilePath;
         public string CurrentTrackContextSummary => BuildTrackContextSummary(_currentTrack);
         public string CurrentTrackKeyBadge => _currentTrack is null || string.IsNullOrWhiteSpace(_currentTrack.CamelotDisplay) || _currentTrack.CamelotDisplay == "—"
             ? "KEY —"
@@ -399,14 +392,6 @@ namespace Singularity.ViewModels
             set => SetProperty(ref _isExpandedPlayerOpen, value);
         }
 
-        /// <summary>Album-art-derived hue (0–360), or -1 for default energy-based color.</summary>
-        private float _albumArtHue = -1f;
-        public float AlbumArtHue
-        {
-            get => _albumArtHue;
-            set => SetProperty(ref _albumArtHue, value);
-        }
-        
         // Phase 9.2: Loading & Error States
         private bool _isLoading;
         public bool IsLoading
@@ -1667,16 +1652,6 @@ namespace Singularity.ViewModels
         // Helper to load track
         public void PlayTrack(string filePath, string title, string artist, double? loudnessLufs = null)
             => _ = LoadTrackCore(filePath, title, artist, autoPlay: true, loudnessLufs);
-
-        /// <summary>
-        /// Loads a track "hot and ready" without starting playback — e.g. Cue Forge loading
-        /// whatever track it's editing so Play/Seek/Audition have something to act on, without
-        /// audibly blipping the track that's about to be silently loaded. A PlayTrack()-then-
-        /// immediately-Pause() sequence still lets a moment of real audio through the WASAPI
-        /// buffer before the pause takes effect.
-        /// </summary>
-        public void LoadTrackPaused(string filePath, string title, string artist, double? loudnessLufs = null)
-            => _ = LoadTrackCore(filePath, title, artist, autoPlay: false, loudnessLufs);
 
         private bool LoadTrackCore(string filePath, string title, string artist, bool autoPlay, double? loudnessLufs = null)
         {

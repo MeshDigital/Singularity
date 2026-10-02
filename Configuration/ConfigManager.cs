@@ -147,8 +147,6 @@ public class ConfigManager
                 WaveformPalette = config["Waveform:Palette"] ?? "NeonRgb",
                 WaveformShowEnergyCurve = bool.TryParse(config["Waveform:ShowEnergyCurve"], out var wsec) ? wsec : true,
                 WaveformShowVocalGhost = bool.TryParse(config["Waveform:ShowVocalGhost"], out var wsvg) ? wsvg : true,
-                WaveformShowPhraseSections = bool.TryParse(config["Waveform:ShowPhraseSections"], out var wsps) ? wsps : true,
-                WaveformShowBeatGrid = bool.TryParse(config["Waveform:ShowBeatGrid"], out var wsbg) ? wsbg : true,
                 WaveformGain = float.TryParse(config["Waveform:Gain"], System.Globalization.CultureInfo.InvariantCulture, out var wg) ? wg : 1.0f,
 
                 // [Library] & Upgrade Scout
@@ -179,9 +177,6 @@ public class ConfigManager
                 IsFfmpegAvailable = bool.TryParse(config["Dependencies:IsFfmpegAvailable"], out var ifa) && ifa,
                 FfmpegVersion = config["Dependencies:FfmpegVersion"] ?? "",
                 
-                // [Analysis]
-                MaxConcurrentAnalyses = int.TryParse(config["Analysis:MaxConcurrentAnalyses"], out var mca) ? mca : 0,
-                
                 // [Window]
                 WindowWidth = double.TryParse(config["Window:Width"], out var ww) ? ww : 1400,
                 WindowHeight = double.TryParse(config["Window:Height"], out var wh) ? wh : 900,
@@ -194,27 +189,8 @@ public class ConfigManager
                 DashboardIsNavigationCollapsed = bool.TryParse(config["Dashboard:IsNavigationCollapsed"], out var dnc) && dnc,
                 DashboardIsRightPanelOpen = !bool.TryParse(config["Dashboard:IsRightPanelOpen"], out var drpo) || drpo,
 
-                // [Workstation]
-                WorkstationOverlaySizeMode = config["Workstation:OverlaySizeMode"] ?? "Auto",
-                WorkstationOverlayManualWidth = double.TryParse(config["Workstation:OverlayManualWidth"], out var womw) ? womw : 0,
-                WorkstationOverlayManualHeight = double.TryParse(config["Workstation:OverlayManualHeight"], out var womh) ? womh : 0,
-                WorkstationOverlayIsOpen = bool.TryParse(config["Workstation:OverlayIsOpen"], out var woio) && woio,
-                WorkstationDrawerTabIndex = int.TryParse(config["Workstation:DrawerTabIndex"], out var wdti) ? Math.Clamp(wdti, 0, 4) : 0,
-                WorkstationActivePlaylistId = config["Workstation:ActivePlaylistId"],
-
-                // [FlowBuilder]
-                FlowBuilderSelectedPlaylistId = config["FlowBuilder:SelectedPlaylistId"],
-                FlowBuilderRestoreContentOnStartup = !bool.TryParse(config["FlowBuilder:RestoreContentOnStartup"], out var fbrc) || fbrc,
-                EnableFlowBuilderSuggestedFlowTelemetry = !bool.TryParse(config["FlowBuilder:EnableSuggestedFlowTelemetry"], out var efbst) || efbst,
-
-                // [Cues]
-                DropCountdownMode = string.IsNullOrWhiteSpace(config["Cues:DropCountdownMode"]) ? "Auto" : config["Cues:DropCountdownMode"]!,
-                CustomCountdownBars = string.IsNullOrWhiteSpace(config["Cues:CustomCountdownBars"]) ? "32,16,8" : config["Cues:CustomCountdownBars"]!,
-
-                // [Discover]
-                DiscoverUseBeatport = !bool.TryParse(config["Discover:UseBeatport"], out var dub) || dub,
+                // [Layout]
                 ContextPanelWidth = int.TryParse(config["Layout:ContextPanelWidth"], out var cpw) ? cpw : 400,
-                DiscoverUseDeezer = !bool.TryParse(config["Discover:UseDeezer"], out var dud) || dud,
 
                 // [FrequentSources]
                 EnableFrequentSources = bool.TryParse(config["FrequentSources:EnableFrequentSources"], out var efs) && efs,
@@ -222,9 +198,6 @@ public class ConfigManager
 
                 // [Import]
                 ImportWebShortcuts = ParseImportWebShortcuts(config["Import:WebShortcutsJson"]),
-
-                // [Privacy]
-                EnableKeyboardTelemetry = bool.TryParse(config["Privacy:EnableKeyboardTelemetry"], out var ekt) && ekt,
 
                 // [Advanced]
                 EnableNetworkActivityMonitor = !bool.TryParse(config["Advanced:EnableNetworkActivityMonitor"], out var enam) || enam, // Default true
@@ -353,8 +326,6 @@ public class ConfigManager
         iniContent.AppendLine($"Palette = {config.WaveformPalette}");
         iniContent.AppendLine($"ShowEnergyCurve = {config.WaveformShowEnergyCurve}");
         iniContent.AppendLine($"ShowVocalGhost = {config.WaveformShowVocalGhost}");
-        iniContent.AppendLine($"ShowPhraseSections = {config.WaveformShowPhraseSections}");
-        iniContent.AppendLine($"ShowBeatGrid = {config.WaveformShowBeatGrid}");
         iniContent.AppendLine($"Gain = {config.WaveformGain.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
 
         iniContent.AppendLine();
@@ -397,10 +368,6 @@ public class ConfigManager
         iniContent.AppendLine($"FfmpegVersion = {config.FfmpegVersion}");
 
         iniContent.AppendLine();
-        iniContent.AppendLine("[Analysis]");
-        iniContent.AppendLine($"MaxConcurrentAnalyses = {config.MaxConcurrentAnalyses}");
-
-        iniContent.AppendLine();
         iniContent.AppendLine("[Window]");
         iniContent.AppendLine($"Width = {config.WindowWidth}");
         iniContent.AppendLine($"Height = {config.WindowHeight}");
@@ -415,33 +382,8 @@ public class ConfigManager
         iniContent.AppendLine($"IsRightPanelOpen = {config.DashboardIsRightPanelOpen}");
 
         iniContent.AppendLine();
-        iniContent.AppendLine("[Workstation]");
-        iniContent.AppendLine($"OverlaySizeMode = {config.WorkstationOverlaySizeMode}");
-        iniContent.AppendLine($"OverlayManualWidth = {config.WorkstationOverlayManualWidth}");
-        iniContent.AppendLine($"OverlayManualHeight = {config.WorkstationOverlayManualHeight}");
-        iniContent.AppendLine($"OverlayIsOpen = {config.WorkstationOverlayIsOpen}");
-        iniContent.AppendLine($"DrawerTabIndex = {Math.Max(0, config.WorkstationDrawerTabIndex)}");
-        iniContent.AppendLine($"ActivePlaylistId = {config.WorkstationActivePlaylistId}");
-
-        iniContent.AppendLine();
-        iniContent.AppendLine("[FlowBuilder]");
-        iniContent.AppendLine($"SelectedPlaylistId = {config.FlowBuilderSelectedPlaylistId}");
-        iniContent.AppendLine($"RestoreContentOnStartup = {config.FlowBuilderRestoreContentOnStartup}");
-        iniContent.AppendLine($"EnableSuggestedFlowTelemetry = {config.EnableFlowBuilderSuggestedFlowTelemetry}");
-
-        iniContent.AppendLine();
-        iniContent.AppendLine("[Cues]");
-        iniContent.AppendLine($"DropCountdownMode = {config.DropCountdownMode}");
-        iniContent.AppendLine($"CustomCountdownBars = {config.CustomCountdownBars}");
-
-        iniContent.AppendLine();
         iniContent.AppendLine("[Layout]");
         iniContent.AppendLine($"ContextPanelWidth = {config.ContextPanelWidth}");
-        iniContent.AppendLine();
-        iniContent.AppendLine("[Discover]");
-        iniContent.AppendLine($"UseBeatport = {config.DiscoverUseBeatport}");
-        iniContent.AppendLine($"UseDeezer = {config.DiscoverUseDeezer}");
-
         iniContent.AppendLine();
         iniContent.AppendLine("[FrequentSources]");
         iniContent.AppendLine($"EnableFrequentSources = {config.EnableFrequentSources}");
@@ -450,10 +392,6 @@ public class ConfigManager
         iniContent.AppendLine();
         iniContent.AppendLine("[Import]");
         iniContent.AppendLine($"WebShortcutsJson = {SerializeImportWebShortcuts(config.ImportWebShortcuts)}");
-
-        iniContent.AppendLine();
-        iniContent.AppendLine("[Privacy]");
-        iniContent.AppendLine($"EnableKeyboardTelemetry = {config.EnableKeyboardTelemetry}");
 
         iniContent.AppendLine();
         iniContent.AppendLine("[Advanced]");

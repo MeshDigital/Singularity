@@ -248,9 +248,6 @@ public partial class LibraryViewModel : INotifyPropertyChanged, IDisposable
     private readonly PlayerViewModel _playerViewModel;
     public PlayerViewModel PlayerViewModel => _playerViewModel;
     
-    // Track View Customization
-    public TrackViewSettings ViewSettings { get; } = new();
-    
     // Help Panel
     private bool _isHelpPanelOpen;
     public bool IsHelpPanelOpen

@@ -870,21 +870,6 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
     // Phase 9: Search Diagnostics
     public int SearchAttemptCount => RejectionDetails?.Count ?? 0;
 
-    public string RejectionSummary
-    {
-        get
-        {
-            if (RejectionDetails == null || !RejectionDetails.Any()) return "No detailed forensic data captured for this failure.";
-            
-            var groups = RejectionDetails
-                .Where(x => !string.IsNullOrEmpty(x.ShortReason))
-                .GroupBy(x => x.ShortReason)
-                .Select(g => $"{g.Count()} {g.Key}");
-            
-            return $"Rejections: {string.Join(", ", groups)}";
-        }
-    }
-
     // Phase 10: Performance Monitoring - Total Download Duration
     public string? DownloadDurationDisplay
     {
@@ -1014,62 +999,6 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
         }
     }
 
-    public string ForensicBadgeBackground
-    {
-        get
-        {
-            if (Model.IsTranscoded) return "#3C1F1F";
-            var fmt = (Model.Format ?? string.Empty).ToUpperInvariant();
-            var bitrate = Model.Bitrate ?? 0;
-            if (fmt == "FLAC" && bitrate >= 400) return "#1A3028";
-            if (IsDownloading && CurrentSpeedBytes > 1_048_576) return "#0E1D33";
-            return "#222222";
-        }
-    }
-
-    public string ForensicBadgeForeground
-    {
-        get
-        {
-            if (Model.IsTranscoded) return "#FF5252";
-            var fmt = (Model.Format ?? string.Empty).ToUpperInvariant();
-            var bitrate = Model.Bitrate ?? 0;
-            if (fmt == "FLAC" && bitrate >= 400) return "#1DB954";
-            if (IsDownloading && CurrentSpeedBytes > 1_048_576) return "#00BFFF";
-            return "#888888";
-        }
-    }
-
-    public string ForensicBadgeBorderColor
-    {
-        get
-        {
-            if (Model.IsTranscoded) return "#FF5252";
-            var fmt = (Model.Format ?? string.Empty).ToUpperInvariant();
-            var bitrate = Model.Bitrate ?? 0;
-            if (fmt == "FLAC" && bitrate >= 400) return "#1DB954";
-            if (IsDownloading && CurrentSpeedBytes > 1_048_576) return "#00BFFF";
-            return "#333333";
-        }
-    }
-
-    /// <summary>Full hover HUD: bitrate · sample rate · bit depth · format · peer · transcode flag.</summary>
-    public string ForensicBadgeHud
-    {
-        get
-        {
-            var parts = new System.Collections.Generic.List<string>();
-            if ((Model.Bitrate ?? 0) > 0) parts.Add($"{Model.Bitrate}kbps");
-            var sr = ParsedSampleRateHz;
-            if (sr > 0) parts.Add($"{sr / 1000.0:F1}kHz");
-            var bd = ParsedBitDepth;
-            if (bd > 0) parts.Add($"{bd}-bit");
-            if (!string.IsNullOrEmpty(Model.Format)) parts.Add(Model.Format.ToUpperInvariant());
-            if (Model.IsTranscoded) parts.Add("⚠️ LIKELY TRANSCODE");
-            if (!string.IsNullOrEmpty(PeerName)) parts.Add($"Peer: {PeerName}");
-            return parts.Count > 0 ? string.Join(" • ", parts) : "Technical data pending";
-        }
-    }
     // ─────────────────────────────────────────────────────────────────────────
 
     public bool IsFakeFlacWarning
@@ -1299,25 +1228,6 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
     // ManualEnergy (1-10 int) takes precedence over Spotify Energy (0-1 float).
     private int ComputedEnergyScore => Model.ManualEnergy ?? (int)Math.Round((Model.Energy ?? 0) * 10);
     public bool HasEnergyBadge => IsCompleted && (Model.Energy.HasValue || Model.ManualEnergy.HasValue);
-    public string EnergyBadgeText => HasEnergyBadge ? $"E{ComputedEnergyScore}" : string.Empty;
-    public string EnergyBadgeColor => ComputedEnergyScore switch
-    {
-        >= 8 => "#1DB954",  // green — high energy
-        >= 5 => "#FFD700",  // amber — mid energy
-        _    => "#7BA7BC"   // steel blue — low energy
-    };
-
-    // ── Vocal Type Badge (Tier 2.4) ───────────────────────────────────────────
-    // Shows INST badge when track is confirmed instrumental (InstrumentalProbability ≥ 0.75).
-    public bool ShowInstrumentalBadge => IsCompleted && Model.InstrumentalProbability >= 0.75;
-
-    // ── Mood Tag Badge (Tier 2.4) ─────────────────────────────────────────────
-    public bool HasMoodTag => IsCompleted && !string.IsNullOrWhiteSpace(Model.MoodTag);
-    public string MoodTagText => Model.MoodTag ?? string.Empty;
-
-    // ── BPM Drift Warning Badge (Tier 2.4) ────────────────────────────────────
-    // BpmStability < 0.70 indicates a drifting or variable tempo — risky for live mixing
-    public bool HasBpmDriftWarning => IsCompleted && Model.BpmStability.HasValue && Model.BpmStability.Value < 0.70f;
 
     // Curation Hub Properties
     public double IntegrityScore => Model.QualityConfidence ?? 0.0;
