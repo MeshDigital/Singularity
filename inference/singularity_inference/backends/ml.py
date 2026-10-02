@@ -143,14 +143,13 @@ class MlBackend:
         from swift_f0 import SwiftF0
 
         audio = audio_io.load(vocals, ALIGN_SAMPLE_RATE)
-        # Range covers bass to soprano; the confidence gate is applied per syllable in assemble.py.
-        detector = SwiftF0(fmin=65.0, fmax=1400.0, confidence_threshold=0.5)
-        result = detector.detect_from_array(audio, ALIGN_SAMPLE_RATE)
+        # swift-f0 >= 0.3: 16 ms frames; confidence is calibrated so a frame is voiced at >= 0.5,
+        # which assemble.VOICED_CONFIDENCE applies per syllable. Range covers bass to soprano.
+        result = SwiftF0().detect(audio, ALIGN_SAMPLE_RATE, fmin=65.0, fmax=1400.0)
         ctx.progress(1.0)
-        voiced = result.voicing
         return PitchTrack(
             times_ms=[float(t) * 1000 for t in result.timestamps],
-            hz=[float(h) if v else 0.0 for h, v in zip(result.pitch_hz, voiced)],
+            hz=[float(h) for h in result.pitch_hz],
             confidence=[float(c) for c in result.confidence],
         )
 
