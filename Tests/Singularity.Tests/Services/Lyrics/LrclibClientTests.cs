@@ -32,10 +32,51 @@ public class LrclibClientTests
     private static string Record(long id, double duration, string? synced, string? plain = "plain text", bool instrumental = false) =>
         $$"""{"id":{{id}},"trackName":"Bohemian Rhapsody","artistName":"Queen","albumName":"A Night at the Opera","duration":{{duration.ToString(CultureInfo.InvariantCulture)}},"instrumental":{{(instrumental ? "true" : "false")}},"plainLyrics":{{(plain is null ? "null" : $"\"{plain}\"")}},"syncedLyrics":{{(synced is null ? "null" : $"\"{synced}\"")}}}""";
 
-    private static (LrclibClient, StubHandler) Create(Func<HttpRequestMessage, HttpResponseMessage> respond)
+    private static (LrclibClient, StubHandler) Create(Func<HttpRequestMessage, HttpResponseMessage> respond, List<TimeSpan>? waits = null)
     {
         var handler = new StubHandler(respond);
-        return (new LrclibClient(new HttpClient(handler), NullLogger<LrclibClient>.Instance), handler);
+        var recorded = waits ?? new List<TimeSpan>();
+        return (new LrclibClient(new HttpClient(handler), NullLogger<LrclibClient>.Instance,
+            (wait, _) => { recorded.Add(wait); return Task.CompletedTask; }), handler);
+    }
+
+    [Fact]
+    public async Task Overloaded_IsRetriedWithBackoff()
+    {
+        int calls = 0;
+        var waits = new List<TimeSpan>();
+        var (client, handler) = Create(_ => ++calls < 3 ? Json("{}", HttpStatusCode.ServiceUnavailable) : Json($"[{Record(1, 354, "[00:01.00] x")}]"), waits);
+
+        var lyrics = await client.FindAsync("Queen", "Bohemian Rhapsody", null, 354_000);
+
+        Assert.Equal(1, lyrics!.Id);
+        Assert.Equal(3, handler.Requests.Count);
+        Assert.Equal(new[] { TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4) }, waits);
+    }
+
+    [Fact]
+    public async Task RetryAfter_IsHonoured()
+    {
+        int calls = 0;
+        var waits = new List<TimeSpan>();
+        var (client, _) = Create(_ =>
+        {
+            if (++calls > 1) return Json("[]");
+            var r = Json("{}", HttpStatusCode.TooManyRequests);
+            r.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(7));
+            return r;
+        }, waits);
+
+        await client.FindAsync("a", "b", null, null);
+        Assert.Equal(new[] { TimeSpan.FromSeconds(7) }, waits);
+    }
+
+    [Fact]
+    public async Task StillOverloaded_AfterMaxAttempts_Throws()
+    {
+        var (client, handler) = Create(_ => Json("{}", HttpStatusCode.ServiceUnavailable));
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.FindAsync("a", "b", null, null));
+        Assert.Equal(LrclibClient.MaxAttempts, handler.Requests.Count);
     }
 
     [Fact]

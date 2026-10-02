@@ -32,6 +32,9 @@
     <Compile Remove="inference\**" />
     <None Remove="inference\**" />
     <EmbeddedResource Remove="inference\**" />
+    <Compile Remove="Tools\ChartBench\**" />
+    <None Remove="Tools\ChartBench\**" />
+    <EmbeddedResource Remove="Tools\ChartBench\**" />
     <Compile Remove="artifacts\**" />
     <EmbeddedResource Remove="External\**" />
     <EmbeddedResource Remove="artifacts\**" />

@@ -57,13 +57,19 @@ public sealed class LrclibClient
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
     };
 
+    /// <summary>Attempts per request when LRCLIB is overloaded or briefly down (429, 502, 503, 504).</summary>
+    public const int MaxAttempts = 3;
+
     private readonly HttpClient _http;
     private readonly ILogger<LrclibClient> _logger;
+    private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
-    public LrclibClient(HttpClient http, ILogger<LrclibClient> logger)
+    /// <param name="delay">Waits between retries; tests pass one that doesn't sleep.</param>
+    public LrclibClient(HttpClient http, ILogger<LrclibClient> logger, Func<TimeSpan, CancellationToken, Task>? delay = null)
     {
         _http = http;
         _logger = logger;
+        _delay = delay ?? Task.Delay;
         _http.BaseAddress ??= new Uri(DefaultBaseAddress);
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
             _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent); // LRCLIB asks clients to identify themselves
@@ -101,9 +107,23 @@ public sealed class LrclibClient
 
     private async Task<T?> GetJsonAsync<T>(string relativeUri, CancellationToken ct) where T : class
     {
-        using var response = await _http.GetAsync(relativeUri, ct).ConfigureAwait(false);
-        if (response.StatusCode == HttpStatusCode.NotFound) return null;
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<T>(Json, ct).ConfigureAwait(false);
+        for (int attempt = 1; ; attempt++)
+        {
+            using var response = await _http.GetAsync(relativeUri, ct).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.NotFound) return null;
+            if (attempt < MaxAttempts && IsTransient(response.StatusCode))
+            {
+                // A free community service: back off (1 s, then 4 s) or as long as it asks.
+                var wait = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(Math.Pow(4, attempt - 1));
+                _logger.LogDebug("LRCLIB returned {Status}; retrying in {Wait}", (int)response.StatusCode, wait);
+                await _delay(wait, ct).ConfigureAwait(false);
+                continue;
+            }
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<T>(Json, ct).ConfigureAwait(false);
+        }
     }
+
+    private static bool IsTransient(HttpStatusCode status) =>
+        status is HttpStatusCode.TooManyRequests or HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout;
 }

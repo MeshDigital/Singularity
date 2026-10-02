@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Measures AI-generated charts against human-made ones: runs songs from an UltraStar collection
+       through LRCLIB + the inference worker and compares the result with each song's own song.txt.
+       The collection is only read; everything is written to the output folder. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Singularity.csproj" />
+    <ProjectReference Include="..\..\Singularity.Contracts\Singularity.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

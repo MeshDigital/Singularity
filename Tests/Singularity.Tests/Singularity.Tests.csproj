@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Singularity.csproj" />
     <ProjectReference Include="..\..\Singularity.Contracts\Singularity.Contracts.csproj" />
+    <ProjectReference Include="..\..\Tools\ChartBench\ChartBench.csproj" />
   </ItemGroup>
 
   <ItemGroup>
