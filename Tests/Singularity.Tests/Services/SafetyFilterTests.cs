@@ -1,7 +1,6 @@
 using Singularity.Configuration;
 using Singularity.Models;
 using Singularity.Services;
-using Singularity.Services.Inputs;
 using Microsoft.Extensions.Logging;
 using Moq;
 using System.Collections.Generic;
