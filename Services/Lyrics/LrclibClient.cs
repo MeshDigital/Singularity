@@ -14,13 +14,13 @@ using Singularity.Contracts.Inference;
 
 namespace Singularity.Services.Lyrics;
 
-/// <summary>One LRCLIB record. <see cref="DurationSeconds"/> is the recording length LRCLIB has on file.</summary>
+/// <summary>One LRCLIB record. <see cref="DurationSeconds"/> is the recording length LRCLIB has on file; some records have none.</summary>
 public sealed record LrclibLyrics(
     long Id,
     string TrackName,
     string ArtistName,
     string? AlbumName,
-    [property: JsonPropertyName("duration")] double DurationSeconds,
+    [property: JsonPropertyName("duration")] double? DurationSeconds,
     bool Instrumental,
     string? PlainLyrics,
     string? SyncedLyrics)
@@ -99,11 +99,12 @@ public sealed class LrclibClient
         results
             .Where(r => Matches(r, durationMs) && (r.Instrumental || r.HasSynced || r.HasPlain))
             .OrderByDescending(r => r.HasSynced)
-            .ThenBy(r => durationMs is null ? 0 : Math.Abs(r.DurationSeconds - durationMs.Value / 1000.0))
+            .ThenBy(r => durationMs is null || r.DurationSeconds is null ? 0 : Math.Abs(r.DurationSeconds.Value - durationMs.Value / 1000.0))
             .FirstOrDefault();
 
+    // A record without a duration can't be checked against the recording, so it never matches one.
     private static bool Matches(LrclibLyrics r, int? durationMs) =>
-        durationMs is null || Math.Abs(r.DurationSeconds - durationMs.Value / 1000.0) <= DurationToleranceSeconds;
+        durationMs is null || (r.DurationSeconds is { } d && Math.Abs(d - durationMs.Value / 1000.0) <= DurationToleranceSeconds);
 
     private async Task<T?> GetJsonAsync<T>(string relativeUri, CancellationToken ct) where T : class
     {

@@ -29,6 +29,9 @@
     <Compile Remove="Singularity.Contracts\**" />
     <None Remove="Singularity.Contracts\**" />
     <EmbeddedResource Remove="Singularity.Contracts\**" />
+    <Compile Remove="Singularity.Karaoke\**" />
+    <None Remove="Singularity.Karaoke\**" />
+    <EmbeddedResource Remove="Singularity.Karaoke\**" />
     <Compile Remove="inference\**" />
     <None Remove="inference\**" />
     <EmbeddedResource Remove="inference\**" />

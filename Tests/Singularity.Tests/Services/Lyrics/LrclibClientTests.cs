@@ -140,6 +140,17 @@ public class LrclibClientTests
     }
 
     [Fact]
+    public async Task RecordWithNullDuration_IsSkippedNotFatal()
+    {
+        var noDuration = Record(1, 354, "[00:01.00] x").Replace("\"duration\":354", "\"duration\":null");
+        var (client, _) = Create(_ => Json($"[{noDuration},{Record(2, 354, "[00:01.00] y")}]"));
+
+        var lyrics = await client.FindAsync("Queen", "Bohemian Rhapsody", null, 354_000);
+
+        Assert.Equal(2, lyrics!.Id);
+    }
+
+    [Fact]
     public void Pick_WithoutDuration_TakesSyncedFirst()
     {
         var plain = new LrclibLyrics(1, "t", "a", null, 100, false, "p", null);

@@ -105,8 +105,9 @@ foreach (var folder in group)
         rows.Add((name, forWorker.Value.Kind.ToString().ToLowerInvariant(), offset, c, null, sw.Elapsed.TotalSeconds));
         Console.WriteLine($"{c.Recall100,4:P0} recall {c.Precision100,4:P0} prec {c.PitchClass,4:P0} pitch {c.Coverage,4:P0} cover  {sw.Elapsed.TotalSeconds,5:0}s  {name}");
     }
-    catch (Exception ex) when (ex is InferenceTaskFailedException or HttpRequestException or FormatException)
+    catch (Exception ex) when (ex is not OperationCanceledException and not InferenceWorkerException)
     {
+        // One bad song (odd LRCLIB record, unreadable audio, failed task) mustn't end the run.
         rows.Add((name, "-", null, null, ex.Message, sw.Elapsed.TotalSeconds));
         Console.WriteLine($"FAIL  {name}: {ex.Message}");
     }
