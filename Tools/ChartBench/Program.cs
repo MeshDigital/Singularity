@@ -83,9 +83,10 @@ foreach (var folder in group)
         var forWorker = lyrics?.ForWorker();
         if (forWorker is null)
         {
-            Console.WriteLine($"skip  {name}: no LRCLIB lyrics within 2 s of its duration");
+            Console.WriteLine($"skip  {name}: no LRCLIB lyrics");
             continue;
         }
+        var lyricsLabel = forWorker.Value.Kind == LyricsKind.Synced ? "synced" : lyrics!.DurationMatches ? "plain" : "plain (other edit)";
 
         var songOut = Path.Combine(outDir, name);
         Directory.CreateDirectory(songOut);
@@ -102,8 +103,8 @@ foreach (var folder in group)
         File.WriteAllText(Path.Combine(songOut, "song.generated.txt"), UltraStarSerializer.Write(generated));
 
         var c = ChartComparison.Compare(reference, generated);
-        rows.Add((name, forWorker.Value.Kind.ToString().ToLowerInvariant(), offset, c, null, sw.Elapsed.TotalSeconds));
-        Console.WriteLine($"{c.Recall100,4:P0} recall {c.Precision100,4:P0} prec {c.PitchClass,4:P0} pitch {c.Coverage,4:P0} cover  {sw.Elapsed.TotalSeconds,5:0}s  {name}");
+        rows.Add((name, lyricsLabel, offset, c, null, sw.Elapsed.TotalSeconds));
+        Console.WriteLine($"{c.Recall100,4:P0} recall {c.Precision100,4:P0} prec {c.PitchClass,4:P0} pitch {c.Coverage,4:P0} cover  {sw.Elapsed.TotalSeconds,5:0}s  {name}  [{lyricsLabel}]");
     }
     catch (Exception ex) when (ex is not OperationCanceledException and not InferenceWorkerException)
     {

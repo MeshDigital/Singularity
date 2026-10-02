@@ -173,6 +173,8 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
     <Content Remove="Tools\**\*.cs" />
+    <!-- A dev tool with its own build output, not something the app ships. -->
+    <Content Remove="Tools\ChartBench\**" />
     <!-- Only the Demucs stem model is used at runtime; any other files a fetch left in the
          (git-ignored) models folder are not shipped. -->
     <Content Remove="Tools\Essentia\models\**" />

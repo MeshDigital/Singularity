@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,23 +28,41 @@ public sealed record LrclibLyrics(
 {
     public bool HasSynced => !string.IsNullOrWhiteSpace(SyncedLyrics);
     public bool HasPlain => !string.IsNullOrWhiteSpace(PlainLyrics);
+    public bool HasLyrics => HasSynced || HasPlain;
+}
+
+/// <summary>A lookup result. <see cref="DurationMatches"/> says whether its timing belongs to this recording.</summary>
+public sealed record LrclibMatch(LrclibLyrics Lyrics, bool DurationMatches)
+{
+    private static readonly Regex Timestamp = new(@"\[\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?\]|<\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?>", RegexOptions.Compiled);
 
     /// <summary>
-    /// The best lyrics for the inference worker. Synced lyrics come first because they let it skip
-    /// transcription, then plain text. Null for instrumentals and records with no lyrics.
+    /// The best lyrics for the inference worker. Synced lyrics go as LRC only when they were timed for
+    /// this recording; they let the worker skip transcription. Lyrics from another edit (a different
+    /// length) still have the right words, so they go as plain text and the worker places the lines
+    /// itself. Null for instrumentals and records without lyrics.
     /// </summary>
-    public (string Text, LyricsKind Kind)? ForWorker() =>
-        Instrumental ? null
-        : HasSynced ? (SyncedLyrics!, LyricsKind.Synced)
-        : HasPlain ? (PlainLyrics!, LyricsKind.Plain)
-        : null;
+    public (string Text, LyricsKind Kind)? ForWorker()
+    {
+        var l = Lyrics;
+        if (l.Instrumental) return null;
+        if (DurationMatches && l.HasSynced) return (l.SyncedLyrics!, LyricsKind.Synced);
+        if (l.HasPlain) return (l.PlainLyrics!, LyricsKind.Plain);
+        if (l.HasSynced) return (StripTimestamps(l.SyncedLyrics!), LyricsKind.Plain);
+        return null;
+    }
+
+    internal static string StripTimestamps(string lrc) =>
+        string.Join("\n", lrc.Split('\n').Select(line => Timestamp.Replace(line, "").Trim())
+            .Where(line => line.Length > 0 && !(line.StartsWith('[') && line.EndsWith(']')))); // [ar:...] tags
 }
 
 /// <summary>
 /// Client for lrclib.net, a free lyrics database with no API key. LRCLIB has no ISRC lookup.
 /// The exact signature endpoint (artist, title, album, duration) is tried first, then a search,
-/// keeping only results whose duration is within <see cref="DurationToleranceSeconds"/>. A wrong
-/// song's lyrics would misalign the whole chart, so a duration mismatch is treated as no result.
+/// preferring results whose duration is within <see cref="DurationToleranceSeconds"/>. When only
+/// other edits have lyrics, the closest one is returned with <see cref="LrclibMatch.DurationMatches"/>
+/// false: its words are usable, its timing is not.
 /// </summary>
 public sealed class LrclibClient
 {
@@ -75,23 +94,29 @@ public sealed class LrclibClient
             _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent); // LRCLIB asks clients to identify themselves
     }
 
-    /// <summary>Lyrics for a recording, or null when LRCLIB has none that match its duration.</summary>
+    /// <summary>Lyrics for a recording, or null when LRCLIB has none for the song at all.</summary>
     /// <exception cref="HttpRequestException">LRCLIB returned an error other than "not found".</exception>
-    public async Task<LrclibLyrics?> FindAsync(string artist, string title, string? album, int? durationMs, CancellationToken ct = default)
+    public async Task<LrclibMatch?> FindAsync(string artist, string title, string? album, int? durationMs, CancellationToken ct = default)
     {
         if (album is { Length: > 0 } && durationMs is > 0)
         {
             var exact = await GetJsonAsync<LrclibLyrics>(
                 $"api/get?artist_name={Uri.EscapeDataString(artist)}&track_name={Uri.EscapeDataString(title)}" +
                 $"&album_name={Uri.EscapeDataString(album)}&duration={(durationMs.Value / 1000.0).ToString("0", CultureInfo.InvariantCulture)}", ct).ConfigureAwait(false);
-            if (exact is not null && Matches(exact, durationMs)) return exact;
+            if (exact is not null && Matches(exact, durationMs)) return new LrclibMatch(exact, true);
         }
 
         var results = await GetJsonAsync<List<LrclibLyrics>>(
             $"api/search?artist_name={Uri.EscapeDataString(artist)}&track_name={Uri.EscapeDataString(title)}", ct).ConfigureAwait(false);
-        var best = Pick(results ?? new List<LrclibLyrics>(), durationMs);
-        if (best is null) _logger.LogDebug("LRCLIB has no lyrics for {Artist} - {Title}", artist, title);
-        return best;
+        results ??= new List<LrclibLyrics>();
+        if (Pick(results, durationMs) is { } timed) return new LrclibMatch(timed, true);
+
+        // No record for this edit: the closest other edit's words are still right.
+        var other = results.Where(r => r.HasLyrics)
+            .OrderBy(r => durationMs is null || r.DurationSeconds is null ? double.MaxValue : Math.Abs(r.DurationSeconds.Value - durationMs.Value / 1000.0))
+            .FirstOrDefault();
+        if (other is null) _logger.LogDebug("LRCLIB has no lyrics for {Artist} - {Title}", artist, title);
+        return other is null ? null : new LrclibMatch(other, false);
     }
 
     /// <summary>Among search results, prefer a duration match, then synced lyrics, then the closest duration.</summary>

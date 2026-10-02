@@ -49,7 +49,7 @@ public class LrclibClientTests
 
         var lyrics = await client.FindAsync("Queen", "Bohemian Rhapsody", null, 354_000);
 
-        Assert.Equal(1, lyrics!.Id);
+        Assert.Equal(1, lyrics!.Lyrics.Id);
         Assert.Equal(3, handler.Requests.Count);
         Assert.Equal(new[] { TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4) }, waits);
     }
@@ -86,7 +86,7 @@ public class LrclibClientTests
 
         var lyrics = await client.FindAsync("Queen", "Bohemian Rhapsody", "A Night at the Opera", 354_320);
 
-        Assert.Equal(1, lyrics!.Id);
+        Assert.Equal(1, lyrics!.Lyrics.Id);
         Assert.Equal(("[00:01.00] Is this the real life", LyricsKind.Synced), lyrics.ForWorker());
         var request = Assert.Single(handler.Requests);
         Assert.StartsWith("/api/get?artist_name=Queen&track_name=Bohemian%20Rhapsody&album_name=A%20Night%20at%20the%20Opera&duration=354", request);
@@ -101,7 +101,7 @@ public class LrclibClientTests
 
         var lyrics = await client.FindAsync("Queen", "Bohemian Rhapsody", "A Night at the Opera", 354_320);
 
-        Assert.Equal(3, lyrics!.Id); // synced and within 2 s; the 300 s edit is excluded
+        Assert.Equal(3, lyrics!.Lyrics.Id); // synced and within 2 s; the 300 s edit is excluded
         Assert.Equal(2, handler.Requests.Count);
     }
 
@@ -117,9 +117,29 @@ public class LrclibClientTests
     }
 
     [Fact]
-    public async Task OnlyDurationMismatches_ReturnsNull()
+    public async Task OnlyOtherEdits_GiveTheirWordsAsPlainText()
     {
-        var (client, _) = Create(_ => Json($"[{Record(1, 200, "[00:01.00] x")}]"));
+        // Timed for a 200 s edit, our file is 354 s: the LRC timing is useless, the words are not.
+        var (client, _) = Create(_ => Json($"[{Record(1, 200, "[ar:Queen]\\n[00:01.00] Is this\\n[00:03.00]\\n[00:04.50]<00:04.50> the real life", plain: null)}]"));
+
+        var match = await client.FindAsync("Queen", "Bohemian Rhapsody", null, 354_000);
+
+        Assert.False(match!.DurationMatches);
+        Assert.Equal(("Is this\nthe real life", LyricsKind.Plain), match.ForWorker());
+    }
+
+    [Fact]
+    public async Task OtherEditWithPlainLyrics_PrefersThePlainText()
+    {
+        var (client, _) = Create(_ => Json($"[{Record(1, 200, "[00:01.00] x", plain: "the words")}]"));
+        var match = await client.FindAsync("Queen", "Bohemian Rhapsody", null, 354_000);
+        Assert.Equal(("the words", LyricsKind.Plain), match!.ForWorker());
+    }
+
+    [Fact]
+    public async Task NoLyricsAnywhere_ReturnsNull()
+    {
+        var (client, _) = Create(_ => Json("[]"));
         Assert.Null(await client.FindAsync("Queen", "Bohemian Rhapsody", null, 354_000));
     }
 
@@ -128,7 +148,7 @@ public class LrclibClientTests
     {
         var (client, _) = Create(_ => Json($"[{Record(1, 354, null, plain: null, instrumental: true)}]"));
         var lyrics = await client.FindAsync("Queen", "Bohemian Rhapsody", null, 354_000);
-        Assert.True(lyrics!.Instrumental);
+        Assert.True(lyrics!.Lyrics.Instrumental);
         Assert.Null(lyrics.ForWorker());
     }
 
@@ -147,7 +167,7 @@ public class LrclibClientTests
 
         var lyrics = await client.FindAsync("Queen", "Bohemian Rhapsody", null, 354_000);
 
-        Assert.Equal(2, lyrics!.Id);
+        Assert.Equal(2, lyrics!.Lyrics.Id);
     }
 
     [Fact]
