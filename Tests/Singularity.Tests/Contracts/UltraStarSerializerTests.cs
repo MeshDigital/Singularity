@@ -101,6 +101,36 @@ public class UltraStarSerializerTests
     }
 
     [Fact]
+    public void ReadFile_DetectsWindows1252()
+    {
+        var song = UltraStarSerializer.ReadFile(ContractFixtures.PathOf("song.cp1252.txt"));
+
+        Assert.Equal("Café Song", song.Title);
+        Assert.Equal("Beyoncé", song.Artist);
+        Assert.Equal(new[] { "Don’t", " pay €5" }, song.Voices.Single().Notes.Select(n => n.Syllable)); // 0x92 / 0x80: not Latin-1
+    }
+
+    [Fact]
+    public void Decode_PrefersBomThenDeclaredThenStrictUtf8()
+    {
+        var utf8 = System.Text.Encoding.UTF8.GetBytes("#TITLE:Café\n");
+        Assert.Equal("#TITLE:Café\n", UltraStarSerializer.Decode(utf8));
+        Assert.Equal("#TITLE:Café\n", UltraStarSerializer.Decode(new byte[] { 0xEF, 0xBB, 0xBF }.Concat(utf8).ToArray()));
+        // Declared UTF-8 with an invalid byte: decoded as UTF-8 (replacement char), not re-guessed as 1252.
+        var declared = System.Text.Encoding.ASCII.GetBytes("#ENCODING:UTF8\n#TITLE:x").Append((byte)0xE9).ToArray();
+        Assert.EndsWith("x�", UltraStarSerializer.Decode(declared));
+    }
+
+    [Theory]
+    [InlineData("E E")]
+    [InlineData("END")]
+    public void AnyLineStartingWithE_EndsTheSong(string end)
+    {
+        var song = UltraStarSerializer.Read($"#TITLE:t\n#ARTIST:a\n#MP3:a.mp3\n#BPM:300\n: 0 1 0 x\n{end}\n: 5 1 0 ignored\n");
+        Assert.Single(song.Voices.Single().Notes);
+    }
+
+    [Fact]
     public void BeatTiming()
     {
         var song = new UltraStarSong { Title = "t", Artist = "a", AudioFile = "a.mp3", Bpm = 300, GapMs = 1000 };

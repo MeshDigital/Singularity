@@ -1,0 +1,8 @@
+#TITLE:Café Song
+#ARTIST:Beyoncé
+#MP3:a.mp3
+#BPM:300
+#GAP:0
+: 0 4 0 Don’t
+: 4 4 0  pay €5
+E E

@@ -98,6 +98,36 @@ public static class UltraStarSerializer
           .Append(note.Syllable).Append('\n');
     }
 
+    /// <summary>Reads a song.txt from disk, detecting its encoding (see <see cref="Decode"/>).</summary>
+    /// <exception cref="FormatException">The file isn't a readable UltraStar file.</exception>
+    public static UltraStarSong ReadFile(string path) => Read(Decode(File.ReadAllBytes(path)));
+
+    /// <summary>
+    /// song.txt files carry no reliable encoding marker. Older ones are Windows-1252, newer ones
+    /// UTF-8, sometimes with a BOM or an #ENCODING:UTF8 header. Order: BOM, #ENCODING, strict UTF-8,
+    /// then Windows-1252 (which differs from Latin-1 in curly quotes and the euro sign).
+    /// </summary>
+    public static string Decode(byte[] bytes)
+    {
+        if (bytes is [0xEF, 0xBB, 0xBF, ..]) return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+
+        var ascii = Encoding.ASCII.GetString(bytes, 0, Math.Min(bytes.Length, 4096));
+        var declared = ascii.Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.StartsWith("#ENCODING:", StringComparison.OrdinalIgnoreCase));
+        var strictUtf8 = new UTF8Encoding(false, throwOnInvalidBytes: true);
+        if (declared is not null && declared[10..].Trim().Replace("-", "").Equals("UTF8", StringComparison.OrdinalIgnoreCase))
+            return Encoding.UTF8.GetString(bytes);
+
+        try
+        {
+            return strictUtf8.GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            return Encoding.GetEncoding(1252).GetString(bytes);
+        }
+    }
+
     /// <exception cref="FormatException">The text isn't a readable UltraStar file.</exception>
     public static UltraStarSong Read(string text)
     {
@@ -129,7 +159,7 @@ public static class UltraStarSerializer
 
             relative ??= headers.TryGetValue("RELATIVE", out var rel) && rel.Equals("YES", StringComparison.OrdinalIgnoreCase);
 
-            if (line[0] == 'E' && line.Trim() == "E") break;
+            if (line[0] == 'E') break; // "E", and in the wild "E E" or "END"; no note type starts with E
 
             if (line[0] == 'P' && TryParsePlayer(line, out var player))
             {
