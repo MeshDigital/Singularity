@@ -1689,6 +1689,15 @@ public class SchemaMigratorService
                     await command.ExecuteNonQueryAsync();
                     _logger.LogInformation("✅ CuePointsJson column added to audio_features");
                 } catch (Microsoft.Data.Sqlite.SqliteException ex) { _logger.LogDebug(ex, "CuePointsJson column already exists — skipping"); }
+
+                // VectorEmbedding: AudioFeaturesEntity maps it, but only newly created audio_features
+                // tables got it, so older databases failed every library query that loads features
+                // ("no such column: a.VectorEmbedding").
+                try {
+                    command.CommandText = @"ALTER TABLE ""audio_features"" ADD COLUMN ""VectorEmbedding"" BLOB NULL;";
+                    await command.ExecuteNonQueryAsync();
+                    _logger.LogInformation("✅ VectorEmbedding column added to audio_features");
+                } catch (Microsoft.Data.Sqlite.SqliteException ex) { _logger.LogDebug(ex, "VectorEmbedding column already exists — skipping"); }
             }
             catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("no such table"))
             {
