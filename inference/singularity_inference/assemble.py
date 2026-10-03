@@ -77,6 +77,9 @@ def smooth_octaves(tones: list[int | None], context: int = OCTAVE_CONTEXT) -> li
 
 
 # A melisma note must last this long; shorter wobbles (vibrato, scoops) stay part of a neighbour.
+# ChartBench, 32 songs (mean recall / precision / F1): 80 ms 73.8/58.9/64.4, 120 ms 69.0/61.3/63.9,
+# 200 ms 62.8/64.0/62.4, 300 ms 59.3/65.4/61.4. 80 ms is within noise of 120 ms but makes busier
+# charts than humans write (already 1.24x their note count), so 120 ms it is.
 MIN_SEGMENT_MS = 120
 # Median filter width over voiced frames before quantising, against frame-to-frame jitter.
 SMOOTH_FRAMES = 5
