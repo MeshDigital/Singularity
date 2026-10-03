@@ -31,6 +31,7 @@ public sealed class SingStage : Control
     private static readonly IBrush PitchBrush = new SolidColorBrush(Color.FromRgb(255, 90, 120));
     private static readonly IBrush Sung = new SolidColorBrush(Color.FromRgb(60, 170, 255));
     private static readonly IBrush Unsung = Brushes.White;
+    private static readonly IBrush VideoShade = new SolidColorBrush(Color.FromArgb(110, 0, 0, 0));
     private static readonly IBrush Dim = new SolidColorBrush(Color.FromArgb(170, 220, 220, 220));
 
     private bool _attached;
@@ -61,6 +62,8 @@ public sealed class SingStage : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 100 || h < 100) return;
 
+        if (s.Video is { } video) DrawVideo(ctx, video, w, h);
+
         var lane = new Rect(w * 0.05, h * 0.10, w * 0.90, h * 0.50);
         ctx.DrawRectangle(LaneBrush, null, lane, 12, 12);
         if (s.Lane is { } layout) DrawLane(ctx, lane, layout, s);
@@ -72,6 +75,16 @@ public sealed class SingStage : Control
         if (s.LastLine is { } line && s.LastLineAgeBeats is >= 0 and < 12)
             DrawText(ctx, RatingText(line.Rating), 28, GoldenHitBrush, new Point(lane.Right - 16, lane.Top + 12), alignRight: true);
 
+    }
+
+    /// <summary>The music video as the bottom layer, filling the stage, dimmed so notes and lyrics stay readable.</summary>
+    private static void DrawVideo(DrawingContext ctx, IImage video, double w, double h)
+    {
+        var size = video.Size;
+        double scale = Math.Max(w / size.Width, h / size.Height);
+        var dest = new Rect((w - size.Width * scale) / 2, (h - size.Height * scale) / 2, size.Width * scale, size.Height * scale);
+        ctx.DrawImage(video, new Rect(size), dest);
+        ctx.DrawRectangle(VideoShade, null, new Rect(0, 0, w, h));
     }
 
     private static void DrawLane(DrawingContext ctx, Rect lane, NoteLaneLayout layout, StageSnapshot s)

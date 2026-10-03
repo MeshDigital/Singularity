@@ -28,7 +28,8 @@ public sealed record StageSnapshot(
     int Score,
     LineResult? LastLine,
     double LastLineAgeBeats,
-    bool Finished);
+    bool Finished,
+    Avalonia.Media.Imaging.WriteableBitmap? Video);
 
 /// <summary>
 /// The sing screen: plays the song, scores the microphone, and gives the stage a snapshot per frame.
@@ -61,6 +62,9 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     private long _lastDiagnosticTicks;
 
     private SongEntry? _entry;
+    private VideoFrameSource? _video;
+    private Avalonia.Media.Imaging.WriteableBitmap? _videoBitmap;
+    private bool _hasVideoFrame;
     private bool _resultsShown;
     private bool _showResults;
     private ScoreBreakdown? _final;
@@ -158,6 +162,14 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
             Status = "No microphone: singing isn't scored";
         }
 
+        // UltraStar's #VIDEOGAP: video position = audio position + gap.
+        if (entry.VideoPath is { } videoPath)
+        {
+            double audioStart = startMs ?? song.StartMs ?? 0;
+            _video = VideoFrameSource.Open(videoPath, audioStart + song.VideoGapMs, _logger);
+            _hasVideoFrame = false;
+        }
+
         IsPaused = false;
         _audio.Play();
         this.RaisePropertyChanged(nameof(IsActive));
@@ -213,9 +225,35 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => PublishResults(final, lines));
             }
 
+            UpdateVideo();
             return new StageSnapshot(
                 beat, lyrics, _lane, _hits.ToArray(), _session?.LastReading,
-                _session?.Scorer.Score.Total ?? 0, _lastLine, beat - _lastLineBeat, _finished);
+                _session?.Scorer.Score.Total ?? 0, _lastLine, beat - _lastLineBeat, _finished,
+                _hasVideoFrame ? _videoBitmap : null);
+        }
+    }
+
+    /// <summary>Copies the due video frame into the bitmap the stage draws (UI thread, from Tick).</summary>
+    private void UpdateVideo()
+    {
+        if (_video is not { } video || _song is not { } song) return;
+        var frame = video.TakeFrame(_audio.PositionMs + song.VideoGapMs);
+        if (frame is null) return;
+        try
+        {
+            _videoBitmap ??= new Avalonia.Media.Imaging.WriteableBitmap(
+                new Avalonia.PixelSize(VideoFrameSource.Width, video.Height), new Avalonia.Vector(96, 96),
+                Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Opaque);
+            using var buffer = _videoBitmap.Lock();
+            if (buffer.Size.Height == video.Height)
+            {
+                System.Runtime.InteropServices.Marshal.Copy(frame.Pixels, 0, buffer.Address, frame.Pixels.Length);
+                _hasVideoFrame = true;
+            }
+        }
+        finally
+        {
+            video.Release(frame);
         }
     }
 
@@ -251,6 +289,10 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     {
         _mic.Stop();
         _audio.Stop();
+        _video?.Dispose();
+        _video = null;
+        _hasVideoFrame = false;
+        _videoBitmap = null;
         lock (_sync)
         {
             _session = null;
