@@ -1,0 +1,57 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Karaoke"
+             xmlns:k="clr-namespace:Singularity.Views.Avalonia.Karaoke"
+             x:Class="Singularity.Views.Avalonia.Karaoke.MicSetupPage"
+             x:DataType="vm:MicSetupViewModel"
+             x:CompileBindings="True"
+             Background="{DynamicResource BrushBg1}" Foreground="White">
+    <ScrollViewer>
+        <StackPanel Margin="28,24" Spacing="18" MaxWidth="900" HorizontalAlignment="Left">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Microphone" FontSize="30" FontWeight="Bold"/>
+                <TextBlock Text="{Binding Status}" Foreground="#9AA"/>
+            </StackPanel>
+
+            <StackPanel Spacing="6">
+                <TextBlock Text="Singing microphone" FontWeight="SemiBold"/>
+                <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" MinWidth="420"/>
+            </StackPanel>
+
+            <!-- Level: sing or speak 10-20 cm from the mic; it should pass the gate line clearly. -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Input level" FontWeight="SemiBold"/>
+                <Grid Height="14" Width="420" HorizontalAlignment="Left">
+                    <ProgressBar Minimum="0" Maximum="1" Value="{Binding LevelFraction}" Height="14"/>
+                </Grid>
+                <TextBlock Text="The game ignores input below -55 dBFS. Aim for -35 dBFS or louder while singing."
+                           Foreground="#889" FontSize="12"/>
+            </StackPanel>
+
+            <StackPanel Spacing="2">
+                <TextBlock Text="Recognised note" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding NoteText}" FontSize="56" FontWeight="Bold"/>
+                <TextBlock Text="{Binding DetailText}" Foreground="#AAB"/>
+            </StackPanel>
+
+            <StackPanel Spacing="6">
+                <TextBlock Text="Pitch, last 4 seconds" FontWeight="SemiBold"/>
+                <k:PitchTrail Height="200"/>
+                <TextBlock Text="Hum a steady note: the dots should form a flat line, not jump between octaves."
+                           Foreground="#889" FontSize="12"/>
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="Latency" FontWeight="SemiBold"/>
+                <TextBlock TextWrapping="Wrap" Foreground="#AAB"
+                           Text="How long the microphone takes to deliver what it hears. The click test plays a few clicks through the speakers and listens for them; use speakers, not headphones."/>
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Button Content="Run click test" Command="{Binding CalibrateCommand}"/>
+                    <NumericUpDown Value="{Binding LatencyMs}" Minimum="0" Maximum="500" Increment="5" FormatString="0" Width="140"/>
+                    <TextBlock Text="ms" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Text="{Binding CalibrationText}" TextWrapping="Wrap" Foreground="#CCD"/>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -13,5 +13,6 @@ public enum PageType
     NowPlaying,
     Users,
     Karaoke,
-    Sing
+    Sing,
+    MicSetup
 }

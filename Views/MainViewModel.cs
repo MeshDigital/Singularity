@@ -204,6 +204,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         NavigateImportCommand = new RelayCommand(NavigateToImport); // Phase 6D
         NavigateUsersCommand = new RelayCommand(NavigateToUsers);
         NavigateKaraokeCommand = new RelayCommand(() => _navigationService.NavigateTo("Karaoke"));
+        NavigateMicSetupCommand = new RelayCommand(() => _navigationService.NavigateTo("MicSetup"));
         PlayPauseCommand = new RelayCommand(() => PlayerViewModel.TogglePlayPauseCommand.Execute(null));
         FocusSearchCommand = new RelayCommand(FocusSearch);
         // Expanded -> Mini -> Collapsed(hidden) -> Expanded. Each state's width transition is
@@ -413,6 +414,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _navigationService.RegisterPage("Users", typeof(Avalonia.UsersPage));
         _navigationService.RegisterPage("Karaoke", typeof(Avalonia.Karaoke.SongSelectPage));
         _navigationService.RegisterPage("Sing", typeof(Avalonia.Karaoke.SingPage));
+        _navigationService.RegisterPage("MicSetup", typeof(Avalonia.Karaoke.MicSetupPage));
 
         // Subscribe to navigation events
         _navigationService.Navigated += OnNavigated;
@@ -754,6 +756,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool IsSettingsOverlayActive => CurrentPageType == PageType.Settings;
     public bool IsUsersOverlayActive => CurrentPageType == PageType.Users;
     public bool IsKaraokeOverlayActive => CurrentPageType is PageType.Karaoke or PageType.Sing;
+    public bool IsMicSetupOverlayActive => CurrentPageType == PageType.MicSetup;
 
     private static readonly string[] NavigationOverlayPropertyNames =
     [
@@ -767,7 +770,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         nameof(IsPlayerOverlayActive),
         nameof(IsSettingsOverlayActive),
         nameof(IsUsersOverlayActive),
-        nameof(IsKaraokeOverlayActive)
+        nameof(IsKaraokeOverlayActive),
+        nameof(IsMicSetupOverlayActive)
     ];
 
     public static PageType ResolvePageType(Type? pageType, PageType fallback)
@@ -787,6 +791,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (typeof(Avalonia.UsersPage).IsAssignableFrom(pageType)) return PageType.Users;
         if (typeof(Avalonia.Karaoke.SongSelectPage).IsAssignableFrom(pageType)) return PageType.Karaoke;
         if (typeof(Avalonia.Karaoke.SingPage).IsAssignableFrom(pageType)) return PageType.Sing;
+        if (typeof(Avalonia.Karaoke.MicSetupPage).IsAssignableFrom(pageType)) return PageType.MicSetup;
 
         return fallback;
     }
@@ -982,6 +987,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand NavigateImportCommand { get; } // Phase 6D
     public ICommand NavigateUsersCommand { get; }
     public ICommand NavigateKaraokeCommand { get; }
+    public ICommand NavigateMicSetupCommand { get; }
     public ICommand PlayPauseCommand { get; }
     public ICommand FocusSearchCommand { get; }
     public ICommand ToggleNavigationCommand { get; }

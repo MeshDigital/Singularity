@@ -6,6 +6,7 @@ using System.Windows.Input;
 using Avalonia.Media.Imaging;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
+using Singularity.Configuration;
 using Singularity.Contracts.UltraStar;
 using Singularity.Karaoke;
 using Singularity.Karaoke.Display;
@@ -40,6 +41,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     /// <summary>How long after the last note the results show, in beats.</summary>
     private const int OutroBeats = 16;
 
+    private readonly AppConfig _config;
     private readonly SingAudioEngine _audio;
     private readonly MicrophoneCapture _mic;
     private readonly INavigationService _navigation;
@@ -64,8 +66,9 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     private Bitmap? _background;
     private bool _isPaused;
 
-    public SingViewModel(SingAudioEngine audio, MicrophoneCapture mic, INavigationService navigation, ILogger<SingViewModel> logger)
+    public SingViewModel(SingAudioEngine audio, MicrophoneCapture mic, INavigationService navigation, AppConfig config, ILogger<SingViewModel> logger)
     {
+        _config = config;
         _audio = audio;
         _mic = mic;
         _navigation = navigation;
@@ -120,11 +123,11 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
             return;
         }
 
-        if (_mic.Start(() => _audio.PositionMs))
+        if (_mic.Start(() => _audio.PositionMs, _config.KaraokeMicDeviceId))
         {
             lock (_sync)
             {
-                _session = new SingerSession(song, 0, _mic.SampleRate, Difficulty.Medium);
+                _session = new SingerSession(song, 0, _mic.SampleRate, Difficulty.Medium, _config.KaraokeMicLatencyMs);
                 _session.Scorer.BeatJudged += (note, beat, hit) => { if (hit) _hits.Add((note, beat)); };
                 _session.Scorer.LineCompleted += line => { _lastLine = line; _lastLineBeat = song.MsToBeat(_audio.PositionMs); };
             }

@@ -75,3 +75,18 @@ public class PitchDetectorTests
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(1), $"{frames} frames took {sw.Elapsed.TotalMilliseconds:0} ms");
     }
 }
+
+public class NoteNamesTests
+{
+    [Theory]
+    [InlineData(60, "C4")]
+    [InlineData(57, "A3")]
+    [InlineData(69.4, "A4")]
+    [InlineData(61, "C♯4")]
+    [InlineData(23, "B0")]
+    [InlineData(12, "C0")]
+    public void Names(double midi, string expected) => Assert.Equal(expected, Singularity.Karaoke.Pitch.NoteNames.Name(midi));
+
+    [Fact]
+    public void Cents_AreRelativeToTheNearestNote() => Assert.Equal(-20, Singularity.Karaoke.Pitch.NoteNames.Cents(68.8), 6);
+}

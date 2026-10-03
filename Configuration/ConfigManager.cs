@@ -201,6 +201,9 @@ public class ConfigManager
 
                 // [Karaoke]
                 KaraokeSongFolders = config["Karaoke:SongFolders"] ?? "",
+                KaraokeMicDeviceId = config["Karaoke:MicDeviceId"] ?? "",
+                KaraokeMicLatencyMs = double.TryParse(config["Karaoke:MicLatencyMs"], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var micLatency) ? micLatency : 0,
 
                 // [Advanced]
                 EnableNetworkActivityMonitor = !bool.TryParse(config["Advanced:EnableNetworkActivityMonitor"], out var enam) || enam, // Default true
@@ -399,6 +402,8 @@ public class ConfigManager
         iniContent.AppendLine();
         iniContent.AppendLine("[Karaoke]");
         iniContent.AppendLine($"SongFolders = {config.KaraokeSongFolders}");
+        iniContent.AppendLine($"MicDeviceId = {config.KaraokeMicDeviceId}");
+        iniContent.AppendLine($"MicLatencyMs = {config.KaraokeMicLatencyMs.ToString("0", System.Globalization.CultureInfo.InvariantCulture)}");
 
         iniContent.AppendLine();
         iniContent.AppendLine("[Advanced]");

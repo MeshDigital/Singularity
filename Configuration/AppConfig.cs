@@ -15,6 +15,12 @@ public class AppConfig
 
     /// <summary>UltraStar song folders for the karaoke game, separated by ';'. Read-only to the app.</summary>
     public string KaraokeSongFolders { get; set; } = "";
+
+    /// <summary>WASAPI endpoint id of the singing microphone; empty = the Windows default recording device.</summary>
+    public string KaraokeMicDeviceId { get; set; } = "";
+
+    /// <summary>Microphone input latency in ms, measured by the click test in Mic setup; subtracted from every reading.</summary>
+    public double KaraokeMicLatencyMs { get; set; }
     public int ListenPort { get; set; } = 49998;
     public bool UseUPnP { get; set; } = false;
     public int ConnectTimeout { get; set; } = 60000; // ms

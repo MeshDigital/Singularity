@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -26,19 +28,46 @@ public sealed class MicrophoneCapture : IDisposable
     /// <summary>Mono samples and the song time (ms) of the first one. Raised on the capture thread.</summary>
     public event Action<float[], int, double>? SamplesCaptured;
 
-    /// <summary>Starts the default microphone. False when there is none (the game then runs without scoring).</summary>
-    public bool Start(Func<double> songClockMs)
+    /// <summary>Active recording devices as (endpoint id, name), the Windows default first.</summary>
+    public static IReadOnlyList<(string Id, string Name)> ListDevices()
+    {
+        using var enumerator = new MMDeviceEnumerator();
+        string? defaultId = enumerator.HasDefaultAudioEndpoint(DataFlow.Capture, Role.Console)
+            ? enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console).ID
+            : null;
+        return enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+            .Select(d => (d.ID, d.FriendlyName))
+            .OrderByDescending(d => d.ID == defaultId)
+            .ThenBy(d => d.FriendlyName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Starts the microphone with endpoint id <paramref name="deviceId"/>, or the Windows default when
+    /// it's empty or no longer present. False when there is none (the game then runs without scoring).
+    /// </summary>
+    public bool Start(Func<double> songClockMs, string? deviceId = null)
     {
         Stop();
         try
         {
             using var enumerator = new MMDeviceEnumerator();
-            if (!enumerator.HasDefaultAudioEndpoint(DataFlow.Capture, Role.Console))
+            MMDevice? device = null;
+            if (!string.IsNullOrEmpty(deviceId))
             {
-                _logger.LogWarning("No microphone found; singing won't be scored");
-                return false;
+                try { device = enumerator.GetDevice(deviceId); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Configured microphone {Id} not found; using the default", deviceId); }
+                if (device is { State: not DeviceState.Active }) device = null;
             }
-            var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
+            if (device is null)
+            {
+                if (!enumerator.HasDefaultAudioEndpoint(DataFlow.Capture, Role.Console))
+                {
+                    _logger.LogWarning("No microphone found; singing won't be scored");
+                    return false;
+                }
+                device = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
+            }
             DeviceName = device.FriendlyName;
             _capture = new WasapiCapture(device, useEventSync: true, audioBufferMillisecondsLength: 20);
             SampleRate = _capture.WaveFormat.SampleRate;
