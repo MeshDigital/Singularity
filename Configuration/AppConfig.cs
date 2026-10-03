@@ -12,6 +12,9 @@ public class AppConfig
     public string? Password { get; set; }
     public bool RememberPassword { get; set; }
     public bool AutoConnectEnabled { get; set; }
+
+    /// <summary>UltraStar song folders for the karaoke game, separated by ';'. Read-only to the app.</summary>
+    public string KaraokeSongFolders { get; set; } = "";
     public int ListenPort { get; set; } = 49998;
     public bool UseUPnP { get; set; } = false;
     public int ConnectTimeout { get; set; } = 60000; // ms

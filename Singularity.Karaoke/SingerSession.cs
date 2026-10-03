@@ -17,6 +17,7 @@ public readonly record struct PitchReading(double Beat, PitchEstimate Pitch);
 public sealed class SingerSession
 {
     public const double HopMs = 10;
+    public const double SilenceDb = -55;
 
     private readonly UltraStarSong _song;
     private readonly PitchDetector _detector;
@@ -30,7 +31,9 @@ public sealed class SingerSession
     {
         _song = song;
         _sampleRate = sampleRate;
-        _detector = new PitchDetector(sampleRate, frameSize: FrameSizeFor(sampleRate));
+        // -55 dBFS rather than the detector's -45: real microphones are often quieter than test
+        // tones, and the clarity check already rejects room noise.
+        _detector = new PitchDetector(sampleRate, frameSize: FrameSizeFor(sampleRate), silenceDb: SilenceDb);
         _hop = (int)Math.Round(sampleRate * HopMs / 1000);
         _buffer = new float[_detector.FrameSize * 4];
         LatencyMs = latencyMs;

@@ -199,6 +199,9 @@ public class ConfigManager
                 // [Import]
                 ImportWebShortcuts = ParseImportWebShortcuts(config["Import:WebShortcutsJson"]),
 
+                // [Karaoke]
+                KaraokeSongFolders = config["Karaoke:SongFolders"] ?? "",
+
                 // [Advanced]
                 EnableNetworkActivityMonitor = !bool.TryParse(config["Advanced:EnableNetworkActivityMonitor"], out var enam) || enam, // Default true
             };
@@ -392,6 +395,10 @@ public class ConfigManager
         iniContent.AppendLine();
         iniContent.AppendLine("[Import]");
         iniContent.AppendLine($"WebShortcutsJson = {SerializeImportWebShortcuts(config.ImportWebShortcuts)}");
+
+        iniContent.AppendLine();
+        iniContent.AppendLine("[Karaoke]");
+        iniContent.AppendLine($"SongFolders = {config.KaraokeSongFolders}");
 
         iniContent.AppendLine();
         iniContent.AppendLine("[Advanced]");

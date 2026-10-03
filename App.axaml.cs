@@ -266,6 +266,7 @@ public partial class App : Application
                             Services.GetRequiredService<WindowsToastService>().Initialize(toastHandle);
 
                             Services.GetRequiredService<UiStallWatchdog>().Start();
+                            OpenDevelopmentShortcuts();
                         });
 
                         // --- THE BARRIER: WE ARE NOW DATA-SAFE ---
@@ -475,6 +476,27 @@ public partial class App : Application
     /// <summary>
     /// Shared service configuration used by both WPF and Avalonia
     /// </summary>
+    /// <summary>--open-page / --sing: jump straight to a page or a song, for development runs.</summary>
+    private void OpenDevelopmentShortcuts()
+    {
+        var navigation = Services.GetRequiredService<INavigationService>();
+        if (Singularity.Configuration.RuntimeOptions.SingFolder is { } folder)
+        {
+            var entry = Singularity.Karaoke.Library.SongScanner.Scan(new[] { folder }).Songs.FirstOrDefault(s => s.IsPlayable);
+            if (entry is null)
+            {
+                Serilog.Log.Warning("--sing: no playable song in {Folder}", folder);
+                return;
+            }
+            Services.GetRequiredService<ViewModels.Karaoke.SingViewModel>().Start(entry);
+            navigation.NavigateTo("Sing");
+        }
+        else if (Singularity.Configuration.RuntimeOptions.OpenPage is { } page)
+        {
+            navigation.NavigateTo(page);
+        }
+    }
+
     public static void ConfigureSharedServices(IServiceCollection services)
     {
         // Logging - Use Serilog
@@ -690,6 +712,17 @@ public partial class App : Application
         services.AddSingleton<PeerVerificationChallengeService>();
         services.AddSingleton<WindowsToastService>();
         services.AddTransient<UsersViewModel>();
+
+        // Karaoke: song collection, the sing screen's audio clock and microphone, and its pages.
+        // The sing view model is a singleton: song select hands it the chosen song, and the cached
+        // Sing page keeps showing whatever it is playing.
+        services.AddSingleton<Services.Karaoke.KaraokeLibrary>();
+        services.AddSingleton<Services.Karaoke.SingAudioEngine>();
+        services.AddSingleton<Services.Karaoke.MicrophoneCapture>();
+        services.AddSingleton<ViewModels.Karaoke.SingViewModel>();
+        services.AddSingleton<ViewModels.Karaoke.SongSelectViewModel>();
+        services.AddTransient<Views.Avalonia.Karaoke.SongSelectPage>();
+        services.AddTransient<Views.Avalonia.Karaoke.SingPage>();
         services.AddTransient<UserProfileViewModel>();
         services.AddTransient<RoomsViewModel>();
         services.AddSingleton<SearchFilterViewModel>(); // [FIX] Added missing registration

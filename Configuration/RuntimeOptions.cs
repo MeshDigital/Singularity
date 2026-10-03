@@ -20,9 +20,24 @@ public static class RuntimeOptions
     /// </summary>
     public static bool Offline { get; internal set; }
 
+    /// <summary>Development shortcut: page to open at startup (<c>--open-page Karaoke</c>).</summary>
+    public static string? OpenPage { get; private set; }
+
+    /// <summary>Development shortcut: song folder to start singing at startup (<c>--sing "D:\Songs\Artist - Title"</c>).</summary>
+    public static string? SingFolder { get; private set; }
+
     public static void Initialize(IEnumerable<string> args)
     {
-        Offline = args.Any(a => a.Equals(OfflineFlag, StringComparison.OrdinalIgnoreCase))
+        var list = args.ToList();
+        string? ValueAfter(string flag)
+        {
+            int i = list.FindIndex(a => a.Equals(flag, StringComparison.OrdinalIgnoreCase));
+            return i >= 0 && i + 1 < list.Count ? list[i + 1] : null;
+        }
+
+        Offline = list.Any(a => a.Equals(OfflineFlag, StringComparison.OrdinalIgnoreCase))
                   || Environment.GetEnvironmentVariable(OfflineEnvironmentVariable) is "1" or "true" or "TRUE" or "True";
+        OpenPage = ValueAfter("--open-page");
+        SingFolder = ValueAfter("--sing");
     }
 }

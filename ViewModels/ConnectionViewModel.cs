@@ -68,9 +68,10 @@ public class ConnectionViewModel : INotifyPropertyChanged, IDisposable
 
     // Login Overlay State
     private bool _isLoginOverlayVisible;
+    /// <summary>Never shown in --offline runs: they can't connect, so they shouldn't ask.</summary>
     public bool IsLoginOverlayVisible
     {
-        get => _isLoginOverlayVisible;
+        get => _isLoginOverlayVisible && !Singularity.Configuration.RuntimeOptions.Offline;
         set => SetProperty(ref _isLoginOverlayVisible, value);
     }
 

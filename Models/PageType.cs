@@ -11,5 +11,7 @@ public enum PageType
     Import,
     TheaterMode,
     NowPlaying,
-    Users
+    Users,
+    Karaoke,
+    Sing
 }

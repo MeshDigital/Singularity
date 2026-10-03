@@ -1,0 +1,222 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Input;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using Microsoft.Extensions.Logging;
+using ReactiveUI;
+using Singularity.Karaoke.Library;
+using Singularity.Services;
+using Singularity.Services.Karaoke;
+using Singularity.Views;
+
+namespace Singularity.ViewModels.Karaoke;
+
+/// <summary>One song in the song-select list. The cover is decoded lazily, off the UI thread, when first shown.</summary>
+public sealed class SongCardViewModel : ReactiveObject
+{
+    private bool _coverRequested;
+
+    public SongCardViewModel(SongEntry entry)
+    {
+        Entry = entry;
+        SearchKey = $"{entry.Song.Artist} {entry.Song.Title}".ToLowerInvariant();
+    }
+
+    public SongEntry Entry { get; }
+    public string Title => Entry.Song.Title;
+    public string Artist => Entry.Song.Artist;
+    public string SearchKey { get; }
+
+    public string Details
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (Entry.Song.IsDuet) parts.Add("Duet");
+            if (Entry.Song.Year is { } y) parts.Add(y.ToString());
+            if (!string.IsNullOrEmpty(Entry.Song.Language)) parts.Add(Entry.Song.Language!);
+            if (Entry.VideoPath is not null) parts.Add("Video");
+            if (!Entry.IsPlayable) parts.Add("No audio");
+            return string.Join(" · ", parts);
+        }
+    }
+
+    /// <summary>Null until decoded; the binding picks it up through PropertyChanged.</summary>
+    public Bitmap? Cover
+    {
+        get
+        {
+            if (Entry.CoverPath is not { } path) return null;
+            if (CoverCache.TryGet(path) is { } cached) return cached;
+            if (!_coverRequested)
+            {
+                _coverRequested = true;
+                _ = LoadCoverAsync(path);
+            }
+            return null;
+        }
+    }
+
+    private async Task LoadCoverAsync(string path)
+    {
+        if (await CoverCache.LoadAsync(path).ConfigureAwait(false) is null) return;
+        await Dispatcher.UIThread.InvokeAsync(() => this.RaisePropertyChanged(nameof(Cover)));
+    }
+}
+
+/// <summary>
+/// Decoded cover thumbnails (160 px wide), least recently used first out. Bounded so scrolling
+/// through thousands of songs doesn't keep thousands of bitmaps alive; an evicted cover that's still
+/// on screen stays alive through its Image control and is simply decoded again next time.
+/// </summary>
+internal static class CoverCache
+{
+    public const int DecodeWidth = 160;
+    public const int Capacity = 300;
+
+    private static readonly Dictionary<string, LinkedListNode<(string Path, Bitmap Bitmap)>> Map = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly LinkedList<(string Path, Bitmap Bitmap)> Order = new();
+    private static readonly object Lock = new();
+
+    public static Bitmap? TryGet(string path)
+    {
+        lock (Lock)
+        {
+            if (!Map.TryGetValue(path, out var node)) return null;
+            Order.Remove(node);
+            Order.AddFirst(node);
+            return node.Value.Bitmap;
+        }
+    }
+
+    public static async Task<Bitmap?> LoadAsync(string path)
+    {
+        try
+        {
+            var bitmap = await Task.Run(() =>
+            {
+                using var stream = File.OpenRead(path);
+                return Bitmap.DecodeToWidth(stream, DecodeWidth, BitmapInterpolationMode.MediumQuality);
+            }).ConfigureAwait(false);
+            lock (Lock)
+            {
+                if (Map.TryGetValue(path, out var existing)) return existing.Value.Bitmap;
+                Map[path] = Order.AddFirst((path, bitmap));
+                while (Order.Count > Capacity)
+                {
+                    Map.Remove(Order.Last!.Value.Path);
+                    Order.RemoveLast();
+                }
+            }
+            return bitmap;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            Serilog.Log.Debug(ex, "Cover {Path} could not be decoded", path);
+            return null;
+        }
+    }
+}
+
+/// <summary>Song select: the karaoke collection, searchable, one click to sing.</summary>
+public sealed class SongSelectViewModel : ReactiveObject
+{
+    private readonly KaraokeLibrary _library;
+    private readonly SingViewModel _sing;
+    private readonly INavigationService _navigation;
+    private readonly ILogger<SongSelectViewModel> _logger;
+    private List<SongCardViewModel> _all = new();
+    private string _searchText = "";
+    private string _statusText = "";
+    private bool _isLoading;
+    private bool _loaded;
+
+    public SongSelectViewModel(KaraokeLibrary library, SingViewModel sing, INavigationService navigation, ILogger<SongSelectViewModel> logger)
+    {
+        _library = library;
+        _sing = sing;
+        _navigation = navigation;
+        _logger = logger;
+        RefreshCommand = new AsyncRelayCommand(LoadAsync);
+        SingCommand = new RelayCommand<SongCardViewModel>(Sing, card => card?.Entry.IsPlayable == true);
+    }
+
+    public ObservableCollection<SongCardViewModel> Songs { get; } = new();
+
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _searchText, value);
+            ApplyFilter();
+        }
+    }
+
+    public string StatusText
+    {
+        get => _statusText;
+        private set => this.RaiseAndSetIfChanged(ref _statusText, value);
+    }
+
+    public bool IsLoading
+    {
+        get => _isLoading;
+        private set => this.RaiseAndSetIfChanged(ref _isLoading, value);
+    }
+
+    public ICommand RefreshCommand { get; }
+    public ICommand SingCommand { get; }
+
+    /// <summary>Scans once, the first time the page is shown.</summary>
+    public Task EnsureLoadedAsync() => _loaded ? Task.CompletedTask : LoadAsync();
+
+    public async Task LoadAsync()
+    {
+        _loaded = true;
+        if (_library.Folders.Count == 0)
+        {
+            StatusText = $"No song folders. Add UltraStar folders under [Karaoke] SongFolders in config.ini, or set {KaraokeLibrary.SongsDirEnvironmentVariable}.";
+            return;
+        }
+
+        IsLoading = true;
+        StatusText = "Scanning songs…";
+        try
+        {
+            var result = await _library.ScanAsync();
+            _all = result.Songs.Select(s => new SongCardViewModel(s)).ToList();
+            ApplyFilter();
+            StatusText = $"{result.Songs.Count} songs" + (result.Failures.Count > 0 ? $" · {result.Failures.Count} unreadable" : "");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Scanning karaoke songs failed");
+            StatusText = "Scanning songs failed: " + ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        var words = SearchText.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        Songs.Clear();
+        foreach (var card in _all.Where(c => words.All(c.SearchKey.Contains)))
+            Songs.Add(card);
+    }
+
+    private void Sing(SongCardViewModel? card)
+    {
+        if (card is null || !card.Entry.IsPlayable) return;
+        _sing.Start(card.Entry);
+        _navigation.NavigateTo("Sing");
+    }
+}

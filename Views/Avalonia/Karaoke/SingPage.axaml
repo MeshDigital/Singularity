@@ -1,0 +1,28 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Karaoke"
+             xmlns:k="clr-namespace:Singularity.Views.Avalonia.Karaoke"
+             x:Class="Singularity.Views.Avalonia.Karaoke.SingPage"
+             x:DataType="vm:SingViewModel"
+             x:CompileBindings="True"
+             Background="Black" Foreground="White" Focusable="True">
+    <Grid>
+        <!-- Bottom layer: background or cover, dimmed. Video will be drawn here by Skia, not a native
+             window: a native video HWND would cover everything drawn on top of it. -->
+        <Image Source="{Binding Background}" Stretch="UniformToFill" Opacity="0.35"/>
+
+        <k:SingStage/>
+
+        <Grid RowDefinitions="Auto,*,Auto" Margin="20,14">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button Content="← Back" Command="{Binding BackCommand}"/>
+                <Button Content="Pause" Command="{Binding PauseCommand}"/>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding Artist}" Foreground="#BBB"/>
+                </StackPanel>
+            </StackPanel>
+            <TextBlock Grid.Row="2" Text="{Binding Status}" Foreground="#889" FontSize="12"/>
+        </Grid>
+    </Grid>
+</UserControl>

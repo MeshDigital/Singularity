@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Karaoke"
+             x:Class="Singularity.Views.Avalonia.Karaoke.SongSelectPage"
+             x:DataType="vm:SongSelectViewModel"
+             x:CompileBindings="True"
+             Background="{DynamicResource BrushBg1}" Foreground="White">
+    <Grid RowDefinitions="Auto,Auto,*" Margin="28,24">
+        <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Sing" FontSize="30" FontWeight="Bold"/>
+                <TextBlock Text="{Binding StatusText}" Foreground="#9AA" FontSize="13" TextWrapping="Wrap"/>
+            </StackPanel>
+            <Button Grid.Column="1" Content="Rescan" Command="{Binding RefreshCommand}" VerticalAlignment="Top"/>
+        </Grid>
+
+        <TextBox Grid.Row="1" Margin="0,16,0,12" Watermark="Search artist or title"
+                 Text="{Binding SearchText}"/>
+
+        <!-- ListBox virtualises its items, so thousands of songs scroll smoothly; covers decode on demand. -->
+        <ListBox Grid.Row="2" x:Name="SongList" ItemsSource="{Binding Songs}" Background="Transparent">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:SongCardViewModel">
+                    <Grid ColumnDefinitions="64,*,Auto" Height="72" Background="Transparent">
+                        <Border Width="64" Height="64" CornerRadius="6" ClipToBounds="True" Background="#222">
+                            <Image Source="{Binding Cover}" Stretch="UniformToFill"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="14,0" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Artist}" Foreground="#BBB" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Details}" Foreground="#778" FontSize="11"/>
+                        </StackPanel>
+                        <Button Grid.Column="2" Content="Sing" Margin="8,0" VerticalAlignment="Center"
+                                Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).SingCommand}"
+                                CommandParameter="{Binding}"/>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>
