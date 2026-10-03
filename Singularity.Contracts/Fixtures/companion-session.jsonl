@@ -1,0 +1,7 @@
+{"type":"hello","protocolVersion":1,"deviceId":"a1b2c3","name":"Living room phone","sessionCode":"4821"}
+{"type":"welcome","protocolVersion":1,"playerSlot":2,"color":"#e63946"}
+{"type":"ping","id":7}
+{"type":"pong","id":7,"receivedMs":1000512.25,"sentMs":1000512.5}
+{"type":"song_state","playing":true,"title":"Wonderwall","artist":"Oasis","line":"Today is gonna be the day","nextLine":"That they're gonna throw it back to you"}
+{"type":"pitch","firstSeq":120,"samples":[{"timeMs":1000600,"midi":57.12,"clarity":0.94},{"timeMs":1000610,"midi":null,"clarity":0.2}]}
+{"type":"remote","action":"select"}
