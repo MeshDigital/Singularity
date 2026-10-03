@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.Extensions.Logging;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
+using Singularity.Karaoke.Audio;
 
 namespace Singularity.Services.Karaoke;
 
@@ -18,15 +19,18 @@ public sealed class MicrophoneCapture : IDisposable
     private readonly ILogger<MicrophoneCapture> _logger;
     private WasapiCapture? _capture;
     private Func<double>? _songClockMs;
-    private float[] _mono = Array.Empty<float>();
+    private float[] _interleaved = Array.Empty<float>();
 
     public MicrophoneCapture(ILogger<MicrophoneCapture> logger) => _logger = logger;
 
     public int SampleRate { get; private set; }
     public string? DeviceName { get; private set; }
 
-    /// <summary>Mono samples and the song time (ms) of the first one. Raised on the capture thread.</summary>
-    public event Action<float[], int, double>? SamplesCaptured;
+    public int Channels { get; private set; }
+
+    /// <summary>Each captured block, all channels interleaved, dated by the clock. Raised on the capture thread;
+    /// the block's buffer is reused for the next one.</summary>
+    public event Action<MicBlock>? SamplesCaptured;
 
     /// <summary>Active recording devices as (endpoint id, name), the Windows default first.</summary>
     public static IReadOnlyList<(string Id, string Name)> ListDevices()
@@ -71,6 +75,7 @@ public sealed class MicrophoneCapture : IDisposable
             DeviceName = device.FriendlyName;
             _capture = new WasapiCapture(device, useEventSync: true, audioBufferMillisecondsLength: 20);
             SampleRate = _capture.WaveFormat.SampleRate;
+            Channels = _capture.WaveFormat.Channels;
             _songClockMs = songClockMs;
             _capture.DataAvailable += OnData;
             _capture.RecordingStopped += (_, e) =>
@@ -98,26 +103,17 @@ public sealed class MicrophoneCapture : IDisposable
         var format = capture.WaveFormat;
         int channels = format.Channels;
         int frames = e.BytesRecorded / format.BlockAlign;
-        if (_mono.Length < frames) _mono = new float[frames];
+        int samples = frames * channels;
+        if (_interleaved.Length < samples) _interleaved = new float[samples];
 
         // WASAPI's shared-mode mix format is 32-bit float, usually wrapped as WAVE_FORMAT_EXTENSIBLE.
         if (format.BitsPerSample == 32 && format.Encoding is WaveFormatEncoding.IeeeFloat or WaveFormatEncoding.Extensible)
         {
-            for (int f = 0; f < frames; f++)
-            {
-                float sum = 0;
-                for (int c = 0; c < channels; c++) sum += BitConverter.ToSingle(e.Buffer, (f * channels + c) * 4);
-                _mono[f] = sum / channels;
-            }
+            Buffer.BlockCopy(e.Buffer, 0, _interleaved, 0, samples * 4);
         }
         else if (format.BitsPerSample == 16)
         {
-            for (int f = 0; f < frames; f++)
-            {
-                float sum = 0;
-                for (int c = 0; c < channels; c++) sum += BitConverter.ToInt16(e.Buffer, (f * channels + c) * 2) / 32768f;
-                _mono[f] = sum / channels;
-            }
+            for (int i = 0; i < samples; i++) _interleaved[i] = BitConverter.ToInt16(e.Buffer, i * 2) / 32768f;
         }
         else
         {
@@ -125,7 +121,7 @@ public sealed class MicrophoneCapture : IDisposable
         }
 
         double firstSampleMs = clock() - frames * 1000.0 / format.SampleRate;
-        SamplesCaptured?.Invoke(_mono, frames, firstSampleMs);
+        SamplesCaptured?.Invoke(new MicBlock(_interleaved, frames, channels, firstSampleMs));
     }
 
     public void Stop()

@@ -13,9 +13,20 @@
                 <TextBlock Text="{Binding Status}" Foreground="#9AA"/>
             </StackPanel>
 
-            <StackPanel Spacing="6">
-                <TextBlock Text="Singing microphone" FontWeight="SemiBold"/>
-                <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" MinWidth="420"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <RadioButton Content="Player 1" GroupName="player" IsChecked="{Binding IsPlayer1}"/>
+                <RadioButton Content="Player 2" GroupName="player" IsChecked="{Binding IsPlayer2}"/>
+                <CheckBox Content="Two singers" IsChecked="{Binding Player2Enabled}" Margin="24,0,0,0"/>
+            </StackPanel>
+
+            <StackPanel Spacing="6" IsEnabled="{Binding PlayerSettingsEnabled}">
+                <TextBlock Text="Microphone" FontWeight="SemiBold"/>
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" MinWidth="420"/>
+                    <ComboBox ItemsSource="{Binding Channels}" SelectedItem="{Binding SelectedChannel}" MinWidth="110"/>
+                </StackPanel>
+                <TextBlock TextWrapping="Wrap" Foreground="#889" FontSize="12"
+                           Text="Two separate microphones: give each player their own device (channel Mix). A two-mic karaoke adapter is one stereo device: player 1 Left, player 2 Right."/>
             </StackPanel>
 
             <!-- Level: sing or speak 10-20 cm from the mic; it should pass the gate line clearly. -->
@@ -44,7 +55,7 @@
             <StackPanel Spacing="8">
                 <TextBlock Text="Latency" FontWeight="SemiBold"/>
                 <TextBlock TextWrapping="Wrap" Foreground="#AAB"
-                           Text="How long the microphone takes to deliver what it hears. The click test plays a few clicks through the speakers and listens for them; use speakers, not headphones."/>
+                           Text="How long the microphone takes to deliver what it hears. The click test plays a few clicks through the speakers and listens for them with the selected player's microphone; use speakers, not headphones. If Windows &quot;Audio enhancements&quot; are on for the mic, its echo cancellation may remove the clicks."/>
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <Button Content="Run click test" Command="{Binding CalibrateCommand}"/>
                     <NumericUpDown Value="{Binding LatencyMs}" Minimum="0" Maximum="500" Increment="5" FormatString="0" Width="140"/>

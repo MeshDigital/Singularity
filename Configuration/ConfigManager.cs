@@ -202,6 +202,10 @@ public class ConfigManager
                 // [Karaoke]
                 KaraokeSongFolders = config["Karaoke:SongFolders"] ?? "",
                 KaraokeMicDeviceId = config["Karaoke:MicDeviceId"] ?? "",
+                KaraokeMicChannel = config["Karaoke:MicChannel"] ?? "Mix",
+                KaraokeMic2Enabled = bool.TryParse(config["Karaoke:Mic2Enabled"], out var mic2) && mic2,
+                KaraokeMic2DeviceId = config["Karaoke:Mic2DeviceId"] ?? "",
+                KaraokeMic2Channel = config["Karaoke:Mic2Channel"] ?? "Right",
                 KaraokeMicLatencyMs = double.TryParse(config["Karaoke:MicLatencyMs"], System.Globalization.NumberStyles.Float,
                     System.Globalization.CultureInfo.InvariantCulture, out var micLatency) ? micLatency : 0,
 
@@ -403,6 +407,10 @@ public class ConfigManager
         iniContent.AppendLine("[Karaoke]");
         iniContent.AppendLine($"SongFolders = {config.KaraokeSongFolders}");
         iniContent.AppendLine($"MicDeviceId = {config.KaraokeMicDeviceId}");
+        iniContent.AppendLine($"MicChannel = {config.KaraokeMicChannel}");
+        iniContent.AppendLine($"Mic2Enabled = {config.KaraokeMic2Enabled}");
+        iniContent.AppendLine($"Mic2DeviceId = {config.KaraokeMic2DeviceId}");
+        iniContent.AppendLine($"Mic2Channel = {config.KaraokeMic2Channel}");
         iniContent.AppendLine($"MicLatencyMs = {config.KaraokeMicLatencyMs.ToString("0", System.Globalization.CultureInfo.InvariantCulture)}");
 
         iniContent.AppendLine();

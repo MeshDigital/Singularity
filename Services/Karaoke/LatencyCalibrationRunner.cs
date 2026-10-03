@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NAudio.Wave;
+using Singularity.Karaoke.Audio;
 using Singularity.Karaoke.Calibration;
 
 namespace Singularity.Services.Karaoke;
@@ -30,7 +31,8 @@ public sealed class LatencyCalibrationRunner
         _logger = loggers.CreateLogger<LatencyCalibrationRunner>();
     }
 
-    public async Task<LatencyEstimate> RunAsync(string? deviceId, CancellationToken ct = default)
+    /// <summary>Measures the latency of one singer's microphone (device and channel).</summary>
+    public async Task<LatencyEstimate> RunAsync(MicAssignment mic, CancellationToken ct = default)
     {
         var (track, clicks) = LatencyCalibrator.CreateClickTrack(TrackSampleRate);
         var wav = Path.Combine(Path.GetTempPath(), $"singularity-clicks-{Guid.NewGuid():N}.wav");
@@ -40,12 +42,16 @@ public sealed class LatencyCalibrationRunner
         using var output = new SingAudioEngine(_loggers.CreateLogger<SingAudioEngine>());
         float[]? recorded = null;
         int micRate = 0;
-        void OnSamples(float[] samples, int count, double timeMs)
+        float[] mono = Array.Empty<float>();
+        void OnSamples(MicBlock block)
         {
             var buffer = recorded;
             if (buffer is null) return;
+            if (mono.Length < block.Frames) mono = new float[block.Frames];
+            int count = block.Extract(mic.Channel, mono);
+            var samples = mono;
             // Place each block where it belongs on the click track's timeline.
-            int at = (int)Math.Round(timeMs * micRate / 1000);
+            int at = (int)Math.Round(block.TimeMs * micRate / 1000);
             for (int i = 0; i < count; i++)
             {
                 int j = at + i;
@@ -56,7 +62,7 @@ public sealed class LatencyCalibrationRunner
         try
         {
             output.Load(wav);
-            if (!_mic.Start(() => output.PositionMs, deviceId))
+            if (!_mic.Start(() => output.PositionMs, mic.DeviceId))
                 return new LatencyEstimate(0, double.MaxValue, 0, clicks.Length);
             micRate = _mic.SampleRate;
             recorded = new float[(int)((long)track.Length * micRate / TrackSampleRate)];

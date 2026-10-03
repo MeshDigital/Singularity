@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using ReactiveUI;
 using Singularity.Configuration;
 using Singularity.Karaoke;
+using Singularity.Karaoke.Audio;
 using Singularity.Karaoke.Pitch;
 using Singularity.Services.Karaoke;
 using Singularity.Views;
@@ -21,8 +22,10 @@ public sealed record MicDevice(string Id, string Name)
 }
 
 /// <summary>
-/// Mic setup: pick the singing microphone, watch its level and recognised pitch live, and measure
-/// its latency with the click test. Isolates "does the mic work" from anything chart- or timing-related.
+/// Mic setup for up to two singers: each picks a device and a channel (Mix for an ordinary mic,
+/// Left/Right for the two sides of a two-mic karaoke adapter). The selected player's input is
+/// monitored live (level, recognised note, pitch trail), and the click test measures its latency.
+/// Isolates "does the mic work" from anything chart- or timing-related.
 /// </summary>
 public sealed class MicSetupViewModel : ReactiveObject, IDisposable
 {
@@ -38,10 +41,12 @@ public sealed class MicSetupViewModel : ReactiveObject, IDisposable
     private readonly object _sync = new();
     private readonly Queue<(double TimeMs, double? Midi)> _trail = new();
     private PitchStream? _stream;
+    private MicChannel _monitoredChannel;
+    private float[] _mono = Array.Empty<float>();
     private PitchEstimate _latest;
     private DispatcherTimer? _refresh;
 
-    private MicDevice? _selectedDevice;
+    private int _player = 1;
     private double _levelDb = -90;
     private string _noteText = "–";
     private string _detailText = "";
@@ -65,28 +70,77 @@ public sealed class MicSetupViewModel : ReactiveObject, IDisposable
     }
 
     public List<MicDevice> Devices { get; private set; } = new();
+    public IReadOnlyList<MicChannel> Channels { get; } = Enum.GetValues<MicChannel>();
+
+    // ── Players ────────────────────────────────────────────────────────────
+
+    public bool IsPlayer1 { get => _player == 1; set { if (value) SelectPlayer(1); } }
+    public bool IsPlayer2 { get => _player == 2; set { if (value) SelectPlayer(2); } }
+
+    public bool Player2Enabled
+    {
+        get => _config.KaraokeMic2Enabled;
+        set
+        {
+            if (_config.KaraokeMic2Enabled == value) return;
+            _config.KaraokeMic2Enabled = value;
+            Save();
+            this.RaisePropertyChanged();
+            this.RaisePropertyChanged(nameof(PlayerSettingsEnabled));
+        }
+    }
+
+    /// <summary>Player 2's device and channel only matter once player 2 is enabled.</summary>
+    public bool PlayerSettingsEnabled => _player == 1 || Player2Enabled;
 
     public MicDevice? SelectedDevice
     {
-        get => _selectedDevice;
+        get => Devices.FirstOrDefault(d => d.Id == CurrentDeviceId) ?? Devices.FirstOrDefault();
         set
         {
-            if (value is null || value == _selectedDevice) return;
-            this.RaiseAndSetIfChanged(ref _selectedDevice, value);
-            _config.KaraokeMicDeviceId = value.Id;
-            _ = _configManager.SaveAsync(_config);
+            if (value is null || value.Id == CurrentDeviceId) return;
+            if (_player == 1) _config.KaraokeMicDeviceId = value.Id;
+            else _config.KaraokeMic2DeviceId = value.Id;
+            Save();
+            this.RaisePropertyChanged();
             StartMonitoring();
         }
     }
+
+    public MicChannel SelectedChannel
+    {
+        get => MicAssignment.Parse(_player == 1 ? _config.KaraokeMicChannel : _config.KaraokeMic2Channel);
+        set
+        {
+            if (value == SelectedChannel) return;
+            if (_player == 1) _config.KaraokeMicChannel = value.ToString();
+            else _config.KaraokeMic2Channel = value.ToString();
+            Save();
+            this.RaisePropertyChanged();
+            StartMonitoring();
+        }
+    }
+
+    private string CurrentDeviceId => (_player == 1 ? _config.KaraokeMicDeviceId : _config.KaraokeMic2DeviceId) ?? "";
+
+    private MicAssignment Current => new(_player, SelectedDevice?.Id ?? "", SelectedChannel);
+
+    private void SelectPlayer(int player)
+    {
+        if (_player == player) return;
+        _player = player;
+        foreach (var name in new[] { nameof(IsPlayer1), nameof(IsPlayer2), nameof(SelectedDevice), nameof(SelectedChannel), nameof(PlayerSettingsEnabled) })
+            this.RaisePropertyChanged(name);
+        StartMonitoring();
+    }
+
+    // ── Live readout ───────────────────────────────────────────────────────
 
     /// <summary>Input level, dBFS.</summary>
     public double LevelDb { get => _levelDb; private set => this.RaiseAndSetIfChanged(ref _levelDb, value); }
 
     /// <summary>0..1 over -70..0 dBFS, for the meter.</summary>
     public double LevelFraction => Math.Clamp((LevelDb + 70) / 70, 0, 1);
-
-    /// <summary>Where the game's silence gate sits on the meter.</summary>
-    public double GateFraction => (SingerSession.SilenceDb + 70) / 70;
 
     public string NoteText { get => _noteText; private set => this.RaiseAndSetIfChanged(ref _noteText, value); }
     public string DetailText { get => _detailText; private set => this.RaiseAndSetIfChanged(ref _detailText, value); }
@@ -104,7 +158,7 @@ public sealed class MicSetupViewModel : ReactiveObject, IDisposable
 
     public string CalibrationText { get => _calibrationText; private set => this.RaiseAndSetIfChanged(ref _calibrationText, value); }
 
-    /// <summary>Saved input latency, ms; editable by hand as well as by the click test.</summary>
+    /// <summary>Saved input latency, ms (shared by both players); editable by hand as well as by the click test.</summary>
     public double LatencyMs
     {
         get => _latencyMs;
@@ -113,7 +167,7 @@ public sealed class MicSetupViewModel : ReactiveObject, IDisposable
             value = Math.Clamp(Math.Round(value), 0, 500);
             this.RaiseAndSetIfChanged(ref _latencyMs, value);
             _config.KaraokeMicLatencyMs = value;
-            _ = _configManager.SaveAsync(_config);
+            Save();
         }
     }
 
@@ -150,7 +204,6 @@ public sealed class MicSetupViewModel : ReactiveObject, IDisposable
             Devices = new();
         }
         this.RaisePropertyChanged(nameof(Devices));
-        _selectedDevice = Devices.FirstOrDefault(d => d.Id == _config.KaraokeMicDeviceId) ?? Devices.FirstOrDefault();
         this.RaisePropertyChanged(nameof(SelectedDevice));
         StartMonitoring();
     }
@@ -164,11 +217,14 @@ public sealed class MicSetupViewModel : ReactiveObject, IDisposable
         lock (_sync) _stream = null;
     }
 
+    private void Save() => _ = _configManager.SaveAsync(_config);
+
     private void StartMonitoring()
     {
         if (IsCalibrating) return;
         _clock.Restart();
-        if (!_mic.Start(() => _clock.Elapsed.TotalMilliseconds, _selectedDevice?.Id))
+        var current = Current;
+        if (!_mic.Start(() => _clock.Elapsed.TotalMilliseconds, current.DeviceId))
         {
             Status = Devices.Count == 0 ? "No microphone found." : "Couldn't open this microphone.";
             return;
@@ -176,17 +232,24 @@ public sealed class MicSetupViewModel : ReactiveObject, IDisposable
         lock (_sync)
         {
             _trail.Clear();
+            _monitoredChannel = current.Channel;
             _stream = new PitchStream(_mic.SampleRate, SingerSession.SilenceDb);
             _stream.Frame += OnFrame;
         }
-        Status = $"Listening: {_mic.DeviceName} ({_mic.SampleRate / 1000.0:0.#} kHz)";
+        Status = $"Player {_player} listening: {_mic.DeviceName} ({_mic.SampleRate / 1000.0:0.#} kHz, {_mic.Channels} ch, {current.Channel})";
         _refresh ??= new DispatcherTimer(TimeSpan.FromMilliseconds(33), DispatcherPriority.Render, (_, _) => Refresh());
         _refresh.Start();
     }
 
-    private void OnSamples(float[] samples, int count, double timeMs)
+    private void OnSamples(MicBlock block)
     {
-        lock (_sync) _stream?.Push(samples.AsSpan(0, count), timeMs);
+        lock (_sync)
+        {
+            if (_stream is null) return;
+            if (_mono.Length < block.Frames) _mono = new float[block.Frames];
+            int count = block.Extract(_monitoredChannel, _mono);
+            _stream.Push(_mono.AsSpan(0, count), block.TimeMs);
+        }
     }
 
     private void OnFrame(double timeMs, PitchEstimate estimate)
@@ -220,12 +283,13 @@ public sealed class MicSetupViewModel : ReactiveObject, IDisposable
 
     private async Task CalibrateAsync()
     {
+        var mic = Current;
         Deactivate();
         IsCalibrating = true;
         CalibrationText = "Playing clicks… keep the room quiet; use speakers, not headphones.";
         try
         {
-            var estimate = await _calibration.RunAsync(_selectedDevice?.Id);
+            var estimate = await _calibration.RunAsync(mic);
             if (estimate.IsReliable)
             {
                 LatencyMs = estimate.LatencyMs;
@@ -234,7 +298,8 @@ public sealed class MicSetupViewModel : ReactiveObject, IDisposable
             else
             {
                 CalibrationText = estimate.ClicksHeard == 0
-                    ? "The microphone didn't hear the clicks. Turn the speakers up or move the mic closer, then try again."
+                    ? "The microphone didn't hear the clicks. Turn the speakers up or move the mic closer. If that doesn't help, switch off "
+                      + "\"Audio enhancements\" for this microphone in Windows Sound settings: its echo cancellation can filter out the clicks."
                     : $"Unreliable result ({estimate.ClicksHeard}/{estimate.ClicksPlayed} clicks, ±{estimate.SpreadMs:0} ms); nothing saved. Try again in a quieter room.";
             }
         }

@@ -21,6 +21,17 @@ public class AppConfig
 
     /// <summary>Microphone input latency in ms, measured by the click test in Mic setup; subtracted from every reading.</summary>
     public double KaraokeMicLatencyMs { get; set; }
+
+    /// <summary>Player 1's channel on that device: Mix, Left or Right (Left/Right for two-mic adapters).</summary>
+    public string KaraokeMicChannel { get; set; } = "Mix";
+
+    /// <summary>Whether a second singer plays.</summary>
+    public bool KaraokeMic2Enabled { get; set; }
+
+    /// <summary>Player 2's device; may be the same device as player 1 on another channel.</summary>
+    public string KaraokeMic2DeviceId { get; set; } = "";
+
+    public string KaraokeMic2Channel { get; set; } = "Right";
     public int ListenPort { get; set; } = 49998;
     public bool UseUPnP { get; set; } = false;
     public int ConnectTimeout { get; set; } = 60000; // ms

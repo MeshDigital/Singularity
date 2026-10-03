@@ -12,11 +12,12 @@ using Singularity.ViewModels.Karaoke;
 namespace Singularity.Views.Avalonia.Karaoke;
 
 /// <summary>
-/// Draws the sing screen: note lane, hit marks, beat cursor, the singer's pitch, lyrics with their
-/// colour wipe, countdown, score and line ratings. It redraws once per display refresh
-/// (TopLevel.RequestAnimationFrame) and asks the view model for a snapshot each time. Every position
-/// derives from the audio device clock in that snapshot, so a late frame shows the right moment
-/// instead of drifting.
+/// Draws the sing screen. With one singer: a note lane in the upper half and the lyrics below it.
+/// With two: player 1's lane and lyrics in the top third, player 2's in the bottom third, and the
+/// video visible between them. Each player gets their own colour, score, pitch marker and line
+/// ratings. The stage redraws once per display refresh (TopLevel.RequestAnimationFrame) from the
+/// view model's snapshot. Every position derives from the audio device clock in that snapshot, so a
+/// late frame shows the right moment instead of drifting.
 /// </summary>
 public sealed class SingStage : Control
 {
@@ -24,15 +25,21 @@ public sealed class SingStage : Control
     private static readonly IBrush LaneBrush = new SolidColorBrush(Color.FromArgb(150, 10, 12, 20));
     private static readonly IBrush NoteBrush = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255));
     private static readonly IBrush GoldenBrush = new SolidColorBrush(Color.FromArgb(150, 255, 200, 40));
-    private static readonly IBrush HitBrush = new SolidColorBrush(Color.FromRgb(60, 170, 255));
     private static readonly IBrush GoldenHitBrush = new SolidColorBrush(Color.FromRgb(255, 210, 60));
     private static readonly IPen FreestylePen = new Pen(new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)), 1.5, DashStyle.Dash);
     private static readonly IPen CursorPen = new Pen(new SolidColorBrush(Color.FromArgb(110, 255, 255, 255)), 2);
-    private static readonly IBrush PitchBrush = new SolidColorBrush(Color.FromRgb(255, 90, 120));
-    private static readonly IBrush Sung = new SolidColorBrush(Color.FromRgb(60, 170, 255));
     private static readonly IBrush Unsung = Brushes.White;
     private static readonly IBrush VideoShade = new SolidColorBrush(Color.FromArgb(110, 0, 0, 0));
     private static readonly IBrush Dim = new SolidColorBrush(Color.FromArgb(170, 220, 220, 220));
+
+    /// <summary>Per-player colours: player 1 blue, player 2 red.</summary>
+    private static readonly IBrush[] PlayerBrushes =
+    {
+        new SolidColorBrush(Color.FromRgb(60, 170, 255)),
+        new SolidColorBrush(Color.FromRgb(255, 90, 100)),
+    };
+
+    private static IBrush ColourOf(int player) => PlayerBrushes[(player - 1) % PlayerBrushes.Length];
 
     private bool _attached;
 
@@ -64,17 +71,39 @@ public sealed class SingStage : Control
 
         if (s.Video is { } video) DrawVideo(ctx, video, w, h);
 
-        var lane = new Rect(w * 0.05, h * 0.10, w * 0.90, h * 0.50);
+        if (s.Players.Count == 1)
+        {
+            DrawPlayer(ctx, s, s.Players[0], new Rect(w * 0.05, h * 0.10, w * 0.90, h * 0.50), lyricsY: h * 0.68, nextY: h * 0.79,
+                lyricSize: Math.Clamp(h * 0.055, 18, 54), w, showName: false);
+        }
+        else
+        {
+            // Two singers: lanes at the top and bottom, video visible between them.
+            var top = s.Players[0];
+            var bottom = s.Players[1];
+            double lyricSize = Math.Clamp(h * 0.04, 16, 40);
+            DrawPlayer(ctx, s, top, new Rect(w * 0.05, h * 0.07, w * 0.90, h * 0.24), lyricsY: h * 0.315, nextY: null, lyricSize, w, showName: true);
+            DrawPlayer(ctx, s, bottom, new Rect(w * 0.05, h * 0.60, w * 0.90, h * 0.24), lyricsY: h * 0.845, nextY: null, lyricSize, w, showName: true);
+        }
+    }
+
+    private static void DrawPlayer(DrawingContext ctx, StageSnapshot s, PlayerSnapshot p, Rect lane, double lyricsY, double? nextY,
+        double lyricSize, double w, bool showName)
+    {
+        var colour = ColourOf(p.Player);
         ctx.DrawRectangle(LaneBrush, null, lane, 12, 12);
-        if (s.Lane is { } layout) DrawLane(ctx, lane, layout, s);
+        if (p.Lane is { } layout) DrawLane(ctx, lane, layout, s.Beat, p, colour);
 
-        DrawLyrics(ctx, w, h, s.Lyrics);
-        DrawMicLevel(ctx, w, h, s);
-        DrawText(ctx, $"{s.Score:N0}", 34, Brushes.White, new Point(w * 0.95, h * 0.025), alignRight: true);
+        DrawText(ctx, $"{p.Score:N0}", Math.Clamp(lane.Height * 0.14, 18, 34), showName ? colour : Brushes.White,
+            new Point(lane.Right - 16, lane.Top + 8), alignRight: true);
+        if (showName) DrawText(ctx, $"P{p.Player}", 16, colour, new Point(lane.Left + 14, lane.Top + 8));
 
-        if (s.LastLine is { } line && s.LastLineAgeBeats is >= 0 and < 12)
-            DrawText(ctx, RatingText(line.Rating), 28, GoldenHitBrush, new Point(lane.Right - 16, lane.Top + 12), alignRight: true);
+        if (p.LastLine is { } line && p.LastLineAgeBeats is >= 0 and < 12)
+            DrawText(ctx, RatingText(line.Rating), Math.Clamp(lane.Height * 0.11, 16, 28), GoldenHitBrush,
+                new Point(lane.Right - 16, lane.Top + 8 + Math.Clamp(lane.Height * 0.16, 22, 40)), alignRight: true);
 
+        DrawLyrics(ctx, w, p.Lyrics, lyricsY, nextY, lyricSize, colour);
+        DrawMicLevel(ctx, p, new Point(lane.Right - 160, lane.Bottom + 6));
     }
 
     /// <summary>The music video as the bottom layer, filling the stage, dimmed so notes and lyrics stay readable.</summary>
@@ -87,12 +116,12 @@ public sealed class SingStage : Control
         ctx.DrawRectangle(VideoShade, null, new Rect(0, 0, w, h));
     }
 
-    private static void DrawLane(DrawingContext ctx, Rect lane, NoteLaneLayout layout, StageSnapshot s)
+    private static void DrawLane(DrawingContext ctx, Rect lane, NoteLaneLayout layout, double beat, PlayerSnapshot p, IBrush colour)
     {
-        double barH = Math.Max(8, lane.Height / 16);
+        double barH = Math.Max(6, lane.Height / 16);
         double X(double laneX) => lane.Left + 24 + laneX * (lane.Width - 48);
         double Y(double laneY) => lane.Bottom - 16 - laneY * (lane.Height - 32);
-        double beatWidth = (lane.Width - 48) * layout.XFor(1) - (lane.Width - 48) * layout.XFor(0);
+        double beatWidth = (lane.Width - 48) * (layout.XFor(1) - layout.XFor(0));
 
         foreach (var n in layout.Layout())
         {
@@ -101,38 +130,38 @@ public sealed class SingStage : Control
             else ctx.DrawRectangle(n.Note.IsGolden ? GoldenBrush : NoteBrush, null, bar, barH / 2, barH / 2);
         }
 
-        foreach (var (note, beat) in s.HitBeats)
+        int firstStart = layout.Notes.FirstOrDefault()?.StartBeat ?? int.MinValue;
+        foreach (var (note, hitBeat) in p.HitBeats)
         {
-            if (note.StartBeat < layout.Notes.FirstOrDefault()?.StartBeat) continue;
-            var hit = new Rect(X(layout.XFor(beat)), Y(layout.YFor(note.MidiTone)) - barH / 2, beatWidth + 0.5, barH);
-            ctx.DrawRectangle(note.IsGolden ? GoldenHitBrush : HitBrush, null, hit);
+            if (note.StartBeat < firstStart) continue;
+            var hit = new Rect(X(layout.XFor(hitBeat)), Y(layout.YFor(note.MidiTone)) - barH / 2, beatWidth + 0.5, barH);
+            ctx.DrawRectangle(note.IsGolden ? GoldenHitBrush : colour, null, hit);
         }
 
-        double cursorX = X(Math.Clamp(layout.XFor(s.Beat), 0, 1));
+        double cursorX = X(Math.Clamp(layout.XFor(beat), 0, 1));
         ctx.DrawLine(CursorPen, new Point(cursorX, lane.Top + 8), new Point(cursorX, lane.Bottom - 8));
 
-        // The singer's current pitch, shown while the reading is fresh (within a beat).
-        if (s.Pitch is { Pitch.IsVoiced: true } p && Math.Abs(p.Beat - s.Beat) < 2)
-            ctx.DrawEllipse(PitchBrush, null, new Point(cursorX, Y(layout.SingerY(p.Pitch.Midi))), barH * 0.6, barH * 0.6);
+        // The singer's current pitch, shown while the reading is fresh (within two beats).
+        if (p.Pitch is { Pitch.IsVoiced: true } r && Math.Abs(r.Beat - beat) < 2)
+            ctx.DrawEllipse(colour, null, new Point(cursorX, Y(layout.SingerY(r.Pitch.Midi))), barH * 0.6, barH * 0.6);
     }
 
-    private static void DrawLyrics(DrawingContext ctx, double w, double h, LyricsFrame lyrics)
+    private static void DrawLyrics(DrawingContext ctx, double w, LyricsFrame lyrics, double y, double? nextY, double size, IBrush colour)
     {
         if (lyrics.Current is { } line)
         {
-            double size = Math.Clamp(h * 0.055, 18, 54);
             var parts = line.Syllables.Select(sy => (sy, Text(sy.Text, size, Unsung))).ToArray();
             double total = parts.Sum(p => p.Item2.WidthIncludingTrailingWhitespace);
-            double x = (w - total) / 2, y = h * 0.68;
+            double x = (w - total) / 2;
 
             foreach (var (syllable, text) in parts)
             {
                 ctx.DrawText(text, new Point(x, y));
                 if (syllable.Progress > 0)
                 {
-                    // Re-draw the sung part in colour, clipped to the wipe position.
+                    // Re-draw the sung part in the player's colour, clipped to the wipe position.
                     using (ctx.PushClip(new Rect(x, y, text.WidthIncludingTrailingWhitespace * syllable.Progress, text.Height)))
-                        ctx.DrawText(Text(syllable.Text, size, Sung), new Point(x, y));
+                        ctx.DrawText(Text(syllable.Text, size, colour), new Point(x, y));
                 }
                 x += text.WidthIncludingTrailingWhitespace;
             }
@@ -143,26 +172,25 @@ public sealed class SingStage : Control
                 int dots = Math.Clamp((int)Math.Ceiling(lyrics.BeatsUntilStart / 16.0 * 3), 1, 3);
                 double startX = (w - total) / 2 - 24 - dots * 18;
                 for (int i = 0; i < dots; i++)
-                    ctx.DrawEllipse(Sung, null, new Point(startX + i * 18, y + size * 0.65), 6, 6);
+                    ctx.DrawEllipse(colour, null, new Point(startX + i * 18, y + size * 0.65), 6, 6);
             }
         }
 
-        if (lyrics.Next is { } next)
-            DrawText(ctx, next.Text, Math.Clamp(h * 0.038, 14, 36), Dim, new Point(w / 2, h * 0.79), center: true);
+        if (nextY is { } ny && lyrics.Next is { } next)
+            DrawText(ctx, next.Text, size * 0.7, Dim, new Point(w / 2, ny), center: true);
     }
 
-    /// <summary>A small input meter, bottom right: the quickest way to see whether the microphone hears anything.</summary>
-    private static void DrawMicLevel(DrawingContext ctx, double w, double h, StageSnapshot s)
+    /// <summary>A small input meter under the lane: the quickest way to see whether a microphone hears anything.</summary>
+    private static void DrawMicLevel(DrawingContext ctx, PlayerSnapshot p, Point at)
     {
-        if (s.Pitch is not { } reading) return;
+        if (p.Pitch is not { } reading) return;
         const double floorDb = -70;
         double level = Math.Clamp((reading.Pitch.LevelDb - floorDb) / -floorDb, 0, 1);
         double gate = (Singularity.Karaoke.SingerSession.SilenceDb - floorDb) / -floorDb;
-        var track = new Rect(w * 0.95 - 160, h * 0.955, 160, 8);
-        ctx.DrawRectangle(LaneBrush, null, track, 4, 4);
-        ctx.DrawRectangle(reading.Pitch.IsVoiced ? HitBrush : Dim, null, track.WithWidth(Math.Max(2, track.Width * level)), 4, 4);
+        var track = new Rect(at.X, at.Y, 160, 6);
+        ctx.DrawRectangle(LaneBrush, null, track, 3, 3);
+        ctx.DrawRectangle(reading.Pitch.IsVoiced ? ColourOf(p.Player) : Dim, null, track.WithWidth(Math.Max(2, track.Width * level)), 3, 3);
         ctx.DrawLine(CursorPen, new Point(track.X + track.Width * gate, track.Y - 3), new Point(track.X + track.Width * gate, track.Bottom + 3));
-        DrawText(ctx, "mic", 12, Dim, new Point(track.X - 8, track.Y - 4), alignRight: true);
     }
 
     private static string RatingText(LineRating rating) => rating switch
