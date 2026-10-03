@@ -72,7 +72,9 @@ public class PitchDetectorTests
         var sw = System.Diagnostics.Stopwatch.StartNew();
         const int frames = 600; // 6 singers x 100 frames per second
         for (int i = 0; i < frames; i++) detector.Detect(frame);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(1), $"{frames} frames took {sw.Elapsed.TotalMilliseconds:0} ms");
+        // One second of six singers. A Release build does this in ~0.06 s; the generous limit only has to
+        // catch a real regression in a Debug build on a busy machine, not measure the speed.
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(3), $"{frames} frames took {sw.Elapsed.TotalMilliseconds:0} ms");
     }
 }
 

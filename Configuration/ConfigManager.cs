@@ -208,6 +208,7 @@ public class ConfigManager
                 KaraokeMic2Channel = config["Karaoke:Mic2Channel"] ?? "Right",
                 KaraokeStageScreen = config["Karaoke:StageScreen"] ?? "",
                 KaraokeVocals = config["Karaoke:Vocals"] ?? "Off",
+                KaraokeBatchRestSeconds = int.TryParse(config["Karaoke:BatchRestSeconds"], out var batchRest) ? Math.Clamp(batchRest, 0, 600) : 3,
                 KaraokeTextScale = double.TryParse(config["Karaoke:TextScale"], System.Globalization.NumberStyles.Float,
                     System.Globalization.CultureInfo.InvariantCulture, out var textScale) ? Math.Clamp(textScale, 0.75, 2.0) : 1.0,
                 KaraokeMicLatencyMs = double.TryParse(config["Karaoke:MicLatencyMs"], System.Globalization.NumberStyles.Float,
@@ -417,6 +418,7 @@ public class ConfigManager
         iniContent.AppendLine($"Mic2Channel = {config.KaraokeMic2Channel}");
         iniContent.AppendLine($"StageScreen = {config.KaraokeStageScreen}");
         iniContent.AppendLine($"Vocals = {config.KaraokeVocals}");
+        iniContent.AppendLine($"BatchRestSeconds = {config.KaraokeBatchRestSeconds}");
         iniContent.AppendLine($"TextScale = {config.KaraokeTextScale.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}");
         iniContent.AppendLine($"MicLatencyMs = {config.KaraokeMicLatencyMs.ToString("0", System.Globalization.CultureInfo.InvariantCulture)}");
 

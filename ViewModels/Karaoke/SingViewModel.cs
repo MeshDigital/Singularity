@@ -54,6 +54,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     private readonly SingAudioEngine _audio;
     private readonly StageScreenService _stage;
     private readonly StemStore _stems;
+    private readonly StemBatchQueue _batch;
     private readonly ConfigManager _configManager;
     private readonly ILoggerFactory _loggers;
     private readonly INavigationService _navigation;
@@ -79,9 +80,10 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     private bool _isPaused;
     private bool _showResults;
 
-    public SingViewModel(SingAudioEngine audio, StageScreenService stage, StemStore stems, ConfigManager configManager, ILoggerFactory loggers,
-        INavigationService navigation, AppConfig config, ILogger<SingViewModel> logger)
+    public SingViewModel(SingAudioEngine audio, StageScreenService stage, StemStore stems, StemBatchQueue batch, ConfigManager configManager,
+        ILoggerFactory loggers, INavigationService navigation, AppConfig config, ILogger<SingViewModel> logger)
     {
+        _batch = batch;
         _stems = stems;
         _stage = stage;
         _configManager = configManager;
@@ -183,6 +185,9 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         Title = song.Title;
         Artist = song.Artist;
         Background = LoadBackground(entry.BackgroundPath ?? entry.CoverPath);
+
+        // Background vocal removal gives the GPU to the singers until the song ends.
+        _batch.Hold();
 
         var mics = MicAssignment.FromConfig(_config);
         lock (_sync)
@@ -346,6 +351,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     {
         _audio.Stop();
         StopMicrophones();
+        _batch.Release(); // nobody is singing on the results screen
         Results.Clear();
         foreach (var r in results) Results.Add(r);
         ShowResults = true;
@@ -411,6 +417,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
     private void StopPlayback()
     {
+        _batch.Release();
         _stage.Close();
         IsOnProjector = false;
         StopMicrophones();

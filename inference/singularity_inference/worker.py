@@ -130,11 +130,34 @@ def take_stdin() -> io.TextIOBase:
     return io.TextIOWrapper(io.FileIO(fd, "rb"), encoding="utf-8-sig")
 
 
+def lower_priority_if_asked() -> None:
+    """SINGULARITY_WORKER_PRIORITY=below_normal: background work (batch vocal removal) yields the CPU to
+    the game and the desktop. Processes this one starts (ffmpeg) inherit the class."""
+    if os.environ.get("SINGULARITY_WORKER_PRIORITY") != "below_normal":
+        return
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        # Declared types matter on 64-bit: as a plain int, the pseudo-handle -1 is truncated to 32 bits
+        # and the call silently fails.
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        kernel32.SetPriorityClass.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+        kernel32.SetPriorityClass.restype = wintypes.BOOL
+        below_normal_priority_class = 0x4000
+        if not kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), below_normal_priority_class):
+            print(f"could not lower worker priority (error {ctypes.get_last_error()})", file=sys.stderr)
+    else:
+        os.nice(5)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m singularity_inference")
     parser.add_argument("--backend", choices=["ml", "fake"], default=None)
     args = parser.parse_args(argv)
 
+    lower_priority_if_asked()
     protocol_out = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", newline="\n", line_buffering=True)
     sys.stdout = sys.stderr  # stray prints from libraries must not corrupt the protocol stream
 

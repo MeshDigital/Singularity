@@ -155,3 +155,27 @@ def test_loading_a_dll_mid_task_does_not_deadlock_with_the_stdin_reader(tmp_path
     assert result["done"]["outcome"] == "succeeded"
     w.send(s.ShutdownCommand())
     assert w.close() == 0
+
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows priority classes")
+def test_below_normal_priority_when_asked(tmp_path):
+    import ctypes
+
+    w = WorkerProcess(tmp_path, SINGULARITY_WORKER_PRIORITY="below_normal")
+    w.next_event()  # ready: priority is set before the protocol starts
+    kernel32 = ctypes.windll.kernel32
+    # The venv launcher's child is the real interpreter; check every process in the tree we can see.
+    import subprocess as sp
+    out = sp.run(["powershell", "-NoProfile", "-Command",
+                  f"Get-CimInstance Win32_Process | ? {{ $_.ParentProcessId -eq {w.proc.pid} -or $_.ProcessId -eq {w.proc.pid} }} | % {{ $_.ProcessId }}"],
+                 capture_output=True, text=True).stdout.split()
+    classes = []
+    for pid in map(int, out):
+        h = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if h:
+            classes.append(kernel32.GetPriorityClass(h))
+            kernel32.CloseHandle(h)
+    w.send(s.ShutdownCommand())
+    w.close()
+    assert 0x4000 in classes  # BELOW_NORMAL_PRIORITY_CLASS on the interpreter that runs the worker

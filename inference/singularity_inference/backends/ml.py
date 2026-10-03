@@ -6,6 +6,7 @@ Not yet validated end to end on real hardware: the first run with downloaded wei
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from .. import audio_io
@@ -71,7 +72,11 @@ class MlBackend:
         vocal = sources[v]
         accompaniment = sources.sum(0) - vocal
         for path, stem in ((vocals, vocal), (instrumental, accompaniment)):
-            sf.write(str(path), stem.clamp(-1, 1).T.cpu().numpy(), model.samplerate, subtype="PCM_16")
+            # Written under a temporary name and renamed when complete, so a worker killed mid-write
+            # (a cancelled batch track) never leaves a truncated stem that looks finished.
+            partial = path.with_name(path.stem + ".partial.wav")
+            sf.write(str(partial), stem.clamp(-1, 1).T.cpu().numpy(), model.samplerate, subtype="PCM_16")
+            os.replace(partial, path)
         del model, sources, wav
 
     def transcribe(self, vocals: Path, language: str | None, prompt: str | None, ctx: StageContext) -> Transcript:

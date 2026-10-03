@@ -153,6 +153,8 @@ public sealed class SongSelectViewModel : ReactiveObject
     private readonly StageScreenService _stage;
     private readonly StemStore _stems;
     private readonly StemSeparationService _separation;
+    private readonly StemBatchQueue _batch;
+    private int _lastBatchFinished = -1;
     private SongCardViewModel? _selectedSong;
     private readonly INavigationService _navigation;
     private readonly ILogger<SongSelectViewModel> _logger;
@@ -163,8 +165,13 @@ public sealed class SongSelectViewModel : ReactiveObject
     private bool _loaded;
 
     public SongSelectViewModel(KaraokeLibrary library, SingViewModel sing, SongPreviewPlayer preview, StageScreenService stage,
-        StemStore stems, StemSeparationService separation, INavigationService navigation, ILogger<SongSelectViewModel> logger)
+        StemStore stems, StemSeparationService separation, StemBatchQueue batch, INavigationService navigation, ILogger<SongSelectViewModel> logger)
     {
+        _batch = batch;
+        _batch.Changed += status => Dispatcher.UIThread.Post(() => OnBatchChanged(status));
+        StartBatchCommand = new RelayCommand(StartBatch, () => !_batch.Status.IsRunning);
+        PauseBatchCommand = new RelayCommand(() => _batch.SetPaused(!_batch.Status.IsPaused));
+        StopBatchCommand = new RelayCommand(_batch.Stop);
         _stage = stage;
         _stems = stems;
         _separation = separation;
@@ -218,6 +225,53 @@ public sealed class SongSelectViewModel : ReactiveObject
     public void StopPreview() => _preview.Stop();
 
     public ICommand SeparateCommand { get; }
+
+    // ── Remove vocals for every song ───────────────────────────────────────
+    private string _batchText = "";
+
+    public ICommand StartBatchCommand { get; }
+    public ICommand PauseBatchCommand { get; }
+    public ICommand StopBatchCommand { get; }
+    public bool IsBatchRunning => _batch.Status.IsRunning;
+    public string PauseBatchText => _batch.Status.IsPaused ? "Resume" : "Pause";
+    public string BatchText { get => _batchText; private set => this.RaiseAndSetIfChanged(ref _batchText, value); }
+
+    private void StartBatch()
+    {
+        if (!_separation.IsAvailable)
+        {
+            StatusText = "Removing vocals needs the AI worker (inference\\.venv), which isn't installed.";
+            return;
+        }
+        int todo = _all.Count(c => !c.HasStems && c.Entry.IsPlayable);
+        if (todo == 0)
+        {
+            BatchText = "Every song already has its vocals removable.";
+            return;
+        }
+        // Songs that already have stems are skipped quickly, so pass everything: the counts stay honest.
+        _batch.Start(_all.Select(c => c.Entry));
+    }
+
+    private void OnBatchChanged(StemBatchStatus s)
+    {
+        if (s.Finished != _lastBatchFinished)
+        {
+            _lastBatchFinished = s.Finished;
+            foreach (var card in _all.Where(c => !c.HasStems))
+                card.HasStems = _stems.Find(card.Entry) is not null;
+        }
+
+        string eta = s.Remaining is { } r ? $" · about {(r.TotalHours >= 1 ? $"{(int)r.TotalHours} h {r.Minutes} min" : $"{Math.Max(1, (int)r.TotalMinutes)} min")} left" : "";
+        string state = s.IsHeld ? " · waiting while someone sings" : s.IsPaused ? " · paused" : "";
+        string failed = s.Failed > 0 ? $" · {s.Failed} failed (see {System.IO.Path.GetFileName(_batch.ErrorLogPath)})" : "";
+        BatchText = s.IsRunning
+            ? $"Removing vocals: {s.Finished} of {s.Total}{failed}{eta}{state}" + (s.Current is { } c && !s.IsHeld && !s.IsPaused ? $" · now: {c}" : "")
+            : s.Total == 0 ? "" : $"Vocals removed: {s.Done} new, {s.Skipped} already done{failed}.";
+        this.RaisePropertyChanged(nameof(IsBatchRunning));
+        this.RaisePropertyChanged(nameof(PauseBatchText));
+        (StartBatchCommand as RelayCommand)?.RaiseCanExecuteChanged();
+    }
 
     // ── Where and how big ──────────────────────────────────────────────────
     public IReadOnlyList<StageScreenOption> StageScreens { get; private set; } = Array.Empty<StageScreenOption>();

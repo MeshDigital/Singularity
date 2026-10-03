@@ -41,6 +41,9 @@ public class AppConfig
 
     /// <summary>Size of everything drawn on the sing stage (lyrics, scores, ratings, notes), 0.75-2.0.</summary>
     public double KaraokeTextScale { get; set; } = 1.0;
+
+    /// <summary>Seconds of rest between songs when removing vocals for the whole collection (lets a laptop GPU cool).</summary>
+    public int KaraokeBatchRestSeconds { get; set; } = 3;
     public int ListenPort { get; set; } = 49998;
     public bool UseUPnP { get; set; } = false;
     public int ConnectTimeout { get; set; } = 60000; // ms

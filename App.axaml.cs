@@ -726,6 +726,13 @@ public partial class App : Application
         services.AddSingleton<Services.Karaoke.StageScreenService>();
         services.AddSingleton<Services.Karaoke.StemStore>();
         services.AddSingleton<Services.Karaoke.StemSeparationService>();
+        services.AddSingleton<Services.Karaoke.IStemSeparator>(sp => sp.GetRequiredService<Services.Karaoke.StemSeparationService>());
+        services.AddSingleton(sp => new Services.Karaoke.StemBatchQueue(
+            sp.GetRequiredService<Services.Karaoke.IStemSeparator>(),
+            sp.GetRequiredService<ILogger<Services.Karaoke.StemBatchQueue>>())
+        {
+            RestBetweenSongs = TimeSpan.FromSeconds(sp.GetRequiredService<AppConfig>().KaraokeBatchRestSeconds),
+        });
         services.AddSingleton<ViewModels.Karaoke.MicSetupViewModel>();
         services.AddTransient<Views.Avalonia.Karaoke.MicSetupPage>();
         services.AddTransient<Views.Avalonia.Karaoke.SongSelectPage>();

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,7 +15,7 @@ namespace Singularity.Services.Karaoke;
 /// song on the GPU) for vocals and instrumental stems and stores them in the <see cref="StemStore"/>
 /// cache. The worker is started on first use and kept running for the next song.
 /// </summary>
-public sealed class StemSeparationService : IAsyncDisposable
+public sealed class StemSeparationService : IStemSeparator, IAsyncDisposable
 {
     private readonly StemStore _store;
     private readonly ILoggerFactory _loggers;
@@ -29,6 +30,11 @@ public sealed class StemSeparationService : IAsyncDisposable
         _logger = loggers.CreateLogger<StemSeparationService>();
     }
 
+    public bool HasStems(SongEntry entry) => _store.Find(entry) is not null;
+
+    async Task IStemSeparator.SeparateAsync(SongEntry entry, IProgress<double>? progress, CancellationToken ct) =>
+        await SeparateAsync(entry, progress, ct);
+
     /// <summary>False when the inference worker isn't installed (no inference\.venv found).</summary>
     public bool IsAvailable => InferenceWorkerOptions.Discover() is not null;
 
@@ -42,9 +48,22 @@ public sealed class StemSeparationService : IAsyncDisposable
         await _gate.WaitAsync(ct);
         try
         {
-            _host ??= new InferenceWorkerHost(
-                InferenceWorkerOptions.Discover() ?? throw new InvalidOperationException("The AI worker isn't installed (inference\\.venv not found)."),
-                _loggers.CreateLogger<InferenceWorkerHost>());
+            if (_host is null)
+            {
+                var options = InferenceWorkerOptions.Discover()
+                              ?? throw new InvalidOperationException("The AI worker isn't installed (inference\\.venv not found).");
+                // Vocal removal is background work: the worker runs below normal priority so the game and
+                // the desktop stay responsive (processes it starts inherit that).
+                // Demucs can't stop mid-song, so waiting for a cancelled separation only keeps the GPU busy
+                // while someone sings; the track is redone later anyway. Kill it after one second instead.
+                _host = new InferenceWorkerHost(
+                    options with
+                    {
+                        Environment = new Dictionary<string, string> { ["SINGULARITY_WORKER_PRIORITY"] = "below_normal" },
+                        CancelGracePeriod = TimeSpan.FromSeconds(1),
+                    },
+                    _loggers.CreateLogger<InferenceWorkerHost>());
+            }
 
             var folder = _store.CacheFolderFor(entry.AudioPath);
             Directory.CreateDirectory(folder);

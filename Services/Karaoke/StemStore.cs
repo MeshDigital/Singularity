@@ -31,12 +31,19 @@ public sealed class StemStore
         if (song.VocalsFile is { } v && song.InstrumentalFile is { } i)
         {
             string vocals = Path.Combine(entry.Folder, v), instrumental = Path.Combine(entry.Folder, i);
-            if (File.Exists(vocals) && File.Exists(instrumental)) return (vocals, instrumental);
+            if (Usable(vocals) && Usable(instrumental)) return (vocals, instrumental);
         }
         if (entry.AudioPath is null) return null;
         var folder = CacheFolderFor(entry.AudioPath);
         string cachedVocals = Path.Combine(folder, VocalsFileName), cachedInstrumental = Path.Combine(folder, InstrumentalFileName);
-        return File.Exists(cachedVocals) && File.Exists(cachedInstrumental) ? (cachedVocals, cachedInstrumental) : null;
+        return Usable(cachedVocals) && Usable(cachedInstrumental) ? (cachedVocals, cachedInstrumental) : null;
+    }
+
+    /// <summary>Exists and isn't empty: an interrupted separation can leave a zero-byte file behind.</summary>
+    private static bool Usable(string path)
+    {
+        var info = new FileInfo(path);
+        return info.Exists && info.Length > 0;
     }
 
     /// <summary>Cache folder for an audio file's stems; a changed file (size or date) gets a new folder.</summary>
