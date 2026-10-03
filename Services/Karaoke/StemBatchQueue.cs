@@ -170,6 +170,8 @@ public sealed class StemBatchQueue
     private async Task RunAsync(List<SongEntry> songs, CancellationToken runToken)
     {
         _logger.LogInformation("Batch vocal removal: {Count} songs", songs.Count);
+        // Runs for hours, typically overnight: keep the PC from sleeping (the screen may still go off).
+        using var awake = KeepAwake.Start("Singularity is removing vocals from songs");
         try
         {
             foreach (var song in songs)
