@@ -2,6 +2,7 @@ using System;
 using Microsoft.Extensions.Logging;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 using Singularity.Services.Audio;
 
 namespace Singularity.Services.Karaoke;
@@ -19,6 +20,9 @@ public sealed class SingAudioEngine : IDisposable
     private WasapiOut? _output;
     private AudioFileReader? _reader;
     private double _baseMs; // song position where the device clock last restarted from zero
+    private AudioFileReader? _vocalsReader;
+    private VolumeSampleProvider? _vocals;
+    private float _vocalsVolume;
 
     public SingAudioEngine(ILogger<SingAudioEngine> logger) => _logger = logger;
 
@@ -42,13 +46,35 @@ public sealed class SingAudioEngine : IDisposable
         }
     }
 
-    /// <summary>Opens <paramref name="path"/> on the default output device, ready to play from <paramref name="startMs"/>.</summary>
-    public void Load(string path, double startMs = 0)
+    /// <summary>
+    /// Opens <paramref name="path"/> on the default output device, ready to play from <paramref name="startMs"/>.
+    /// With <paramref name="stems"/> it plays the instrumental and the vocals instead, mixed live, so the
+    /// original vocals can be turned down (<see cref="VocalsVolume"/>) without touching the timing.
+    /// </summary>
+    public void Load(string path, double startMs = 0, (string Vocals, string Instrumental)? stems = null)
     {
         Stop();
-        _reader = PlayableAudio.Open(path, out var playable);
+        _vocals = null;
+        _vocalsReader = null;
+        _reader = PlayableAudio.Open(stems?.Instrumental ?? path, out var playable);
         _reader.CurrentTime = TimeSpan.FromMilliseconds(Math.Max(0, startMs));
         _baseMs = _reader.CurrentTime.TotalMilliseconds;
+
+        ISampleProvider source = _reader;
+        if (stems is { } st)
+        {
+            _vocalsReader = PlayableAudio.Open(st.Vocals, out _);
+            _vocalsReader.CurrentTime = _reader.CurrentTime;
+            ISampleProvider vocals = _vocalsReader;
+            // Both stems come from the same separation, but be safe: match the instrumental's format.
+            if (vocals.WaveFormat.Channels != source.WaveFormat.Channels)
+                vocals = vocals.WaveFormat.Channels == 1 ? new MonoToStereoSampleProvider(vocals) : new StereoToMonoSampleProvider(vocals);
+            if (vocals.WaveFormat.SampleRate != source.WaveFormat.SampleRate)
+                vocals = new WdlResamplingSampleProvider(vocals, source.WaveFormat.SampleRate);
+            _vocals = new VolumeSampleProvider(vocals) { Volume = _vocalsVolume };
+            var mixer = new MixingSampleProvider(new[] { source, _vocals }) { ReadFully = false };
+            source = mixer;
+        }
 
         // Shared mode, 50 ms buffer: low enough that pause/seek feel immediate, safe on any device.
         _output = new WasapiOut(AudioClientShareMode.Shared, useEventSync: true, latency: 50);
@@ -57,8 +83,23 @@ public sealed class SingAudioEngine : IDisposable
             if (e.Exception is not null) _logger.LogWarning(e.Exception, "Sing playback stopped with an error");
             else if (_reader is { } r && r.Position >= r.Length) Ended?.Invoke();
         };
-        _output.Init(_reader);
-        _logger.LogInformation("Sing audio loaded: {File} ({Seconds:0.0}s)", playable, DurationMs / 1000);
+        _output.Init(source);
+        _logger.LogInformation("Sing audio loaded: {File} ({Seconds:0.0}s){Stems}", playable, DurationMs / 1000,
+            stems is null ? "" : " with separated vocals");
+    }
+
+    /// <summary>True when the song plays as instrumental + vocals stems, so the vocals can be turned down.</summary>
+    public bool HasStems => _vocals is not null;
+
+    /// <summary>Original vocals volume, 0 (real karaoke) to 1; only effective with stems.</summary>
+    public float VocalsVolume
+    {
+        get => _vocalsVolume;
+        set
+        {
+            _vocalsVolume = Math.Clamp(value, 0f, 1f);
+            if (_vocals is { } v) v.Volume = _vocalsVolume;
+        }
     }
 
     public void Play() => _output?.Play();
@@ -73,6 +114,9 @@ public sealed class SingAudioEngine : IDisposable
         output?.Dispose();
         _reader?.Dispose();
         _reader = null;
+        _vocalsReader?.Dispose();
+        _vocalsReader = null;
+        _vocals = null;
         _baseMs = 0;
     }
 

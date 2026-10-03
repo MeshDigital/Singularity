@@ -16,7 +16,7 @@ public static class WorkerProtocol
 
     private static readonly HashSet<string> KnownCommands = new(StringComparer.Ordinal)
     {
-        "process_track", "cancel", "shutdown",
+        "process_track", "separate_stems", "cancel", "shutdown",
     };
 
     /// <summary>One JSONL line, without the trailing newline.</summary>

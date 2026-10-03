@@ -32,6 +32,15 @@ public class AppConfig
     public string KaraokeMic2DeviceId { get; set; } = "";
 
     public string KaraokeMic2Channel { get; set; } = "Right";
+
+    /// <summary>Display the sing stage goes full screen on ("x,y" of its desktop position); empty = the main window.</summary>
+    public string KaraokeStageScreen { get; set; } = "";
+
+    /// <summary>Original vocals while singing, when the song has separated stems: Off, Guide (quiet) or Full.</summary>
+    public string KaraokeVocals { get; set; } = "Off";
+
+    /// <summary>Size of everything drawn on the sing stage (lyrics, scores, ratings, notes), 0.75-2.0.</summary>
+    public double KaraokeTextScale { get; set; } = 1.0;
     public int ListenPort { get; set; } = 49998;
     public bool UseUPnP { get; set; } = false;
     public int ConnectTimeout { get; set; } = 60000; // ms

@@ -196,6 +196,31 @@ def run_task(cmd: s.ProcessTrackCommand, backend: Backend, emit: Callable[[s.Con
     )
 
 
+def run_separation(cmd: s.SeparateStemsCommand, backend: Backend, emit: Callable[[s.Contract], None],
+                   is_cancelled: Callable[[], bool]) -> None:
+    """Only the separation stage: vocals.wav and instrumental.wav into cmd.output_folder."""
+    audio = Path(cmd.audio_path)
+    if not audio.is_file():
+        raise FileNotFoundError(f"audio file not found: {audio}")
+    missing = backend.missing_models([s.PipelineStage.SEPARATION])
+    if missing:
+        raise RuntimeError(f"models not downloaded: {', '.join(missing)} (run: python -m singularity_inference.models fetch)")
+    out_dir = Path(cmd.output_folder)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    ctx = StageContext(cmd.task_id, s.PipelineStage.SEPARATION, emit, is_cancelled)
+    ctx.check()
+    emit(s.StageStartedEvent(task_id=cmd.task_id, stage=s.PipelineStage.SEPARATION))
+    started = time.monotonic()
+    try:
+        backend.separate(audio, out_dir / "vocals.wav", out_dir / "instrumental.wav", ctx)
+    finally:
+        release_gpu_memory()
+    ctx.check()
+    emit(s.StageCompletedEvent(task_id=cmd.task_id, stage=s.PipelineStage.SEPARATION,
+                               duration_ms=int((time.monotonic() - started) * 1000)))
+
+
 def create_backend(name: str | None = None) -> Backend:
     name = name or os.environ.get("SINGULARITY_INFERENCE_BACKEND") or "ml"
     if name == "fake":

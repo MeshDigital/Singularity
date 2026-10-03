@@ -109,13 +109,27 @@ public sealed class InferenceWorkerHost : IAsyncDisposable
     public async Task<TrackAnalysisResult> ProcessTrackAsync(ProcessTrackCommand command, IProgress<WorkerEvent>? progress = null,
         CancellationToken ct = default)
     {
+        var finished = await RunAsync(command, command.TaskId, progress, ct).ConfigureAwait(false);
+        return finished.Result ?? throw new InferenceTaskFailedException(command.TaskId, "the worker reported success without a result");
+    }
+
+    /// <summary>Separates a song into vocals.wav and instrumental.wav in the command's output folder.</summary>
+    /// <exception cref="InferenceTaskFailedException">The worker reported a failure.</exception>
+    /// <exception cref="InferenceWorkerException">The worker crashed or couldn't start.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="ct"/> was cancelled.</exception>
+    public async Task SeparateStemsAsync(SeparateStemsCommand command, IProgress<WorkerEvent>? progress = null, CancellationToken ct = default) =>
+        await RunAsync(command, command.TaskId, progress, ct).ConfigureAwait(false);
+
+    /// <summary>Sends one task and waits for its task_finished; succeeds only when the worker does.</summary>
+    private async Task<TaskFinishedEvent> RunAsync(WorkerCommand command, string taskId, IProgress<WorkerEvent>? progress, CancellationToken ct)
+    {
         ObjectDisposedException.ThrowIf(_disposed, this);
         await _taskGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             await StartAsync(ct).ConfigureAwait(false);
             var worker = _worker!;
-            var task = new RunningTask(command.TaskId, progress);
+            var task = new RunningTask(taskId, progress);
             lock (_stateLock) _current = task;
 
             await SendAsync(worker, command).ConfigureAwait(false);
@@ -127,9 +141,9 @@ public sealed class InferenceWorkerHost : IAsyncDisposable
 
             return finished.Outcome switch
             {
-                TaskOutcome.Succeeded when finished.Result is not null => finished.Result,
-                TaskOutcome.Cancelled => throw new OperationCanceledException($"Inference task {command.TaskId} was cancelled.", ct),
-                _ => throw new InferenceTaskFailedException(command.TaskId, finished.Error ?? "no error message"),
+                TaskOutcome.Succeeded => finished,
+                TaskOutcome.Cancelled => throw new OperationCanceledException($"Inference task {taskId} was cancelled.", ct),
+                _ => throw new InferenceTaskFailedException(taskId, finished.Error ?? "no error message"),
             };
         }
         finally

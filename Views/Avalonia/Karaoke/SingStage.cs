@@ -71,36 +71,36 @@ public sealed class SingStage : Control
 
         if (s.Video is { } video) DrawVideo(ctx, video, w, h);
 
+        // Everything scales with the stage height (so a 1080p or 4K projector gets proportionally large,
+        // sharp text) and with the user's text size; minimums keep it readable in a small window.
+        double k = s.TextScale;
         if (s.Players.Count == 1)
         {
-            DrawPlayer(ctx, s, s.Players[0], new Rect(w * 0.05, h * 0.10, w * 0.90, h * 0.50), lyricsY: h * 0.68, nextY: h * 0.79,
-                lyricSize: Math.Clamp(h * 0.055, 18, 54), w, showName: false);
+            DrawPlayer(ctx, s, s.Players[0], new Rect(w * 0.05, h * 0.10, w * 0.90, h * 0.50), lyricsY: h * 0.68, nextY: h * 0.68 + h * 0.075 * k + 12,
+                lyricSize: Math.Max(16, h * 0.055 * k), w, h, k, showName: false);
         }
         else
         {
             // Two singers: lanes at the top and bottom, video visible between them.
-            var top = s.Players[0];
-            var bottom = s.Players[1];
-            double lyricSize = Math.Clamp(h * 0.04, 16, 40);
-            DrawPlayer(ctx, s, top, new Rect(w * 0.05, h * 0.07, w * 0.90, h * 0.24), lyricsY: h * 0.315, nextY: null, lyricSize, w, showName: true);
-            DrawPlayer(ctx, s, bottom, new Rect(w * 0.05, h * 0.60, w * 0.90, h * 0.24), lyricsY: h * 0.845, nextY: null, lyricSize, w, showName: true);
+            double lyricSize = Math.Max(14, h * 0.04 * k);
+            DrawPlayer(ctx, s, s.Players[0], new Rect(w * 0.05, h * 0.07, w * 0.90, h * 0.24), lyricsY: h * 0.315, nextY: null, lyricSize, w, h, k, showName: true);
+            DrawPlayer(ctx, s, s.Players[1], new Rect(w * 0.05, h * 0.60, w * 0.90, h * 0.24), lyricsY: h * 0.845, nextY: null, lyricSize, w, h, k, showName: true);
         }
     }
 
     private static void DrawPlayer(DrawingContext ctx, StageSnapshot s, PlayerSnapshot p, Rect lane, double lyricsY, double? nextY,
-        double lyricSize, double w, bool showName)
+        double lyricSize, double w, double h, double k, bool showName)
     {
         var colour = ColourOf(p.Player);
         ctx.DrawRectangle(LaneBrush, null, lane, 12, 12);
-        if (p.Lane is { } layout) DrawLane(ctx, lane, layout, s.Beat, p, colour);
+        if (p.Lane is { } layout) DrawLane(ctx, lane, layout, s.Beat, p, colour, k);
 
-        DrawText(ctx, $"{p.Score:N0}", Math.Clamp(lane.Height * 0.14, 18, 34), showName ? colour : Brushes.White,
-            new Point(lane.Right - 16, lane.Top + 8), alignRight: true);
-        if (showName) DrawText(ctx, $"P{p.Player}", 16, colour, new Point(lane.Left + 14, lane.Top + 8));
+        double scoreSize = Math.Max(18, h * 0.032 * k), ratingSize = Math.Max(16, h * 0.026 * k);
+        DrawText(ctx, $"{p.Score:N0}", scoreSize, showName ? colour : Brushes.White, new Point(lane.Right - 16, lane.Top + 8), alignRight: true);
+        if (showName) DrawText(ctx, $"P{p.Player}", Math.Max(14, h * 0.018 * k), colour, new Point(lane.Left + 14, lane.Top + 8));
 
         if (p.LastLine is { } line && p.LastLineAgeBeats is >= 0 and < 12)
-            DrawText(ctx, RatingText(line.Rating), Math.Clamp(lane.Height * 0.11, 16, 28), GoldenHitBrush,
-                new Point(lane.Right - 16, lane.Top + 8 + Math.Clamp(lane.Height * 0.16, 22, 40)), alignRight: true);
+            DrawText(ctx, RatingText(line.Rating), ratingSize, GoldenHitBrush, new Point(lane.Right - 16, lane.Top + 12 + scoreSize * 1.3), alignRight: true);
 
         DrawLyrics(ctx, w, p.Lyrics, lyricsY, nextY, lyricSize, colour);
         DrawMicLevel(ctx, p, new Point(lane.Right - 160, lane.Bottom + 6));
@@ -116,9 +116,9 @@ public sealed class SingStage : Control
         ctx.DrawRectangle(VideoShade, null, new Rect(0, 0, w, h));
     }
 
-    private static void DrawLane(DrawingContext ctx, Rect lane, NoteLaneLayout layout, double beat, PlayerSnapshot p, IBrush colour)
+    private static void DrawLane(DrawingContext ctx, Rect lane, NoteLaneLayout layout, double beat, PlayerSnapshot p, IBrush colour, double k)
     {
-        double barH = Math.Max(6, lane.Height / 16);
+        double barH = Math.Max(6, lane.Height / 16 * Math.Sqrt(k));
         double X(double laneX) => lane.Left + 24 + laneX * (lane.Width - 48);
         double Y(double laneY) => lane.Bottom - 16 - laneY * (lane.Height - 32);
         double beatWidth = (lane.Width - 48) * (layout.XFor(1) - layout.XFor(0));
@@ -171,8 +171,10 @@ public sealed class SingStage : Control
             {
                 int dots = Math.Clamp((int)Math.Ceiling(lyrics.BeatsUntilStart / 16.0 * 3), 1, 3);
                 double startX = (w - total) / 2 - 24 - dots * 18;
+                double dot = Math.Max(5, size * 0.12), gap = dot * 3;
+                startX = (w - total) / 2 - gap - dots * gap;
                 for (int i = 0; i < dots; i++)
-                    ctx.DrawEllipse(colour, null, new Point(startX + i * 18, y + size * 0.65), 6, 6);
+                    ctx.DrawEllipse(colour, null, new Point(startX + i * gap, y + size * 0.65), dot, dot);
             }
         }
 

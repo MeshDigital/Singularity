@@ -129,6 +129,15 @@ class ProcessTrackCommand(Contract):
     reuse_stems: bool = True
 
 
+class SeparateStemsCommand(Contract):
+    """Only the separation stage; finishes with no result payload (the stems are in output_folder)."""
+
+    command: Literal["separate_stems"] = "separate_stems"
+    task_id: str
+    audio_path: str
+    output_folder: str
+
+
 class CancelCommand(Contract):
     command: Literal["cancel"] = "cancel"
     task_id: str
@@ -138,7 +147,7 @@ class ShutdownCommand(Contract):
     command: Literal["shutdown"] = "shutdown"
 
 
-WorkerCommand = Annotated[Union[ProcessTrackCommand, CancelCommand, ShutdownCommand], Field(discriminator="command")]
+WorkerCommand = Annotated[Union[ProcessTrackCommand, SeparateStemsCommand, CancelCommand, ShutdownCommand], Field(discriminator="command")]
 
 
 class PitchSegment(Contract):
@@ -225,7 +234,7 @@ _commands: TypeAdapter[WorkerCommand] = TypeAdapter(WorkerCommand)
 _events: TypeAdapter[WorkerEvent] = TypeAdapter(WorkerEvent)
 
 
-def decode_command(line: str) -> ProcessTrackCommand | CancelCommand | ShutdownCommand:
+def decode_command(line: str) -> ProcessTrackCommand | SeparateStemsCommand | CancelCommand | ShutdownCommand:
     """Parse one stdin line. Raises pydantic.ValidationError for unknown or malformed commands."""
     return _commands.validate_json(line)
 

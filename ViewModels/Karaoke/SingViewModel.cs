@@ -32,7 +32,7 @@ public sealed record PlayerSnapshot(
     double LastLineAgeBeats);
 
 /// <summary>Everything the stage draws for one frame, taken under the lock in <see cref="SingViewModel.Tick"/>.</summary>
-public sealed record StageSnapshot(double Beat, IReadOnlyList<PlayerSnapshot> Players, bool Finished, WriteableBitmap? Video);
+public sealed record StageSnapshot(double Beat, IReadOnlyList<PlayerSnapshot> Players, bool Finished, WriteableBitmap? Video, double TextScale);
 
 /// <summary>A singer's line on the results screen.</summary>
 public sealed record PlayerResult(string Name, int Score, string Title, string Notes, string Golden, string LineBonus, string Lines);
@@ -52,6 +52,9 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
     private readonly AppConfig _config;
     private readonly SingAudioEngine _audio;
+    private readonly StageScreenService _stage;
+    private readonly StemStore _stems;
+    private readonly ConfigManager _configManager;
     private readonly ILoggerFactory _loggers;
     private readonly INavigationService _navigation;
     private readonly ILogger<SingViewModel> _logger;
@@ -76,8 +79,12 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     private bool _isPaused;
     private bool _showResults;
 
-    public SingViewModel(SingAudioEngine audio, ILoggerFactory loggers, INavigationService navigation, AppConfig config, ILogger<SingViewModel> logger)
+    public SingViewModel(SingAudioEngine audio, StageScreenService stage, StemStore stems, ConfigManager configManager, ILoggerFactory loggers,
+        INavigationService navigation, AppConfig config, ILogger<SingViewModel> logger)
     {
+        _stems = stems;
+        _stage = stage;
+        _configManager = configManager;
         _config = config;
         _audio = audio;
         _loggers = loggers;
@@ -86,6 +93,66 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         BackCommand = new RelayCommand(Back);
         PauseCommand = new RelayCommand(TogglePause);
         RestartCommand = new RelayCommand(() => { if (_entry is { } e) Start(e); });
+        CycleVocalsCommand = new RelayCommand(CycleVocals);
+        BiggerTextCommand = new RelayCommand(() => TextScale += 0.1);
+        SmallerTextCommand = new RelayCommand(() => TextScale -= 0.1);
+    }
+
+    // ── Projector ──────────────────────────────────────────────────────────
+    private bool _isOnProjector;
+    private string _projectorText = "";
+    private string _liveScores = "";
+    private long _lastLiveScoreTicks;
+
+    /// <summary>The stage is full screen on another display; this window shows the operator view.</summary>
+    public bool IsOnProjector { get => _isOnProjector; private set => this.RaiseAndSetIfChanged(ref _isOnProjector, value); }
+    public string ProjectorText { get => _projectorText; private set => this.RaiseAndSetIfChanged(ref _projectorText, value); }
+    public string LiveScores { get => _liveScores; private set => this.RaiseAndSetIfChanged(ref _liveScores, value); }
+
+    // ── Display size ───────────────────────────────────────────────────────
+    public const double MinTextScale = 0.75, MaxTextScale = 2.0;
+
+    /// <summary>Size of all stage text and note bars, 0.75-2.0 (1 = default); saved to config.</summary>
+    public double TextScale
+    {
+        get => _config.KaraokeTextScale is > 0 ? _config.KaraokeTextScale : 1.0;
+        set
+        {
+            value = Math.Round(Math.Clamp(value, MinTextScale, MaxTextScale), 2);
+            if (Math.Abs(value - TextScale) < 0.001) return;
+            _config.KaraokeTextScale = value;
+            _ = _configManager.SaveAsync(_config);
+            this.RaisePropertyChanged();
+        }
+    }
+
+    public ICommand BiggerTextCommand { get; }
+    public ICommand SmallerTextCommand { get; }
+
+    // ── Original vocals ────────────────────────────────────────────────────
+    public ICommand CycleVocalsCommand { get; }
+
+    /// <summary>Button text: the current original-vocals setting.</summary>
+    public string VocalsText => !_audio.HasStems ? "Vocals: original mix" : $"Vocals: {VocalsMode.ToLowerInvariant()}";
+
+    private string VocalsMode => _config.KaraokeVocals is "Guide" or "Full" ? _config.KaraokeVocals : "Off";
+
+    private void CycleVocals()
+    {
+        if (!_audio.HasStems)
+        {
+            Status = "This song has no separated vocals yet, so the original mix plays. Use \"Separate vocals\" in song select.";
+            return;
+        }
+        _config.KaraokeVocals = VocalsMode switch { "Off" => "Guide", "Guide" => "Full", _ => "Off" };
+        _ = _configManager.SaveAsync(_config);
+        ApplyVocals();
+    }
+
+    private void ApplyVocals()
+    {
+        _audio.VocalsVolume = VocalsMode switch { "Full" => 1f, "Guide" => 0.3f, _ => 0f };
+        this.RaisePropertyChanged(nameof(VocalsText));
     }
 
     public string Title { get => _title; private set => this.RaiseAndSetIfChanged(ref _title, value); }
@@ -136,7 +203,8 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
         try
         {
-            _audio.Load(entry.AudioPath!, startMs ?? song.StartMs ?? 0);
+            // With separated stems the original vocals can be turned down (V); otherwise the original mix plays.
+            _audio.Load(entry.AudioPath!, startMs ?? song.StartMs ?? 0, _stems.Find(entry));
         }
         catch (Exception ex)
         {
@@ -154,9 +222,14 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
             _hasVideoFrame = false;
         }
 
+        ApplyVocals();
         IsPaused = false;
         _audio.Play();
         this.RaisePropertyChanged(nameof(IsActive));
+
+        var screen = _stage.Open(this);
+        IsOnProjector = screen is not null;
+        ProjectorText = screen is null ? "" : $"Singing on {screen}. Esc or Back ends the song.";
     }
 
     /// <summary>Opens each distinct capture device once and gives every player a scoring session on it.</summary>
@@ -244,7 +317,12 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
             }
 
             UpdateVideo();
-            return new StageSnapshot(beat, players, _finished, _hasVideoFrame ? _videoBitmap : null);
+            if (Environment.TickCount64 - _lastLiveScoreTicks > 250)
+            {
+                _lastLiveScoreTicks = Environment.TickCount64;
+                LiveScores = string.Join("     ", players.Select(p => (_players.Count > 1 ? $"P{p.Player} " : "Score ") + p.Score.ToString("N0")));
+            }
+            return new StageSnapshot(beat, players, _finished, _hasVideoFrame ? _videoBitmap : null, TextScale);
         }
     }
 
@@ -296,10 +374,10 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         try
         {
             _videoBitmap ??= new WriteableBitmap(
-                new Avalonia.PixelSize(VideoFrameSource.Width, video.Height), new Avalonia.Vector(96, 96),
+                new Avalonia.PixelSize(video.Width, video.Height), new Avalonia.Vector(96, 96),
                 Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Opaque);
             using var buffer = _videoBitmap.Lock();
-            if (buffer.Size.Height == video.Height)
+            if (buffer.Size.Width == video.Width && buffer.Size.Height == video.Height)
             {
                 System.Runtime.InteropServices.Marshal.Copy(frame.Pixels, 0, buffer.Address, frame.Pixels.Length);
                 _hasVideoFrame = true;
@@ -333,6 +411,8 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
     private void StopPlayback()
     {
+        _stage.Close();
+        IsOnProjector = false;
         StopMicrophones();
         _audio.Stop();
         _video?.Dispose();

@@ -20,8 +20,9 @@ public class WorkerProtocolTests
         var process = Assert.IsType<ProcessTrackCommand>(commands[0]);
         Assert.Equal("t-001", process.TaskId);
         Assert.Contains("\n", process.Lyrics);
-        Assert.IsType<CancelCommand>(commands[1]);
-        Assert.IsType<ShutdownCommand>(commands[2]);
+        Assert.Equal("C:/Stems/queen-bohemian", Assert.IsType<SeparateStemsCommand>(commands[1]).OutputFolder);
+        Assert.IsType<CancelCommand>(commands[2]);
+        Assert.IsType<ShutdownCommand>(commands[3]);
 
         var ready = Assert.IsType<ReadyEvent>(events[0]);
         Assert.Equal(WorkerProtocol.Version, ready.ProtocolVersion);

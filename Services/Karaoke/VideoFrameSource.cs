@@ -19,7 +19,8 @@ public sealed class VideoFrame
 
 /// <summary>
 /// Decodes a song's video for the sing screen as raw BGRA frames from ffmpeg (already a dependency;
-/// handles avi/divx/flv/mp4 alike), scaled to <see cref="Width"/> wide at a constant <see cref="Fps"/>.
+/// handles avi/divx/flv/mp4 alike) at the source's own width up to <see cref="MaxWidth"/> (1080p), at a
+/// constant <see cref="Fps"/>; smaller videos are not upscaled here, the stage scales them when drawing.
 /// A reader thread keeps up to <see cref="QueueDepth"/> frames ahead; the stage asks for the frame at
 /// the current video time and is handed the newest one that is due, so video follows the audio clock
 /// and a slow frame is skipped rather than shown late. The video is drawn into the Skia scene, never
@@ -27,7 +28,7 @@ public sealed class VideoFrame
 /// </summary>
 public sealed class VideoFrameSource : IDisposable
 {
-    public const int Width = 1280;
+    public const int MaxWidth = 1920;
     public const double Fps = 30;
     private const int QueueDepth = 4;
 
@@ -40,15 +41,17 @@ public sealed class VideoFrameSource : IDisposable
     private readonly double _startMs;
     private volatile bool _stopped;
 
+    public int Width { get; }
     public int Height { get; }
 
-    private VideoFrameSource(ILogger logger, Process ffmpeg, int height, double startMs)
+    private VideoFrameSource(ILogger logger, Process ffmpeg, int width, int height, double startMs)
     {
+        Width = width;
         _logger = logger;
         _ffmpeg = ffmpeg;
         Height = height;
         _startMs = startMs;
-        for (int i = 0; i < QueueDepth + 2; i++) _free.Push(new VideoFrame(Width, height));
+        for (int i = 0; i < QueueDepth + 2; i++) _free.Push(new VideoFrame(width, height));
         _reader = new Thread(ReadFrames) { IsBackground = true, Name = "video-frames" };
         _reader.Start();
     }
@@ -64,7 +67,8 @@ public sealed class VideoFrameSource : IDisposable
 
             var (w, h) = ProbeSize(ffprobe, path);
             if (w <= 0 || h <= 0) return null;
-            int height = Math.Max(2, (int)Math.Round(Width * (double)h / w / 2) * 2);
+            int width = Math.Min(MaxWidth, w / 2 * 2);
+            int height = Math.Max(2, (int)Math.Round(width * (double)h / w / 2) * 2);
 
             var psi = new ProcessStartInfo(ffmpeg)
             {
@@ -78,15 +82,15 @@ public sealed class VideoFrameSource : IDisposable
                          "-v", "error", "-nostdin",
                          "-ss", (Math.Max(0, startMs) / 1000).ToString("0.###", CultureInfo.InvariantCulture),
                          "-i", path, "-an", "-sn",
-                         "-vf", $"fps={Fps.ToString(CultureInfo.InvariantCulture)},scale={Width}:{height}",
+                         "-vf", $"fps={Fps.ToString(CultureInfo.InvariantCulture)},scale={width}:{height}",
                          "-f", "rawvideo", "-pix_fmt", "bgra", "-",
                      })
                 psi.ArgumentList.Add(a);
             var process = Process.Start(psi)!;
             process.ErrorDataReceived += (_, e) => { if (e.Data is { Length: > 0 }) logger.LogDebug("[ffmpeg video] {Line}", e.Data); };
             process.BeginErrorReadLine();
-            logger.LogInformation("Video: {File} {W}x{H} → {OutW}x{OutH} @ {Fps} fps from {Start:0} ms", Path.GetFileName(path), w, h, Width, height, Fps, startMs);
-            return new VideoFrameSource(logger, process, height, Math.Max(0, startMs));
+            logger.LogInformation("Video: {File} {W}x{H} → {OutW}x{OutH} @ {Fps} fps from {Start:0} ms", Path.GetFileName(path), w, h, width, height, Fps, startMs);
+            return new VideoFrameSource(logger, process, width, height, Math.Max(0, startMs));
         }
         catch (Exception ex)
         {

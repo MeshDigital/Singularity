@@ -1,0 +1,58 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Karaoke"
+             xmlns:k="clr-namespace:Singularity.Views.Avalonia.Karaoke"
+             x:Class="Singularity.Views.Avalonia.Karaoke.SingStageView"
+             x:DataType="vm:SingViewModel"
+             x:CompileBindings="True"
+             Background="Black" Foreground="White">
+    <!-- What the audience sees: shown in the main window, or full screen on the projector. -->
+    <Grid>
+        <!-- Bottom layer: background or cover, dimmed. The music video is drawn by the stage itself
+             (Skia), never as a native window, which would paint over the notes. -->
+        <Image Source="{Binding Background}" Stretch="UniformToFill" Opacity="0.35"/>
+
+        <k:SingStage/>
+
+        <StackPanel Margin="24,16" VerticalAlignment="Top" HorizontalAlignment="Left" IsVisible="{Binding IsOnProjector}">
+            <TextBlock Text="{Binding Title}" FontSize="22" FontWeight="Bold"/>
+            <TextBlock Text="{Binding Artist}" Foreground="#BBB" FontSize="16"/>
+        </StackPanel>
+
+        <!-- Results: one column per singer -->
+        <Border IsVisible="{Binding ShowResults}" Background="#D8000000">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                <TextBlock Text="{Binding Title}" FontSize="20" Foreground="#BBB" HorizontalAlignment="Center"/>
+                <ItemsControl ItemsSource="{Binding Results}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="72" HorizontalAlignment="Center"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PlayerResult">
+                            <StackPanel Spacing="8" MinWidth="320">
+                                <TextBlock Text="{Binding Name}" FontSize="18" Foreground="#AAB" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding Score, StringFormat={}{0:N0}}" FontSize="76" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding Title}" FontSize="28" Foreground="#FFD23C" HorizontalAlignment="Center"/>
+                                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" Margin="0,12,0,0">
+                                    <TextBlock Text="Notes" Foreground="#AAB"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Notes}"/>
+                                    <TextBlock Grid.Row="1" Text="Golden notes" Foreground="#AAB"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Golden}"/>
+                                    <TextBlock Grid.Row="2" Text="Line bonus" Foreground="#AAB"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LineBonus}"/>
+                                </Grid>
+                                <TextBlock Text="{Binding Lines}" Foreground="#889" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" Margin="0,18,0,0">
+                    <Button Content="Sing again (R)" Command="{Binding RestartCommand}"/>
+                    <Button Content="Song select (Enter)" Command="{Binding BackCommand}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

@@ -50,6 +50,7 @@ public enum WorkerLogLevel
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "command")]
 [JsonDerivedType(typeof(ProcessTrackCommand), "process_track")]
+[JsonDerivedType(typeof(SeparateStemsCommand), "separate_stems")]
 [JsonDerivedType(typeof(CancelCommand), "cancel")]
 [JsonDerivedType(typeof(ShutdownCommand), "shutdown")]
 public abstract record WorkerCommand;
@@ -70,6 +71,12 @@ public sealed record ProcessTrackCommand(
     LyricsKind LyricsKind = LyricsKind.Plain,
     string? Language = null,
     bool ReuseStems = true) : WorkerCommand;
+
+/// <summary>
+/// Only the separation stage: writes vocals.wav and instrumental.wav to <paramref name="OutputFolder"/>,
+/// e.g. so a song can be sung with the original vocals turned down. Finishes with no result payload.
+/// </summary>
+public sealed record SeparateStemsCommand(string TaskId, string AudioPath, string OutputFolder) : WorkerCommand;
 
 public sealed record CancelCommand(string TaskId) : WorkerCommand;
 
@@ -105,7 +112,8 @@ public sealed record ProgressUpdateEvent(string TaskId, PipelineStage Stage, dou
 
 public sealed record StageCompletedEvent(string TaskId, PipelineStage Stage, long DurationMs) : WorkerEvent;
 
-/// <summary>Last event for a task. <see cref="Result"/> is set exactly when the outcome is <see cref="TaskOutcome.Succeeded"/>.</summary>
+/// <summary>Last event for a task. For process_track, <see cref="Result"/> is set exactly when the outcome is
+/// <see cref="TaskOutcome.Succeeded"/>; separate_stems never has one (the stems are in its output folder).</summary>
 public sealed record TaskFinishedEvent(string TaskId, TaskOutcome Outcome, TrackAnalysisResult? Result = null, string? Error = null) : WorkerEvent;
 
 public sealed record LogEvent(WorkerLogLevel Level, string Message, string? TaskId = null) : WorkerEvent;

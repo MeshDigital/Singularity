@@ -27,7 +27,28 @@ public sealed class SongCardViewModel : ReactiveObject
         SearchKey = $"{entry.Song.Artist} {entry.Song.Title}".ToLowerInvariant();
     }
 
+    private bool _hasStems;
+    private string? _separating;
+
     public SongEntry Entry { get; }
+
+    /// <summary>Vocals and instrumental are separated, so the original vocals can be turned off while singing.</summary>
+    public bool HasStems { get => _hasStems; set { this.RaiseAndSetIfChanged(ref _hasStems, value); this.RaisePropertyChanged(nameof(CanSeparate)); } }
+
+    /// <summary>Progress text while the vocals are being removed; null otherwise.</summary>
+    public string? Separating
+    {
+        get => _separating;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _separating, value);
+            this.RaisePropertyChanged(nameof(IsSeparating));
+            this.RaisePropertyChanged(nameof(CanSeparate));
+        }
+    }
+
+    public bool IsSeparating => _separating is not null;
+    public bool CanSeparate => !_hasStems && _separating is null && Entry.IsPlayable;
     public string Title => Entry.Song.Title;
     public string Artist => Entry.Song.Artist;
     public string SearchKey { get; }
@@ -129,6 +150,9 @@ public sealed class SongSelectViewModel : ReactiveObject
     private readonly KaraokeLibrary _library;
     private readonly SingViewModel _sing;
     private readonly SongPreviewPlayer _preview;
+    private readonly StageScreenService _stage;
+    private readonly StemStore _stems;
+    private readonly StemSeparationService _separation;
     private SongCardViewModel? _selectedSong;
     private readonly INavigationService _navigation;
     private readonly ILogger<SongSelectViewModel> _logger;
@@ -138,9 +162,13 @@ public sealed class SongSelectViewModel : ReactiveObject
     private bool _isLoading;
     private bool _loaded;
 
-    public SongSelectViewModel(KaraokeLibrary library, SingViewModel sing, SongPreviewPlayer preview, INavigationService navigation,
-        ILogger<SongSelectViewModel> logger)
+    public SongSelectViewModel(KaraokeLibrary library, SingViewModel sing, SongPreviewPlayer preview, StageScreenService stage,
+        StemStore stems, StemSeparationService separation, INavigationService navigation, ILogger<SongSelectViewModel> logger)
     {
+        _stage = stage;
+        _stems = stems;
+        _separation = separation;
+        SeparateCommand = new RelayCommand<SongCardViewModel>(card => _ = SeparateAsync(card), card => card?.CanSeparate == true);
         _preview = preview;
         _library = library;
         _sing = sing;
@@ -189,6 +217,71 @@ public sealed class SongSelectViewModel : ReactiveObject
     /// <summary>Called when the page is hidden.</summary>
     public void StopPreview() => _preview.Stop();
 
+    public ICommand SeparateCommand { get; }
+
+    // ── Where and how big ──────────────────────────────────────────────────
+    public IReadOnlyList<StageScreenOption> StageScreens { get; private set; } = Array.Empty<StageScreenOption>();
+
+    /// <summary>Where songs are sung: this window, or full screen on another display.</summary>
+    public StageScreenOption? SelectedStageScreen
+    {
+        get => StageScreens.FirstOrDefault(o => o.Key == _stage.SelectedKey) ?? StageScreens.FirstOrDefault();
+        set
+        {
+            if (value is null || value.Key == _stage.SelectedKey) return;
+            _stage.SelectedKey = value.Key;
+            this.RaisePropertyChanged();
+        }
+    }
+
+    /// <summary>Size of the stage's text and notes (also adjustable while singing with + and -).</summary>
+    public double TextScale
+    {
+        get => _sing.TextScale;
+        set
+        {
+            _sing.TextScale = value;
+            this.RaisePropertyChanged();
+            this.RaisePropertyChanged(nameof(TextScaleText));
+        }
+    }
+
+    public string TextScaleText => $"{TextScale:P0}";
+
+    /// <summary>Refreshes the display list (projectors come and go).</summary>
+    public void RefreshScreens()
+    {
+        StageScreens = _stage.Options();
+        this.RaisePropertyChanged(nameof(StageScreens));
+        this.RaisePropertyChanged(nameof(SelectedStageScreen));
+    }
+
+    private async Task SeparateAsync(SongCardViewModel? card)
+    {
+        if (card is null || !card.CanSeparate) return;
+        if (!_separation.IsAvailable)
+        {
+            StatusText = "Removing vocals needs the AI worker (inference\\.venv), which isn't installed.";
+            return;
+        }
+        card.Separating = "Removing vocals…";
+        try
+        {
+            var progress = new Progress<double>(p => card.Separating = $"Removing vocals… {p:P0}");
+            await _separation.SeparateAsync(card.Entry, progress);
+            card.HasStems = true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Removing vocals failed for {Song}", card.Entry.TxtPath);
+            StatusText = $"Removing vocals failed for {card.Title}: {ex.Message}";
+        }
+        finally
+        {
+            card.Separating = null;
+        }
+    }
+
     public ICommand RefreshCommand { get; }
     public ICommand SingCommand { get; }
 
@@ -209,7 +302,7 @@ public sealed class SongSelectViewModel : ReactiveObject
         try
         {
             var result = await _library.ScanAsync();
-            _all = result.Songs.Select(s => new SongCardViewModel(s)).ToList();
+            _all = result.Songs.Select(s => new SongCardViewModel(s) { HasStems = _stems.Find(s) is not null }).ToList();
             ApplyFilter();
             StatusText = $"{result.Songs.Count} songs" + (result.Failures.Count > 0 ? $" · {result.Failures.Count} unreadable" : "");
         }

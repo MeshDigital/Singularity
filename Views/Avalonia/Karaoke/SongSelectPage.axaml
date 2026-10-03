@@ -11,7 +11,20 @@
                 <TextBlock Text="Sing" FontSize="30" FontWeight="Bold"/>
                 <TextBlock Text="{Binding StatusText}" Foreground="#9AA" FontSize="13" TextWrapping="Wrap"/>
             </StackPanel>
-            <Button Grid.Column="1" Content="Rescan" Command="{Binding RefreshCommand}" VerticalAlignment="Top"/>
+            <StackPanel Grid.Column="1" Spacing="10" HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                    <TextBlock Text="Sing on" VerticalAlignment="Center" Foreground="#AAB"/>
+                    <ComboBox ItemsSource="{Binding StageScreens}" SelectedItem="{Binding SelectedStageScreen}" MinWidth="260"
+                              ToolTip.Tip="Show the singing full screen on a projector or TV, and keep this window for the library"/>
+                    <Button Content="Rescan" Command="{Binding RefreshCommand}"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                    <TextBlock Text="Text size" VerticalAlignment="Center" Foreground="#AAB"/>
+                    <Slider Minimum="0.75" Maximum="2" SmallChange="0.05" LargeChange="0.25" Value="{Binding TextScale}" Width="200"
+                            ToolTip.Tip="Size of lyrics, scores and notes on the stage; + and - change it while singing"/>
+                    <TextBlock Text="{Binding TextScaleText}" VerticalAlignment="Center" Width="44"/>
+                </StackPanel>
+            </StackPanel>
         </Grid>
 
         <TextBox Grid.Row="1" Margin="0,16,0,12" Watermark="Search artist or title"
@@ -30,9 +43,17 @@
                             <TextBlock Text="{Binding Artist}" Foreground="#BBB" TextTrimming="CharacterEllipsis"/>
                             <TextBlock Text="{Binding Details}" Foreground="#778" FontSize="11"/>
                         </StackPanel>
-                        <Button Grid.Column="2" Content="Sing" Margin="8,0" VerticalAlignment="Center"
-                                Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).SingCommand}"
-                                CommandParameter="{Binding}"/>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="8,0" VerticalAlignment="Center">
+                            <TextBlock Text="Vocals removable" Foreground="#6C8" FontSize="11" VerticalAlignment="Center" IsVisible="{Binding HasStems}"/>
+                            <TextBlock Text="{Binding Separating}" Foreground="#FC6" FontSize="11" VerticalAlignment="Center" IsVisible="{Binding IsSeparating}"/>
+                            <Button Content="Remove vocals" IsVisible="{Binding CanSeparate}"
+                                    ToolTip.Tip="Separate the original vocals with the AI worker (about 40 s on the GPU) so they can be turned off while singing"
+                                    Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).SeparateCommand}"
+                                    CommandParameter="{Binding}"/>
+                            <Button Content="Sing"
+                                    Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).SingCommand}"
+                                    CommandParameter="{Binding}"/>
+                        </StackPanel>
                     </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>

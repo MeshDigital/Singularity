@@ -88,6 +88,20 @@ def test_cancel_running_task_then_keep_working(tmp_path):
     assert w.close() == 0
 
 
+def test_separate_stems_runs_only_separation(tmp_path):
+    w = WorkerProcess(tmp_path)
+    w.next_event()
+    audio = tmp_path / "song.mp3"
+    audio.write_bytes(b"x")
+    w.send(s.SeparateStemsCommand(task_id="stems", audio_path=str(audio), output_folder=str(tmp_path / "stems")))
+    events = w.until("task_finished")
+    assert [e["stage"] for e in events if e["event"] == "stage_started"] == ["separation"]
+    assert events[-1]["outcome"] == "succeeded" and "result" not in events[-1]
+    assert (tmp_path / "stems" / "vocals.wav").is_file() and (tmp_path / "stems" / "instrumental.wav").is_file()
+    w.send(s.ShutdownCommand())
+    assert w.close() == 0
+
+
 def test_failure_is_reported_and_worker_survives(tmp_path):
     w = WorkerProcess(tmp_path)
     w.next_event()

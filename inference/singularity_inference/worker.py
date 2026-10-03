@@ -22,7 +22,7 @@ from pydantic import ValidationError
 
 from . import __version__
 from . import schemas as s
-from .pipeline import Backend, Cancelled, create_backend, plan_stages, run_task
+from .pipeline import Backend, Cancelled, create_backend, plan_stages, run_separation, run_task
 
 
 class Worker:
@@ -31,7 +31,7 @@ class Worker:
         self._stdin = stdin
         self._stdout = stdout
         self._write_lock = threading.Lock()
-        self._tasks: queue.Queue[s.ProcessTrackCommand | None] = queue.Queue()
+        self._tasks: queue.Queue[s.ProcessTrackCommand | s.SeparateStemsCommand | None] = queue.Queue()
         self._cancelled: set[str] = set()
         self._cancel_lock = threading.Lock()
         self._shutdown = threading.Event()
@@ -61,7 +61,7 @@ class Worker:
                 except ValidationError as e:
                     self.log(s.WorkerLogLevel.ERROR, f"ignored malformed command: {e.errors()[0]['msg']}: {line.strip()[:200]}")
                     continue
-                if isinstance(cmd, s.ProcessTrackCommand):
+                if isinstance(cmd, (s.ProcessTrackCommand, s.SeparateStemsCommand)):
                     self._tasks.put(cmd)
                 elif isinstance(cmd, s.CancelCommand):
                     with self._cancel_lock:
@@ -85,11 +85,15 @@ class Worker:
                 return 0
             self._run_one(cmd)
 
-    def _run_one(self, cmd: s.ProcessTrackCommand) -> None:
+    def _run_one(self, cmd: s.ProcessTrackCommand | s.SeparateStemsCommand) -> None:
         if self._is_cancelled(cmd.task_id):
             self.emit(s.TaskFinishedEvent(task_id=cmd.task_id, outcome=s.TaskOutcome.CANCELLED))
             return
         try:
+            if isinstance(cmd, s.SeparateStemsCommand):
+                run_separation(cmd, self._backend, self.emit, lambda: self._is_cancelled(cmd.task_id))
+                self.emit(s.TaskFinishedEvent(task_id=cmd.task_id, outcome=s.TaskOutcome.SUCCEEDED))
+                return
             self.log(s.WorkerLogLevel.INFO, f"stages: {', '.join(st.value for st in plan_stages(cmd))}", cmd.task_id)
             result = run_task(cmd, self._backend, self.emit, lambda: self._is_cancelled(cmd.task_id))
             self.emit(s.TaskFinishedEvent(task_id=cmd.task_id, outcome=s.TaskOutcome.SUCCEEDED, result=result))

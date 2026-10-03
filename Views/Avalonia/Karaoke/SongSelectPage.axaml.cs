@@ -25,7 +25,9 @@ public partial class SongSelectPage : UserControl
     protected override async void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        if (DataContext is SongSelectViewModel vm) await vm.EnsureLoadedAsync();
+        if (DataContext is not SongSelectViewModel vm) return;
+        vm.RefreshScreens();
+        await vm.EnsureLoadedAsync();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)

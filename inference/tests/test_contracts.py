@@ -55,7 +55,7 @@ def test_session_fixture_decodes():
             except ValidationError:
                 unknown.append(obj["event"])
 
-    assert [type(c) for c in commands] == [s.ProcessTrackCommand, s.CancelCommand, s.ShutdownCommand]
+    assert [type(c) for c in commands] == [s.ProcessTrackCommand, s.SeparateStemsCommand, s.CancelCommand, s.ShutdownCommand]
     assert "\n" in commands[0].lyrics
     assert unknown == ["gpu_stats"]
     assert [e.event for e in events] == [

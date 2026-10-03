@@ -4,11 +4,12 @@ using Singularity.ViewModels.Karaoke;
 
 namespace Singularity.Views.Avalonia.Karaoke;
 
-public partial class SingPage : UserControl
+public partial class StageWindow : Window
 {
-    public SingPage()
+    public StageWindow()
     {
         InitializeComponent();
+        // The same keys as the sing page, for whoever is standing at the projector's keyboard.
         KeyDown += (_, e) =>
         {
             if (DataContext is not SingViewModel vm) return;
@@ -21,16 +22,5 @@ public partial class SingPage : UserControl
             else return;
             e.Handled = true;
         };
-    }
-
-    public SingPage(SingViewModel viewModel) : this()
-    {
-        DataContext = viewModel;
-    }
-
-    protected override void OnAttachedToVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
-    {
-        base.OnAttachedToVisualTree(e);
-        Focus();
     }
 }
