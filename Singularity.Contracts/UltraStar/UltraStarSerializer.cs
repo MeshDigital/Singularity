@@ -138,6 +138,19 @@ public static class UltraStarSerializer
         var voices = new List<List<UltraStarNote>> { new() };
         int current = 0;
         bool sawPlayerMarker = false;
+        bool both = false, sawBoth = false;
+        void AddNote(UltraStarNote note)
+        {
+            if (both)
+            {
+                voices[0].Add(note);
+                voices[1].Add(note);
+            }
+            else
+            {
+                voices[current].Add(note);
+            }
+        }
         bool? relative = null;
         int lineOffset = 0; // #RELATIVE mode: beats are counted from the start of the current line
         int lineNo = 0;
@@ -163,9 +176,11 @@ public static class UltraStarSerializer
 
             if (line[0] == 'P' && TryParsePlayer(line, out var player))
             {
-                // P1 / P2 select a voice. "P3" (both singers) is legacy; it is read into voice 1.
+                // P1 / P2 select a voice. Legacy "P3" means both singers: its notes go into both voices.
                 current = player == 2 ? 1 : 0;
-                while (voices.Count <= current) voices.Add(new List<UltraStarNote>());
+                both = player == 3;
+                sawBoth |= both;
+                while (voices.Count <= (both ? 1 : current)) voices.Add(new List<UltraStarNote>());
                 sawPlayerMarker = true;
                 lineOffset = 0;
                 continue;
@@ -176,7 +191,7 @@ public static class UltraStarSerializer
                 var parts = line[1..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length == 0 || !int.TryParse(parts[0], NumberStyles.AllowLeadingSign, Inv, out var beat))
                     throw new FormatException($"Line {lineNo}: line break without a beat.");
-                voices[current].Add(UltraStarNote.LineBreak(lineOffset + beat));
+                AddNote(UltraStarNote.LineBreak(lineOffset + beat));
                 if (relative == true)
                 {
                     // "- <end> <next>": the following line's beats count from <next> (or <end> if absent).
@@ -195,7 +210,14 @@ public static class UltraStarSerializer
                 _ => throw new FormatException($"Line {lineNo}: unknown line type '{line[0]}'."),
             };
             var note = ParseNote(type, line, lineNo);
-            voices[current].Add(lineOffset == 0 ? note : note with { StartBeat = note.StartBeat + lineOffset });
+            AddNote(lineOffset == 0 ? note : note with { StartBeat = note.StartBeat + lineOffset });
+        }
+
+        if (sawBoth)
+        {
+            // P3 blocks usually follow the P1 and P2 blocks, so merged voices need putting back in time order.
+            for (int v = 0; v < voices.Count; v++)
+                voices[v] = InTimeOrder(voices[v]);
         }
 
         string Required(string key) => headers.TryGetValue(key, out var v) && v.Length > 0
@@ -237,6 +259,22 @@ public static class UltraStarSerializer
             Voices = voices.Select((notes, i) => new UltraStarVoice(notes,
                 isDuet ? Optional(i == 0 ? "P1" : "P2") ?? Optional(i == 0 ? "DUETSINGERP1" : "DUETSINGERP2") : null)).ToArray(),
         };
+    }
+
+    /// <summary>Sorted by beat (a line break before a note on the same beat), without doubled line breaks.</summary>
+    private static List<UltraStarNote> InTimeOrder(List<UltraStarNote> notes)
+    {
+        var sorted = notes.Select((n, i) => (n, i))
+            .OrderBy(x => x.n.StartBeat).ThenBy(x => x.n.Type == NoteType.LineBreak ? 0 : 1).ThenBy(x => x.i)
+            .Select(x => x.n).ToList();
+        var result = new List<UltraStarNote>(sorted.Count);
+        foreach (var n in sorted)
+        {
+            if (n.Type == NoteType.LineBreak && (result.Count == 0 || result[^1].Type == NoteType.LineBreak)) continue;
+            result.Add(n);
+        }
+        while (result.Count > 0 && result[^1].Type == NoteType.LineBreak) result.RemoveAt(result.Count - 1);
+        return result;
     }
 
     private static bool TryParsePlayer(string line, out int player)

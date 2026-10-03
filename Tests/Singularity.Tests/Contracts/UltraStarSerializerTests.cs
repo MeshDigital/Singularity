@@ -69,6 +69,26 @@ public class UltraStarSerializerTests
     }
 
     [Fact]
+    public void LegacyP3_SharedLines_GoToBothSingers_InTimeOrder()
+    {
+        var song = UltraStarSerializer.Read(string.Join("\n",
+            "#TITLE:t", "#ARTIST:a", "#MP3:a.mp3", "#BPM:300",
+            "P1", ": 0 4 0 One", "- 6", ": 30 4 0 Later",
+            "P2", ": 10 4 0 Two", "- 16",
+            "P3", ": 20 4 0  Together", "- 26",
+            "E"));
+
+        Assert.True(song.IsDuet);
+        Assert.Equal(new[] { 0, 6, 20, 26, 30 }, song.Voices[0].Notes.Select(n => n.StartBeat));
+        Assert.Equal(new[] { 10, 16, 20 }, song.Voices[1].Notes.Select(n => n.StartBeat)); // trailing break dropped
+        Assert.Equal(" Together", song.Voices[1].Notes[2].Syllable);
+
+        var reread = UltraStarSerializer.Read(UltraStarSerializer.Write(song)); // written as plain P1/P2
+        Assert.Equal(song.Voices[0].Notes, reread.Voices[0].Notes);
+        Assert.Equal(song.Voices[1].Notes, reread.Voices[1].Notes);
+    }
+
+    [Fact]
     public void LegacyDuetSingerHeaders_AreRead()
     {
         var text = ContractFixtures.Read("song.duet.txt")
