@@ -24,5 +24,27 @@
             </StackPanel>
             <TextBlock Grid.Row="2" Text="{Binding Status}" Foreground="#889" FontSize="12"/>
         </Grid>
+
+        <!-- Results -->
+        <Border IsVisible="{Binding ShowResults}" Background="#D8000000">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" MinWidth="420">
+                <TextBlock Text="{Binding Title}" FontSize="20" Foreground="#BBB" HorizontalAlignment="Center"/>
+                <TextBlock Text="{Binding FinalScore, StringFormat={}{0:N0}}" FontSize="84" FontWeight="Bold" HorizontalAlignment="Center"/>
+                <TextBlock Text="{Binding FinalTitle}" FontSize="30" Foreground="#FFD23C" HorizontalAlignment="Center"/>
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" Margin="0,16,0,0">
+                    <TextBlock Text="Notes" Foreground="#AAB"/>
+                    <TextBlock Grid.Column="1" Text="{Binding NotesPoints}"/>
+                    <TextBlock Grid.Row="1" Text="Golden notes" Foreground="#AAB"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding GoldenPoints}"/>
+                    <TextBlock Grid.Row="2" Text="Line bonus" Foreground="#AAB"/>
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LineBonusPoints}"/>
+                </Grid>
+                <TextBlock Text="{Binding LineSummary}" Foreground="#889" HorizontalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" Margin="0,18,0,0">
+                    <Button Content="Sing again (R)" Command="{Binding RestartCommand}"/>
+                    <Button Content="Song select (Enter)" Command="{Binding BackCommand}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
     </Grid>
 </UserControl>

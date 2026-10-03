@@ -135,3 +135,34 @@ public class SingScorerTests
         Assert.Equal(new[] { 0, 1 }, judged.Where(j => j.Hit).Select(j => j.Beat));
     }
 }
+
+public class ScoreTitlesTests
+{
+    [Theory]
+    [InlineData(0, "Tone Deaf")]
+    [InlineData(1999, "Tone Deaf")]
+    [InlineData(2000, "Amateur")]
+    [InlineData(5990, "Wannabe")]
+    [InlineData(7490, "Rising Star")]
+    [InlineData(8990, "Lead Singer")]
+    [InlineData(10000, "Karaoke God")]
+    public void Tiers(int score, string title) => Assert.Equal(title, ScoreTitles.For(score));
+}
+
+public class DisplayedScoreTests
+{
+    [Theory]
+    [InlineData(12.9, 0, 11.9)]
+    [InlineData(4495.5, 4490.2, 1000)]
+    [InlineData(0, 0, 0)]
+    [InlineData(9000, 0, 1000)]
+    [InlineData(3333.3, 3333.3, 333.3)]
+    public void PartsAlwaysAddUpToTheTotal(double notes, double golden, double bonus)
+    {
+        var score = new ScoreBreakdown(notes, golden, bonus);
+        var shown = DisplayedScore.From(score);
+        Assert.Equal(score.Total, shown.Notes + shown.Golden + shown.LineBonus);
+        Assert.Equal(score.Total, shown.Total);
+        Assert.All(new[] { shown.Notes, shown.Golden, shown.LineBonus }, p => Assert.Equal(0, p % 10));
+    }
+}

@@ -32,7 +32,6 @@ public sealed class SingStage : Control
     private static readonly IBrush Sung = new SolidColorBrush(Color.FromRgb(60, 170, 255));
     private static readonly IBrush Unsung = Brushes.White;
     private static readonly IBrush Dim = new SolidColorBrush(Color.FromArgb(170, 220, 220, 220));
-    private static readonly IBrush Shade = new SolidColorBrush(Color.FromArgb(170, 0, 0, 0));
 
     private bool _attached;
 
@@ -73,12 +72,6 @@ public sealed class SingStage : Control
         if (s.LastLine is { } line && s.LastLineAgeBeats is >= 0 and < 12)
             DrawText(ctx, RatingText(line.Rating), 28, GoldenHitBrush, new Point(lane.Right - 16, lane.Top + 12), alignRight: true);
 
-        if (s.Finished)
-        {
-            ctx.DrawRectangle(Shade, null, new Rect(0, 0, w, h));
-            DrawText(ctx, "Final score", 30, Dim, new Point(w / 2, h * 0.38), center: true);
-            DrawText(ctx, $"{s.Score:N0}", 72, Brushes.White, new Point(w / 2, h * 0.44), center: true);
-        }
     }
 
     private static void DrawLane(DrawingContext ctx, Rect lane, NoteLaneLayout layout, StageSnapshot s)

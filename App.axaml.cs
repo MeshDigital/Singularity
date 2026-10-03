@@ -488,7 +488,7 @@ public partial class App : Application
                 Serilog.Log.Warning("--sing: no playable song in {Folder}", folder);
                 return;
             }
-            Services.GetRequiredService<ViewModels.Karaoke.SingViewModel>().Start(entry);
+            Services.GetRequiredService<ViewModels.Karaoke.SingViewModel>().Start(entry, Singularity.Configuration.RuntimeOptions.SingStartSeconds * 1000);
             navigation.NavigateTo("Sing");
         }
         else if (Singularity.Configuration.RuntimeOptions.OpenPage is { } page)

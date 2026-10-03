@@ -26,6 +26,9 @@ public static class RuntimeOptions
     /// <summary>Development shortcut: song folder to start singing at startup (<c>--sing "D:\Songs\Artist - Title"</c>).</summary>
     public static string? SingFolder { get; private set; }
 
+    /// <summary>Development shortcut: with --sing, start this many seconds into the song (<c>--sing-start 200</c>).</summary>
+    public static double? SingStartSeconds { get; private set; }
+
     public static void Initialize(IEnumerable<string> args)
     {
         var list = args.ToList();
@@ -39,5 +42,7 @@ public static class RuntimeOptions
                   || Environment.GetEnvironmentVariable(OfflineEnvironmentVariable) is "1" or "true" or "TRUE" or "True";
         OpenPage = ValueAfter("--open-page");
         SingFolder = ValueAfter("--sing");
+        SingStartSeconds = double.TryParse(ValueAfter("--sing-start"), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var start) ? start : null;
     }
 }

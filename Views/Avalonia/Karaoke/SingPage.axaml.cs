@@ -12,8 +12,9 @@ public partial class SingPage : UserControl
         KeyDown += (_, e) =>
         {
             if (DataContext is not SingViewModel vm) return;
-            if (e.Key == Key.Escape) vm.BackCommand.Execute(null);
-            else if (e.Key is Key.Space or Key.P) vm.PauseCommand.Execute(null);
+            if (e.Key == Key.Escape || (e.Key == Key.Enter && vm.ShowResults)) vm.BackCommand.Execute(null);
+            else if (e.Key == Key.R && vm.ShowResults) vm.RestartCommand.Execute(null);
+            else if ((e.Key is Key.Space or Key.P) && !vm.ShowResults) vm.PauseCommand.Execute(null);
             else return;
             e.Handled = true;
         };

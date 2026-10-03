@@ -60,6 +60,10 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     private bool _finished;
     private long _lastDiagnosticTicks;
 
+    private SongEntry? _entry;
+    private bool _resultsShown;
+    private bool _showResults;
+    private ScoreBreakdown? _final;
     private string _title = "";
     private string _artist = "";
     private string _status = "";
@@ -75,6 +79,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         _logger = logger;
         BackCommand = new RelayCommand(Back);
         PauseCommand = new RelayCommand(TogglePause);
+        RestartCommand = new RelayCommand(() => { if (_entry is { } e) Start(e); });
         _mic.SamplesCaptured += OnMicSamples;
     }
 
@@ -90,10 +95,25 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
     public ICommand BackCommand { get; }
     public ICommand PauseCommand { get; }
+    public ICommand RestartCommand { get; }
 
-    public void Start(SongEntry entry)
+    // ── Results ────────────────────────────────────────────────────────────
+    public bool ShowResults { get => _showResults; private set => this.RaiseAndSetIfChanged(ref _showResults, value); }
+    private DisplayedScore Shown => DisplayedScore.From(_final ?? new ScoreBreakdown(0, 0, 0));
+    public int FinalScore => Shown.Total;
+    public string FinalTitle => ScoreTitles.For(FinalScore);
+    public string NotesPoints => $"{Shown.Notes:N0}";
+    public string GoldenPoints => $"{Shown.Golden:N0}";
+    public string LineBonusPoints => $"{Shown.LineBonus:N0}";
+    public string LineSummary { get; private set; } = "";
+
+    /// <param name="startMs">Where to start playing; null = the song's #START (or the beginning).</param>
+    public void Start(SongEntry entry, double? startMs = null)
     {
         StopPlayback();
+        _entry = entry;
+        _resultsShown = false;
+        ShowResults = false;
         var song = entry.Song;
         Title = song.Title;
         Artist = song.Artist;
@@ -114,7 +134,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
         try
         {
-            _audio.Load(entry.AudioPath!, song.StartMs ?? 0);
+            _audio.Load(entry.AudioPath!, startMs ?? song.StartMs ?? 0);
         }
         catch (Exception ex)
         {
@@ -180,16 +200,37 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                     _logger.LogDebug("Sing: beat {Beat:0.0}, no microphone reading yet", beat);
             }
 
-            if (!_finished && beat > _lastNoteEndBeat + OutroBeats)
+            if (!_finished && (beat > _lastNoteEndBeat + OutroBeats || (_audio.IsLoaded && !_audio.IsPlaying && !IsPaused && beat > 0)))
             {
                 _finished = true;
                 _session?.Finish();
+            }
+            if (_finished && !_resultsShown)
+            {
+                _resultsShown = true;
+                var final = _session?.Scorer.Score ?? new ScoreBreakdown(0, 0, 0);
+                var lines = _session?.Scorer.CompletedLines ?? Array.Empty<LineResult>();
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => PublishResults(final, lines));
             }
 
             return new StageSnapshot(
                 beat, lyrics, _lane, _hits.ToArray(), _session?.LastReading,
                 _session?.Scorer.Score.Total ?? 0, _lastLine, beat - _lastLineBeat, _finished);
         }
+    }
+
+    private void PublishResults(ScoreBreakdown final, IReadOnlyList<LineResult> lines)
+    {
+        _audio.Stop();
+        _mic.Stop();
+        _final = final;
+        _logger.LogInformation("Sing results: {Notes} notes + {Golden} golden + {Bonus} line bonus = {Total}", final.Notes, final.Golden, final.LineBonus, final.Total);
+        int perfect = lines.Count(l => l.Rating == LineRating.Perfect);
+        int great = lines.Count(l => l.Rating is LineRating.Awesome or LineRating.Great);
+        LineSummary = lines.Count == 0 ? "" : $"{perfect} perfect and {great} great lines out of {lines.Count}";
+        foreach (var name in new[] { nameof(FinalScore), nameof(FinalTitle), nameof(NotesPoints), nameof(GoldenPoints), nameof(LineBonusPoints), nameof(LineSummary) })
+            this.RaisePropertyChanged(name);
+        ShowResults = true;
     }
 
     private void TogglePause()
