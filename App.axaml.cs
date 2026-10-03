@@ -297,12 +297,14 @@ public partial class App : Application
                         // call elsewhere (Library's playlist Sync included) silently fell back to
                         // Client Credentials auth, which Spotify 404s for private/collaborative
                         // playlists (i.e. almost anyone's own playlists) as if they don't exist.
-                        _ = Services.GetRequiredService<SpotifyAuthService>().VerifyConnectionAsync();
+                        if (!Singularity.Configuration.RuntimeOptions.Offline)
+                            _ = Services.GetRequiredService<SpotifyAuthService>().VerifyConnectionAsync();
 
                         // Fire-and-forget: a single throttled GitHub Releases check. Never awaited
                         // so a slow/unreachable network never delays startup; all failures inside
                         // are caught and logged, never thrown.
-                        _ = Services.GetRequiredService<IUpdateCheckService>().CheckForUpdatesAsync();
+                        if (!Singularity.Configuration.RuntimeOptions.Offline)
+                            _ = Services.GetRequiredService<IUpdateCheckService>().CheckForUpdatesAsync();
 
                         // Eager-resolve chat/notification services so they start listening for
                         // incoming Soulseek messages from app launch, not just after the user

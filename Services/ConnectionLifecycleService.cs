@@ -128,6 +128,12 @@ public sealed class ConnectionLifecycleService : IConnectionLifecycleService, ID
         string? correlationId = null,
         CancellationToken ct = default)
     {
+        if (Singularity.Configuration.RuntimeOptions.Offline)
+        {
+            _logger.LogInformation("Lifecycle: offline mode (--offline) — not connecting to Soulseek. corr={Corr}", correlationId ?? "-");
+            return;
+        }
+
         // Reject immediately while in cooldown — caller must wait
         if (_state == ConnectionLifecycleState.CoolingDown)
         {

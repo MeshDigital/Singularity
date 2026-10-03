@@ -16,6 +16,8 @@ namespace Singularity
         [STAThread]
         public static void Main(string[] args)
         {
+            Singularity.Configuration.RuntimeOptions.Initialize(args);
+
             // Build configuration for Serilog
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
@@ -69,6 +71,8 @@ namespace Singularity
             try
             {
                 Log.Information("Starting Singularity application | RunJsonLog: {RunJsonLogPath} | RunTxtLog: {RunTxtLogPath}", runJsonLogPath, runTxtLogPath);
+                if (Singularity.Configuration.RuntimeOptions.Offline)
+                    Log.Warning("Offline mode: Soulseek connections and startup network checks are disabled");
                 BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
             }
             catch (Exception ex)
