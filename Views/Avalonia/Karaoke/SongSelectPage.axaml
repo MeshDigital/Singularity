@@ -18,7 +18,7 @@
                  Text="{Binding SearchText}"/>
 
         <!-- ListBox virtualises its items, so thousands of songs scroll smoothly; covers decode on demand. -->
-        <ListBox Grid.Row="2" x:Name="SongList" ItemsSource="{Binding Songs}" Background="Transparent">
+        <ListBox Grid.Row="2" x:Name="SongList" ItemsSource="{Binding Songs}" SelectedItem="{Binding SelectedSong}" Background="Transparent">
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:SongCardViewModel">
                     <Grid ColumnDefinitions="64,*,Auto" Height="72" Background="Transparent">

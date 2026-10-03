@@ -28,6 +28,12 @@ public partial class SongSelectPage : UserControl
         if (DataContext is SongSelectViewModel vm) await vm.EnsureLoadedAsync();
     }
 
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        (DataContext as SongSelectViewModel)?.StopPreview();
+        base.OnDetachedFromVisualTree(e);
+    }
+
     private void SingSelected()
     {
         if (DataContext is SongSelectViewModel vm && SongList.SelectedItem is SongCardViewModel card && vm.SingCommand.CanExecute(card))

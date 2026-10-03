@@ -128,6 +128,8 @@ public sealed class SongSelectViewModel : ReactiveObject
 {
     private readonly KaraokeLibrary _library;
     private readonly SingViewModel _sing;
+    private readonly SongPreviewPlayer _preview;
+    private SongCardViewModel? _selectedSong;
     private readonly INavigationService _navigation;
     private readonly ILogger<SongSelectViewModel> _logger;
     private List<SongCardViewModel> _all = new();
@@ -136,8 +138,10 @@ public sealed class SongSelectViewModel : ReactiveObject
     private bool _isLoading;
     private bool _loaded;
 
-    public SongSelectViewModel(KaraokeLibrary library, SingViewModel sing, INavigationService navigation, ILogger<SongSelectViewModel> logger)
+    public SongSelectViewModel(KaraokeLibrary library, SingViewModel sing, SongPreviewPlayer preview, INavigationService navigation,
+        ILogger<SongSelectViewModel> logger)
     {
+        _preview = preview;
         _library = library;
         _sing = sing;
         _navigation = navigation;
@@ -169,6 +173,21 @@ public sealed class SongSelectViewModel : ReactiveObject
         get => _isLoading;
         private set => this.RaiseAndSetIfChanged(ref _isLoading, value);
     }
+
+    /// <summary>The highlighted song; highlighting starts its preview.</summary>
+    public SongCardViewModel? SelectedSong
+    {
+        get => _selectedSong;
+        set
+        {
+            if (value == _selectedSong) return;
+            this.RaiseAndSetIfChanged(ref _selectedSong, value);
+            _preview.Preview(value?.Entry);
+        }
+    }
+
+    /// <summary>Called when the page is hidden.</summary>
+    public void StopPreview() => _preview.Stop();
 
     public ICommand RefreshCommand { get; }
     public ICommand SingCommand { get; }
@@ -216,6 +235,7 @@ public sealed class SongSelectViewModel : ReactiveObject
     private void Sing(SongCardViewModel? card)
     {
         if (card is null || !card.Entry.IsPlayable) return;
+        _preview.Stop();
         _sing.Start(card.Entry);
         _navigation.NavigateTo("Sing");
     }
