@@ -42,7 +42,7 @@ public sealed record AudioFingerprint(string Chromaprint, string? AcoustId = nul
 
 /// <param name="Bpm">UltraStar BPM: one beat = 60000 / (Bpm * 4) ms. A timing resolution, not the song's tempo.</param>
 /// <param name="GapMs">Offset of beat 0 from the start of the audio (UltraStar #GAP).</param>
-/// <param name="VideoGapMs">Video offset relative to the audio; positive = video starts later (UltraStar #VIDEOGAP, in seconds there).</param>
+/// <param name="VideoGapMs">UltraStar #VIDEOGAP in ms (seconds in song.txt): video position = audio position + gap, so positive skips the start of the video.</param>
 /// <param name="VideoStructureValid">The 3-window video correlation agreed; false means show cover art instead of video.</param>
 public sealed record TimingDescriptor(double Bpm, int GapMs, int VideoGapMs, bool VideoStructureValid);
 

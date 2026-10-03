@@ -59,7 +59,7 @@ public sealed record UltraStarSong
     public string? InstrumentalFile { get; init; }
     public string? VideoFile { get; init; }
 
-    /// <summary>Written as #VIDEOGAP in seconds.</summary>
+    /// <summary>Written as #VIDEOGAP in seconds. Video position = audio position + gap.</summary>
     public int VideoGapMs { get; init; }
 
     public string? CoverFile { get; init; }
