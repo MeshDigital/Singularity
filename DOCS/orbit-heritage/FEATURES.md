@@ -270,4 +270,4 @@ ORBIT-Pure combines Soulseek network integration with professional audio analysi
 ---
 
 *ORBIT-Pure represents the evolution from basic file sharing to professional music workstation, combining network efficiency with audio integrity verification and comprehensive analysis tools.*</content>
-<parameter name="filePath">c:\Users\quint\OneDrive\Documenten\GitHub\ORBIT-Pure\FEATURES.md
+<parameter name="filePath">FEATURES.md

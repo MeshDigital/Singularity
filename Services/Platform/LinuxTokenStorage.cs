@@ -28,7 +28,7 @@ public class LinuxTokenStorage : ISecureTokenStorage
             configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
         }
         
-        var appFolder = Path.Combine(configPath, "qmusicslsk");
+        var appFolder = Path.Combine(configPath, "Singularity");
         Directory.CreateDirectory(appFolder);
         
         _tokenFilePath = Path.Combine(appFolder, "spotify_token.enc");

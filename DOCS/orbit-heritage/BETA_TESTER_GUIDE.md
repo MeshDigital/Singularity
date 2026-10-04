@@ -231,4 +231,4 @@ Your participation in the ORBIT-Pure beta program is invaluable. By testing thes
 **Remember**: The goal is to create a "Pure" experience - high-fidelity audio, rock-solid stability, and professional-grade tools for music professionals.
 
 Happy testing! 🎵✨</content>
-<parameter name="filePath">c:\Users\quint\OneDrive\Documenten\GitHub\ORBIT-Pure\BETA_TESTER_GUIDE.md
+<parameter name="filePath">BETA_TESTER_GUIDE.md

@@ -46,7 +46,7 @@ The following memory and planning documents have been created to organize develo
 
 ---
 
-#### [MODIFY] [WorkstationPage.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/WorkstationPage.axaml)
+#### [MODIFY] [WorkstationPage.axaml](Views/Avalonia/WorkstationPage.axaml)
 - **Mixer Center Removal**: Delete `<wsViews:MixerCenter Grid.Row="3" Grid.Column="0"/>` to reclaim vertical timeline space.
 - **Grid Layout Restructuring**:
   - In `CockpitGrid`, the timeline row container (`Grid.Row="1"`) contains a nested grid.
@@ -72,17 +72,17 @@ The following memory and planning documents have been created to organize develo
 
 ---
 
-#### [DELETE] [MixerCenter.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/Workstation/MixerCenter.axaml)
+#### [DELETE] [MixerCenter.axaml](Views/Avalonia/Workstation/MixerCenter.axaml)
 - Delete the file entirely. All duplicate transport/quantize/metronome controls have already been relocated to the global header, and the crossfader is relocated to the Flow Inspector.
 
 ---
 
-#### [DELETE] [MixerCenter.axaml.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/Workstation/MixerCenter.axaml.cs)
+#### [DELETE] [MixerCenter.axaml.cs](Views/Avalonia/Workstation/MixerCenter.axaml.cs)
 - Delete the corresponding code-behind file.
 
 ---
 
-#### [MODIFY] [WorkstationTimelineLayoutGuardTests.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Tests/SLSKDONET.Tests/Architecture/WorkstationTimelineLayoutGuardTests.cs)
+#### [MODIFY] [WorkstationTimelineLayoutGuardTests.cs](Tests/SLSKDONET.Tests/Architecture/WorkstationTimelineLayoutGuardTests.cs)
 - Add a new helper `ReadWorkstationDeckRowXaml()` to read the deck row XAML content.
 - Add `WorkstationDeckRow_IsUltraThinAndStripped` to assert that `WorkstationDeckRow.axaml` enforces the `Height="64"` height constraint, uses `ColumnDefinitions="200,*"`, and does not contain `Slider`, `Expander`, or buttons of classes `hotcue`/`stem-toggle`/`phrase-chip` in its main layout body.
 - Add `WorkstationPage_TrackInspectorContainsSelectedDeckBindings` to assert that the right-hand inspector contains correct bindings pointing to `FocusedDeck` properties.

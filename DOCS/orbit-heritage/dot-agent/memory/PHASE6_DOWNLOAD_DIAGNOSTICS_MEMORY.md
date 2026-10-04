@@ -10,9 +10,9 @@
 - 2026-06-15: Bound `OpenAuditLogCommand` to the new "Terminal: View Search Audit" context menu options in `TrackListView.axaml` and `DownloadsPage.axaml`.
 
 ## Associated Documents
-- [Phase 5 Batch Actions Memory](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/.agent/memory/PHASE5_BATCH_ACTIONS_MEMORY.md)
-- [Phase 5 Batch Actions Testing Plan](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/.agent/memory/PHASE5_BATCH_ACTIONS_TESTING_PLAN.md)
-- [Phase 6 Download Diagnostics Implementation Plan](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/.agent/memory/PHASE6_DOWNLOAD_DIAGNOSTICS_IMPLEMENTATION_PLAN.md)
-- [Combined Phase 5 & 6 Walkthrough](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/.agent/memory/PHASE5_PHASE6_WALKTHROUGH.md)
-- [Combined Phase 5 & 6 Task List](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/.agent/memory/PHASE5_PHASE6_TASK.md)
-- [Phase 7 Queue Velocity & Heartbeat Fix Memory](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/.agent/memory/PHASE7_QUEUE_VELOCITY_MEMORY.md)
+- [Phase 5 Batch Actions Memory](.agent/memory/PHASE5_BATCH_ACTIONS_MEMORY.md)
+- [Phase 5 Batch Actions Testing Plan](.agent/memory/PHASE5_BATCH_ACTIONS_TESTING_PLAN.md)
+- [Phase 6 Download Diagnostics Implementation Plan](.agent/memory/PHASE6_DOWNLOAD_DIAGNOSTICS_IMPLEMENTATION_PLAN.md)
+- [Combined Phase 5 & 6 Walkthrough](.agent/memory/PHASE5_PHASE6_WALKTHROUGH.md)
+- [Combined Phase 5 & 6 Task List](.agent/memory/PHASE5_PHASE6_TASK.md)
+- [Phase 7 Queue Velocity & Heartbeat Fix Memory](.agent/memory/PHASE7_QUEUE_VELOCITY_MEMORY.md)

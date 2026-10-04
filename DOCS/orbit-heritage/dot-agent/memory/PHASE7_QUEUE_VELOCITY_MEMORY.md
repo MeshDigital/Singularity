@@ -65,4 +65,4 @@ When `ctx.State == PlaylistTrackState.Queued`:
 
 ## Related Previous Memory Files
 - [Phase 6 Download Diagnostics Memory](.agent/memory/PHASE6_DOWNLOAD_DIAGNOSTICS_MEMORY.md)
-- [P2P Network Improvements Plan (Artifact)](file:///C:/Users/quint/.gemini/antigravity/brain/370a23dd-12fd-4dd2-9e6b-5a3ebbb65ea6/p2p_network_improvements.md)
+- P2P Network Improvements Plan (Artifact) (private notes, not in the repository)

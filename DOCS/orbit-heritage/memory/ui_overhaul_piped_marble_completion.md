@@ -4,7 +4,7 @@
 >
 > Last reviewed: 2026-06-16
 >
-> Plan source: `c:\Users\quint\.claude\plans\investigate-the-orbit-workstation-piped-marble.md`
+> Plan source: a private planning note
 >
 > See also: [workstation_overhaul_completed_work.md](workstation_overhaul_completed_work.md), [workstation_flow_intelligence_A10.md](workstation_flow_intelligence_A10.md)
 

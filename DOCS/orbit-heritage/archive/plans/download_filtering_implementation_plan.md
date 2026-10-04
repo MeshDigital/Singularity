@@ -41,25 +41,25 @@ graph TD
 ### Slice 12: Waveform Rendering & Blob Unpacking
 * **Goal**: Fix analysis waveform visualizer.
 * **Proposed Changes**:
-  - **[MODIFY] [LibraryService.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/LibraryService.cs)**: Update mapping from `AudioFeatures` entities to unpack the 3000-byte packed blob (`entity.AudioFeatures.WaveformBlob`) into 1000-byte Low, Mid, and High band arrays. Synthesize visual `PeakData` and `RmsData` using RMS formulas.
-  - **[MODIFY] [AnalysisPageViewModel.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/ViewModels/AnalysisPageViewModel.cs)**: Remove the `readonly` keyword from waveform and metadata backing fields in `AnalysisTrackItem`. Add an `UpdateFrom(AnalysisTrackItem source)` method to update all fields in-place and call `RaisePropertyChanged(string.Empty)`.
-  - **[MODIFY] [AnalysisPage.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/AnalysisPage.axaml)**: Bind the visual `WaveformControl` using `WaveformData="{Binding WaveformData}"` instead of binding bands individually.
+  - **[MODIFY] [LibraryService.cs](Services/LibraryService.cs)**: Update mapping from `AudioFeatures` entities to unpack the 3000-byte packed blob (`entity.AudioFeatures.WaveformBlob`) into 1000-byte Low, Mid, and High band arrays. Synthesize visual `PeakData` and `RmsData` using RMS formulas.
+  - **[MODIFY] [AnalysisPageViewModel.cs](ViewModels/AnalysisPageViewModel.cs)**: Remove the `readonly` keyword from waveform and metadata backing fields in `AnalysisTrackItem`. Add an `UpdateFrom(AnalysisTrackItem source)` method to update all fields in-place and call `RaisePropertyChanged(string.Empty)`.
+  - **[MODIFY] [AnalysisPage.axaml](Views/Avalonia/AnalysisPage.axaml)**: Bind the visual `WaveformControl` using `WaveformData="{Binding WaveformData}"` instead of binding bands individually.
 
 ### Slice 13: Analysis Status Bar & Event Pipelines
 * **Goal**: Replace simulated delay logic with real background queue events.
 * **Proposed Changes**:
-  - **[MODIFY] [AnalysisQueueService.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/AnalysisQueueService.cs)**: Instantiate `Progress<(int Percent, string Step)>` inside `DispatchAnalysisJobAsync` and pass progress callbacks to the compiler. Ensure `_queuedCount` is decremented in a `finally` block to fix stuck status readouts.
-  - **[MODIFY] [AnalysisPageViewModel.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/ViewModels/AnalysisPageViewModel.cs)**: Expose real subscriptions to `TrackAnalysisCompletedEvent` and `TrackAnalysisFailedEvent` instead of simulating delays. Update selection rows in-place on completion.
+  - **[MODIFY] [AnalysisQueueService.cs](Services/AnalysisQueueService.cs)**: Instantiate `Progress<(int Percent, string Step)>` inside `DispatchAnalysisJobAsync` and pass progress callbacks to the compiler. Ensure `_queuedCount` is decremented in a `finally` block to fix stuck status readouts.
+  - **[MODIFY] [AnalysisPageViewModel.cs](ViewModels/AnalysisPageViewModel.cs)**: Expose real subscriptions to `TrackAnalysisCompletedEvent` and `TrackAnalysisFailedEvent` instead of simulating delays. Update selection rows in-place on completion.
 
 ### Slice 14: Automix Optimizer Integration
 * **Goal**: Integrate the external `PlaylistOptimizer` into the Automix creator.
 * **Proposed Changes**:
-  - **[MODIFY] [AnalysisPageViewModel.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/ViewModels/AnalysisPageViewModel.cs)**: Inject `PlaylistOptimizer?` into constructor. Convert the `CreateAutomixPlaylist` command to run asynchronously, parsing UI constraints (MatchKey, energy weights) to the optimizer. Sort the track collection based on optimizer sequence.
+  - **[MODIFY] [AnalysisPageViewModel.cs](ViewModels/AnalysisPageViewModel.cs)**: Inject `PlaylistOptimizer?` into constructor. Convert the `CreateAutomixPlaylist` command to run asynchronously, parsing UI constraints (MatchKey, energy weights) to the optimizer. Sort the track collection based on optimizer sequence.
 
 ### Slice 15: Theme Alignment & Token Cleanups
 * **Goal**: Align the general UI with workstation themes and clean up deprecated variables.
 * **Proposed Changes**:
-  - **[MODIFY] [AnalysisPage.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/AnalysisPage.axaml)**: Replace all hardcoded green hex colors (`#1DB954`) with DynamicResource references to unified cockpit theme tokens (`BrushAccent`, `BrushAccentSubtle`, `BrushBg1`).
+  - **[MODIFY] [AnalysisPage.axaml](Views/Avalonia/AnalysisPage.axaml)**: Replace all hardcoded green hex colors (`#1DB954`) with DynamicResource references to unified cockpit theme tokens (`BrushAccent`, `BrushAccentSubtle`, `BrushBg1`).
 
 ---
 
@@ -68,31 +68,31 @@ graph TD
 ### Slice 16: Strict Fallback Gate & N-Format Token ORing
 * **Goal**: Prevent soft fallback bypasses and search protocol query errors.
 * **Proposed Changes**:
-  - **[MODIFY] [AppConfig.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Configuration/AppConfig.cs)**: Add `bool AutoDownloadAllowFuzzyFallback = false`.
-  - **[MODIFY] [SettingsViewModel.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/ViewModels/SettingsViewModel.cs)** & **[SettingsPage.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/SettingsPage.axaml)** Expose and bind the toggle switch.
-  - **[MODIFY] [DownloadManager.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/DownloadManager.cs)**: Refactor `ResolveDiscoveryWithStrictGateAsync` to return `null` results directly if strict search fails, unless `AutoDownloadAllowFuzzyFallback` is explicitly enabled.
-  - **[MODIFY] [SoulseekSearchHelper.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/AutoDownload/SoulseekSearchHelper.cs)**: Update `BuildFilterTokens` to only append `ext:FORMAT` when exactly one format is allowed.
+  - **[MODIFY] [AppConfig.cs](Configuration/AppConfig.cs)**: Add `bool AutoDownloadAllowFuzzyFallback = false`.
+  - **[MODIFY] [SettingsViewModel.cs](ViewModels/SettingsViewModel.cs)** & **[SettingsPage.axaml](Views/Avalonia/SettingsPage.axaml)** Expose and bind the toggle switch.
+  - **[MODIFY] [DownloadManager.cs](Services/DownloadManager.cs)**: Refactor `ResolveDiscoveryWithStrictGateAsync` to return `null` results directly if strict search fails, unless `AutoDownloadAllowFuzzyFallback` is explicitly enabled.
+  - **[MODIFY] [SoulseekSearchHelper.cs](Services/AutoDownload/SoulseekSearchHelper.cs)**: Update `BuildFilterTokens` to only append `ext:FORMAT` when exactly one format is allowed.
 
 ### Slice 17: Track Duration Proximity Filters & Scoring
 * **Goal**: Block DJ sets and wrong edits by enforcing duration tolerance gates.
 * **Proposed Changes**:
-  - **[MODIFY] [AppConfig.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Configuration/AppConfig.cs)**: Add `int AutoDownloadDurationToleranceSeconds = 3`.
-  - **[MODIFY] [SettingsViewModel.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/ViewModels/SettingsViewModel.cs)** & **[SettingsPage.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/SettingsPage.axaml)**: Bind the new numeric up-down controls.
-  - **[MODIFY] [SoulseekSearchHelper.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/AutoDownload/SoulseekSearchHelper.cs)**: In `FilterCandidates`, evaluate `targetTrack.CanonicalDuration`. Reject candidates deviating by more than the configured tolerance seconds.
-  - **[MODIFY] [MatchScorer.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/AutoDownload/MatchScorer.cs)**: Re-weight scoring parameters to allocate 20% to duration matching, calculating proximity on a sliding scale.
+  - **[MODIFY] [AppConfig.cs](Configuration/AppConfig.cs)**: Add `int AutoDownloadDurationToleranceSeconds = 3`.
+  - **[MODIFY] [SettingsViewModel.cs](ViewModels/SettingsViewModel.cs)** & **[SettingsPage.axaml](Views/Avalonia/SettingsPage.axaml)**: Bind the new numeric up-down controls.
+  - **[MODIFY] [SoulseekSearchHelper.cs](Services/AutoDownload/SoulseekSearchHelper.cs)**: In `FilterCandidates`, evaluate `targetTrack.CanonicalDuration`. Reject candidates deviating by more than the configured tolerance seconds.
+  - **[MODIFY] [MatchScorer.cs](Services/AutoDownload/MatchScorer.cs)**: Re-weight scoring parameters to allocate 20% to duration matching, calculating proximity on a sliding scale.
 
 ### Slice 18: MatchScorer Format/Bitrate & Fake-FLAC Hard-Fails
 * **Goal**: Tighten scoring constraints and reject invalid formats or upscaled files.
 * **Proposed Changes**:
-  - **[MODIFY] [MatchScorer.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/AutoDownload/MatchScorer.cs)**: Update `ScoreFormat` to return `0.0` for any unallowed formats. Update `ScoreBitrate` to flag FLACs under 400kbps and trigger a hard fail (returning `0.0` for the overall candidate score).
-  - **[MODIFY] [AppConfig.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Configuration/AppConfig.cs)**: Add `int AutoDownloadMinMatchScore = 75`.
-  - **[MODIFY] [SettingsViewModel.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/ViewModels/SettingsViewModel.cs)** & **[SettingsPage.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/SettingsPage.axaml)** Expose the minimum score threshold.
-  - **[MODIFY] [AutoSearchService.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/AutoDownload/AutoSearchService.cs)**: In `SelectBestCandidateAsync`, reject candidates scoring below `AutoDownloadMinMatchScore` (returning `null`).
+  - **[MODIFY] [MatchScorer.cs](Services/AutoDownload/MatchScorer.cs)**: Update `ScoreFormat` to return `0.0` for any unallowed formats. Update `ScoreBitrate` to flag FLACs under 400kbps and trigger a hard fail (returning `0.0` for the overall candidate score).
+  - **[MODIFY] [AppConfig.cs](Configuration/AppConfig.cs)**: Add `int AutoDownloadMinMatchScore = 75`.
+  - **[MODIFY] [SettingsViewModel.cs](ViewModels/SettingsViewModel.cs)** & **[SettingsPage.axaml](Views/Avalonia/SettingsPage.axaml)** Expose the minimum score threshold.
+  - **[MODIFY] [AutoSearchService.cs](Services/AutoDownload/AutoSearchService.cs)**: In `SelectBestCandidateAsync`, reject candidates scoring below `AutoDownloadMinMatchScore` (returning `null`).
 
 ### Slice 19: PrefetchVerifier Integration & Verification States
 * **Goal**: Wire the post-download verifier to run Essentia and check staging sizes.
 * **Proposed Changes**:
-  - **[MODIFY] [DownloadManager.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/DownloadManager.cs)**: Inject `PrefetchVerifier` into the constructor. In the download completion rename block, invoke `VerifyDownloadAsync`. If verification fails, delete the file and transition the track to `Failed` with `DownloadFailureReason.FileVerificationFailed`.
+  - **[MODIFY] [DownloadManager.cs](Services/DownloadManager.cs)**: Inject `PrefetchVerifier` into the constructor. In the download completion rename block, invoke `VerifyDownloadAsync`. If verification fails, delete the file and transition the track to `Failed` with `DownloadFailureReason.FileVerificationFailed`.
 
 ---
 

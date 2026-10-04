@@ -24,12 +24,12 @@ After deep-diving into the download orchestration and safety filters, the follow
 
 ### Component 1: Safety Filter and Bitrate Inference Adjustments
 
-#### [MODIFY] [SoulseekAdapter.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/SoulseekAdapter.cs)
+#### [MODIFY] [SoulseekAdapter.cs](Services/SoulseekAdapter.cs)
 - In `ParseTrackFromFile`, detect if the bitrate attribute is unreported/zero. If so, and if `length > 0` and `file.Size > 0`, calculate and assign the inferred bitrate:
   `bitrate = (int)((file.Size * 8) / (length * 1000));`
 - This ensures all downstream consumers (UI, ranking scorer, safety filters) see and use a realistic bitrate instead of `0 kbps`.
 
-#### [MODIFY] [SafetyFilterService.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/SafetyFilterService.cs)
+#### [MODIFY] [SafetyFilterService.cs](Services/SafetyFilterService.cs)
 - Update `EvaluateCandidate` signature:
   `public SafetyCheckResult EvaluateCandidate(Track candidate, string query, int? targetDuration = null, bool allowLossy = false)`
 - Adjust extension validation:
@@ -40,13 +40,13 @@ After deep-diving into the download orchestration and safety filters, the follow
 - Update `EvaluateSafety` signature to match:
   `public void EvaluateSafety(Track track, string query, bool allowLossy = false)`
 
-#### [MODIFY] [SearchOrchestrationService.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/SearchOrchestrationService.cs)
+#### [MODIFY] [SearchOrchestrationService.cs](Services/SearchOrchestrationService.cs)
 - In `StreamAndRankResultsAsync`, compute `allowLossy`:
   `var allowLossy = maxBitrate > 0 || formatFilter.Contains("mp3", StringComparer.OrdinalIgnoreCase);`
 - Pass `allowLossy` to `EvaluateSafety`:
   `_safetyFilter.EvaluateSafety(track, normalizedQuery, allowLossy);`
 
-#### [MODIFY] [DownloadDiscoveryService.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/DownloadDiscoveryService.cs)
+#### [MODIFY] [DownloadDiscoveryService.cs](Services/DownloadDiscoveryService.cs)
 - In `PerformSearchTierAsync`, pass `forceMp3` as the `allowLossy` parameter to `EvaluateCandidate`:
   `var safety = _safetyFilter.EvaluateCandidate(searchTrack, query, targetDurationSeconds, allowLossy: forceMp3);`
 
@@ -54,7 +54,7 @@ After deep-diving into the download orchestration and safety filters, the follow
 
 ### Component 2: High-Performance Track Audit Logger and ViewModel
 
-#### [NEW] [TrackAuditLogger.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/Diagnostics/TrackAuditLogger.cs)
+#### [NEW] [TrackAuditLogger.cs](Services/Diagnostics/TrackAuditLogger.cs)
 - Introduce a singleton `TrackAuditLogger` implementing `ITrackAuditLogger` that:
   - Uses `System.Threading.Channels.Channel<AuditLogEntry>` for non-blocking I/O to avoid UI lockups.
   - Implements a continuous background reader that flushes logs to disk asynchronously.
@@ -62,21 +62,21 @@ After deep-diving into the download orchestration and safety filters, the follow
   - Auto-subscribes to `TrackDetailedStatusEvent` on the `IEventBus` to capture all UI Live Console messages.
   - Exposes `LogSearchCandidate(hash, peer, bitrate, format, action, reason)` to cleanly format and log evaluations.
 
-#### [NEW] [BlackBoxTerminalViewModel.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/ViewModels/Diagnostics/BlackBoxTerminalViewModel.cs)
+#### [NEW] [BlackBoxTerminalViewModel.cs](ViewModels/Diagnostics/BlackBoxTerminalViewModel.cs)
 - Introduce `BlackBoxTerminalViewModel` that:
   - Represents the backing context for the `BlackBoxTerminal` UserControl.
   - Launches a background streaming file reader that tails the corresponding track log file in real-time.
   - Parses log lines into structured `TerminalLogEntry` items (`Timestamp`, `Stage`, `Level`, `Message`).
   - Implements `IDisposable` to cleanly cancel the tailing task when closed.
 
-#### [NEW] [ForensicLevelToColorConverter.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/Converters/ForensicLevelToColorConverter.cs)
+#### [NEW] [ForensicLevelToColorConverter.cs](Views/Avalonia/Converters/ForensicLevelToColorConverter.cs)
 - Value converter that maps log levels to Hex Brushes (e.g. `ERROR` -> Red, `WARN` -> Yellow, `INFO` -> Teal/Mint).
 
-#### [MODIFY] [App.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/App.axaml)
+#### [MODIFY] [App.axaml](App.axaml)
 - Register `ForensicLevelToColorConverter` resource:
   `<converters:ForensicLevelToColorConverter x:Key="ForensicLevelToColorConverter"/>`
 
-#### [MODIFY] [App.axaml.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/App.axaml.cs)
+#### [MODIFY] [App.axaml.cs](App.axaml.cs)
 - Register the new logger:
   `services.AddSingleton<ITrackAuditLogger, TrackAuditLogger>();`
 
@@ -84,19 +84,19 @@ After deep-diving into the download orchestration and safety filters, the follow
 
 ### Component 3: Integration of Logging in Orchestration
 
-#### [MODIFY] [DownloadManager.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/DownloadManager.cs)
+#### [MODIFY] [DownloadManager.cs](Services/DownloadManager.cs)
 - Inject `ITrackAuditLogger`.
 - Log high-level transitions:
   - Orchestration start/stop, library reuse, validation failures, transfer starts, progress/stall events, cancellations, final success/failure dispositions.
 
-#### [MODIFY] [DownloadDiscoveryService.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/DownloadDiscoveryService.cs)
+#### [MODIFY] [DownloadDiscoveryService.cs](Services/DownloadDiscoveryService.cs)
 - Inject `ITrackAuditLogger`.
 - Log search tier details:
   - Query dispatched, variations sanitized, and lane constraints.
   - Candidates found: peer, filename, format, bitrate, sample rate, queue size, match/fit/reliability/final scores.
   - Log safety check details and rejections with `LogSearchCandidate`.
 
-#### [MODIFY] [PostDownloadSpectralScanService.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/PostDownloadSpectralScanService.cs)
+#### [MODIFY] [PostDownloadSpectralScanService.cs](Services/PostDownloadSpectralScanService.cs)
 - Inject `ITrackAuditLogger`.
 - Log the post-download spectral check verdict, cutoff frequency, Rolloff, DBFS, and transcode status.
 
@@ -104,15 +104,15 @@ After deep-diving into the download orchestration and safety filters, the follow
 
 ### Component 4: Dynamic UI Right Panel Integration
 
-#### [MODIFY] [TrackOperationsViewModel.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/ViewModels/Library/TrackOperationsViewModel.cs)
+#### [MODIFY] [TrackOperationsViewModel.cs](ViewModels/Library/TrackOperationsViewModel.cs)
 - Expose `OpenAuditLogCommand`.
 - Send an `OpenInspectorEvent` carrying a new instance of `BlackBoxTerminalViewModel` with the track's log file path:
   `MessageBus.Current.SendMessage(OpenInspectorEvent.Create(new BlackBoxTerminalViewModel(...), "Library.TrackSelection.AuditLog"));`
 
-#### [MODIFY] [UnifiedTrackViewModel.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/ViewModels/Downloads/UnifiedTrackViewModel.cs)
+#### [MODIFY] [UnifiedTrackViewModel.cs](ViewModels/Downloads/UnifiedTrackViewModel.cs)
 - Expose `OpenAuditLogCommand` that broadcasts `OpenInspectorEvent` with the `BlackBoxTerminalViewModel`.
 
-#### [MODIFY] [MainWindow.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/MainWindow.axaml)
+#### [MODIFY] [MainWindow.axaml](Views/Avalonia/MainWindow.axaml)
 - Register `BlackBoxTerminalViewModel` DataTemplate inside the Inspector `ContentControl` pane:
   ```xml
   <DataTemplate DataType="vmCore:BlackBoxTerminalViewModel">
@@ -120,14 +120,14 @@ After deep-diving into the download orchestration and safety filters, the follow
   </DataTemplate>
   ```
 
-#### [MODIFY] [OpenInspectorEvent.cs](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Events/OpenInspectorEvent.cs)
+#### [MODIFY] [OpenInspectorEvent.cs](Events/OpenInspectorEvent.cs)
 - Resolve presentation defaults for `"Library.TrackSelection.AuditLog"` to `("SEARCH AUDIT LOG", "📝")`.
 
-#### [MODIFY] [TrackListView.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/TrackListView.axaml)
+#### [MODIFY] [TrackListView.axaml](Views/Avalonia/TrackListView.axaml)
 - Add "Terminal: View Search Audit" to the `VirtualGrid` right-click context menu:
   `<MenuItem Header="Terminal: View Search Audit" Command="{Binding Operations.OpenAuditLogCommand}" Icon="{StaticResource ConsoleIcon}" />`
 
-#### [MODIFY] [DownloadsPage.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/DownloadsPage.axaml)
+#### [MODIFY] [DownloadsPage.axaml](Views/Avalonia/DownloadsPage.axaml)
 - Add "Terminal: View Search Audit" to the downloads list items context menu:
   `<MenuItem Header="Terminal: View Search Audit" Command="{Binding OpenAuditLogCommand}" Icon="{StaticResource ConsoleIcon}" />`
 

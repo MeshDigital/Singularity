@@ -25,7 +25,7 @@ We analyzed the ViewModels and found that while some operations are fully functi
 ### 1. Play & Add to Queue (Audio Integration)
 * **Goal**: Verify that selection plays immediately or appends to the queue without stuttering.
 * **Test Case**:
-  1. Select 3 tracks in [TrackListView.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/TrackListView.axaml).
+  1. Select 3 tracks in [TrackListView.axaml](Views/Avalonia/TrackListView.axaml).
   2. Click **Play**: Verify the first track plays immediately in the workstation deck or main player, and the active queue has exactly the remaining 2 tracks.
   3. Select 2 different tracks, click **Add to Queue**: Verify they are appended to the tail of the play queue without interrupting the current playback.
 
@@ -75,7 +75,7 @@ To achieve **100% full functionality**, we propose implementing the dialog syste
 
 ## 🎨 UI & Readability Refinements (Overlapping Text Fix)
 
-Your screenshots reveal that track list text from the row underneath the FAB is bleeding through, making the buttons difficult to read. We propose updating the floating border style in [LibraryPage.axaml](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Views/Avalonia/LibraryPage.axaml#L327-L332):
+Your screenshots reveal that track list text from the row underneath the FAB is bleeding through, making the buttons difficult to read. We propose updating the floating border style in [LibraryPage.axaml](Views/Avalonia/LibraryPage.axaml#L327-L332):
 
 1. **Increase Background Opacity**:
    Change background from `#E01E1E2E` (semi-transparent) to a more opaque or solid dark theme brush `#F31E1E2E` or `#FF1E1E2E`.

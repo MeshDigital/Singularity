@@ -202,7 +202,7 @@ public class SearchResultMatcherTests
             BitDepth = 24,
             Format = "flac",
             Filename = "Artist - Title.flac",
-            Directory = @"Users\Quint\Downloads\New Folder",
+            Directory = @"Users\Alex\Downloads\New Folder",
             PathSegments = new List<string> { "Downloads", "New Folder" }
         };
 

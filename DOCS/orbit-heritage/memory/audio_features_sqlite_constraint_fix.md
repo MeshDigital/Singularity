@@ -5,9 +5,9 @@ Status: Completed
 
 ## Executive Summary
 
-During track re-analysis, a SQLite error (`SQLite Error 19: 'NOT NULL constraint failed: PlaylistTracks.TrackUniqueHash'`) was encountered inside [SaveAudioFeaturesAsync](file:///C:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/DatabaseService.cs#L668) when saving analyzed audio features. 
+During track re-analysis, a SQLite error (`SQLite Error 19: 'NOT NULL constraint failed: PlaylistTracks.TrackUniqueHash'`) was encountered inside [SaveAudioFeaturesAsync](Services/DatabaseService.cs#L668) when saving analyzed audio features. 
 
-This error was caused by a delete-and-add pattern in `SaveAudioFeaturesAsync` combined with EF Core's relationship tracking behavior. When the existing `AudioFeaturesEntity` was removed, EF Core's change tracker attempted to nullify the optional relationship link (`TrackUniqueHash`) on any referencing [PlaylistTrackEntity](file:///C:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Database/Entities/TrackEntity.cs#L232) rows. Because `TrackUniqueHash` is configured as a `NOT NULL` column in the database, this nullification triggered a constraint violation during `SaveChangesAsync`.
+This error was caused by a delete-and-add pattern in `SaveAudioFeaturesAsync` combined with EF Core's relationship tracking behavior. When the existing `AudioFeaturesEntity` was removed, EF Core's change tracker attempted to nullify the optional relationship link (`TrackUniqueHash`) on any referencing [PlaylistTrackEntity](Database/Entities/TrackEntity.cs#L232) rows. Because `TrackUniqueHash` is configured as a `NOT NULL` column in the database, this nullification triggered a constraint violation during `SaveChangesAsync`.
 
 Both the save method and the EF Core model configuration were updated to resolve this.
 
@@ -17,13 +17,13 @@ Both the save method and the EF Core model configuration were updated to resolve
 
 ### 1. In-Place Updates in Database Service
 * **Modify Save Pattern**:
-  - Updated [SaveAudioFeaturesAsync](file:///C:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/DatabaseService.cs#L668) in [DatabaseService.cs](file:///C:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/DatabaseService.cs).
-  - Instead of removing the existing [AudioFeaturesEntity](file:///C:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Data/Entities/AudioFeaturesEntity.cs) and adding a new instance, it now updates the existing record in-place via `context.Entry(existing).CurrentValues.SetValues(features)` while preserving the database identity (`Guid Id`).
+  - Updated [SaveAudioFeaturesAsync](Services/DatabaseService.cs#L668) in [DatabaseService.cs](Services/DatabaseService.cs).
+  - Instead of removing the existing [AudioFeaturesEntity](Data/Entities/AudioFeaturesEntity.cs) and adding a new instance, it now updates the existing record in-place via `context.Entry(existing).CurrentValues.SetValues(features)` while preserving the database identity (`Guid Id`).
   - This matches the update pattern already successfully used in `UpdateAudioFeaturesAsync` and prevents EF Core's change tracker from flagging the related records as orphaned or modified.
 
 ### 2. Fluent API Configuration Hardening
 * **Delete Behavior Configuration**:
-  - Updated [AppDbContext.cs](file:///C:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Data/AppDbContext.cs).
+  - Updated [AppDbContext.cs](Data/AppDbContext.cs).
   - Explicitly configured the relationship between `PlaylistTrackEntity` and `AudioFeaturesEntity` to use `DeleteBehavior.NoAction`:
     ```csharp
     modelBuilder.Entity<PlaylistTrackEntity>()

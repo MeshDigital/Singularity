@@ -1,4 +1,4 @@
-# QMUSICSLSK - Upgrade Roadmap
+# ORBIT - Upgrade Roadmap
 
 **Spotify-Like Music Player - Feature Implementation Plan**
 
@@ -952,7 +952,7 @@
 
 **What to Build**:
 - [ ] Download and cache album art from Spotify URLs
-- [ ] Store images in `%APPDATA%/QMUSICSLSK/artwork/`
+- [ ] Store images in `%APPDATA%/ORBIT/artwork/`
 - [ ] Image cache service
 - [ ] Placeholder image for missing artwork
 

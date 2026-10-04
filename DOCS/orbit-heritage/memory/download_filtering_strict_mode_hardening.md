@@ -83,7 +83,7 @@ All configuration wiring in `SettingsViewModel.cs` correctly reads from and writ
 Our end-to-end audit revealed several critical loopholes, logic bugs, and structural flaws in the current strict-mode implementation:
 
 ### Flaw A: The "Soft Fallback" Loophole in Strict Mode Routing
-* **Code Location**: `DownloadManager.cs` -> [ResolveDiscoveryWithStrictGateAsync](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/DownloadManager.cs#L2705)
+* **Code Location**: `DownloadManager.cs` -> [ResolveDiscoveryWithStrictGateAsync](Services/DownloadManager.cs#L2705)
 * **Description**: If `strictModeEnabled` is true, the gate invokes `_autoSearchService.FindBestMatchAsync()`. If this strict search returns `null` (no results pass quality, format, or exact filters), the gate immediately falls back to:
   ```csharp
   return await legacyDiscovery();
@@ -91,7 +91,7 @@ Our end-to-end audit revealed several critical loopholes, logic bugs, and struct
 * **Consequence**: The "Strict Mode" becomes soft. If strict mode returns nothing, the app silently falls back to legacy fuzzy search, which has relaxed constraints (e.g. automatically falling back to MP3 formats even if the user wanted strict FLAC/lossless).
 
 ### Flaw B: Multiple `ext:` Search Token ANDing Protocol Bug
-* **Code Location**: `SoulseekSearchHelper.cs` -> [BuildFilterTokens](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/AutoDownload/SoulseekSearchHelper.cs#L139)
+* **Code Location**: `SoulseekSearchHelper.cs` -> [BuildFilterTokens](Services/AutoDownload/SoulseekSearchHelper.cs#L139)
 * **Description**: When multiple formats are allowed, the helper appends all of them as `ext:FORMAT` tokens to the query text (e.g., query becomes `artist title minbitrate:320 mfs:512000 ext:flac ext:wav`).
 * **Consequence**: Since the Soulseek network server treats all terms in the query text as `AND` operands, searching for `ext:flac ext:wav ext:aiff` requests a single file that has all three extensions. This query returns **zero** results from the server.
 * **Correction**: Only append `ext:FORMAT` when exactly **one** extension is allowed. If multiple formats are allowed, do not append `ext:` to the query text; instead, rely on the client-side `fileFilter` in `StreamResultsAsync` which is already properly configured to match any of the allowed formats.
@@ -103,19 +103,19 @@ Our end-to-end audit revealed several critical loopholes, logic bugs, and struct
 * **Correction**: Enforce a duration filter (e.g., candidate duration must be within ±3 seconds of `targetTrack.CanonicalDuration` if it is present) and include duration proximity scoring in `MatchScorer`.
 
 ### Flaw D: scoring Loophole for Invalid Formats
-* **Code Location**: `MatchScorer.cs` -> [ScoreFormat](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/AutoDownload/MatchScorer.cs#L105)
+* **Code Location**: `MatchScorer.cs` -> [ScoreFormat](Services/AutoDownload/MatchScorer.cs#L105)
 * **Description**: If a candidate format is not allowed (and is not MP3), it returns a score of `0.3` instead of `0.0`.
 * **Consequence**: Files with unallowed formats (like `.wma`, `.m4a`, etc.) still get positive formatting points contributing to their final score.
 * **Correction**: Return `0.0` for any unallowed formats.
 
 ### Flaw E: Fake FLAC (Transcode) is Not Rejected Hard
-* **Code Location**: `MatchScorer.cs` -> [ScoreBitrate](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/AutoDownload/MatchScorer.cs#L138)
+* **Code Location**: `MatchScorer.cs` -> [ScoreBitrate](Services/AutoDownload/MatchScorer.cs#L138)
 * **Description**: If a FLAC file has a bitrate under 400kbps, it is identified as a fake FLAC and receives `0.0` for its bitrate score. However, this does not reject the candidate; it only reduces the total score.
 * **Consequence**: A fake FLAC candidate can still score up to `85` points from exactness, format, reliability, and response time, easily passing the acceptance threshold and getting downloaded.
 * **Correction**: Return a special low value (e.g. `0.0` for the entire match score) or trigger a hard rejection for fake FLACs.
 
 ### Flaw F: Missing Score Acceptance Threshold
-* **Code Location**: `AutoSearchService.cs` -> [SelectBestCandidateAsync](file:///c:/Users/quint/OneDrive/Documenten/GitHub/ORBIT-Pure/Services/AutoDownload/AutoSearchService.cs#L334)
+* **Code Location**: `AutoSearchService.cs` -> [SelectBestCandidateAsync](Services/AutoDownload/AutoSearchService.cs#L334)
 * **Description**: Unlike legacy search (which requires score >= 70/100), strict mode has no minimum score threshold. It orders candidates by score and picks the first one, meaning it will happily select and download a candidate even if its score is `10/100`.
 * **Consequence**: Extremely poor matches will still get downloaded automatically.
 * **Correction**: Enforce a minimum score threshold (e.g. 75/100) before selecting a candidate.
