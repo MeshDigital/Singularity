@@ -251,6 +251,17 @@ public sealed class KaraokePackagerTests : IDisposable
     }
 
     [Fact]
+    public async Task LyricsSiteDown_TheSongIsStillMade()
+    {
+        _lyrics.Throw = new HttpRequestException("503 (Service Unavailable)");
+
+        var result = await Packager().BuildAsync(Source(Download()), Output);
+
+        Assert.Null(_analyzer.Last!.Lyrics);
+        Assert.Contains(result.Notes, n => n.Contains("couldn't be reached"));
+    }
+
+    [Fact]
     public async Task NoLyricsOnline_TheWorkerTranscribes()
     {
         _lyrics.Result = null;
@@ -275,8 +286,10 @@ internal sealed class FakeLyrics : ILyricsLookup
 {
     public (string Text, LyricsKind Kind)? Result { get; set; } = ("la la\nla la", LyricsKind.Plain);
 
+    public Exception? Throw { get; set; }
+
     public Task<(string Text, LyricsKind Kind)?> FindAsync(string artist, string title, string? album, int durationMs, CancellationToken ct) =>
-        Task.FromResult(Result);
+        Throw is not null ? Task.FromException<(string Text, LyricsKind Kind)?>(Throw) : Task.FromResult(Result);
 }
 
 internal sealed class FakeAnalyzer : ITrackAnalyzer

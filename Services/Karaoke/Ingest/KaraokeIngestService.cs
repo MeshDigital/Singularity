@@ -323,6 +323,12 @@ public sealed class KaraokeIngestService : IDisposable
         lock (_lock)
         {
             if (!_made.Add(key)) return false;
+            // Remembered until it's made, so a restart picks it up again.
+            if (track.TrackUniqueHash.Length > 0 && !_pending.ContainsKey(track.TrackUniqueHash))
+            {
+                _pending[track.TrackUniqueHash] = new Pending(track.Artist, track.Title, new List<Guid> { track.PlaylistId }, details);
+                Save();
+            }
         }
         EnqueueDownloaded(track, details);
         return true;
@@ -401,9 +407,10 @@ public sealed class KaraokeIngestService : IDisposable
         }
     }
 
+    /// <summary>Made or failed songs leave the saved list (a failure isn't retried at every start).</summary>
     private void ForgetFinished()
     {
-        var ready = Queue.Items.Where(i => i.State == IngestState.Ready).Select(i => i.Key).ToList();
+        var ready = Queue.Items.Where(i => i.State is IngestState.Ready or IngestState.Failed).Select(i => i.Key).ToList();
         lock (_lock)
         {
             if (ready.Count(_pending.Remove) > 0) Save();

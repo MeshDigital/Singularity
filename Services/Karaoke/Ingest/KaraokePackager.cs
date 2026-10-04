@@ -202,8 +202,19 @@ public sealed class KaraokePackager
             {
                 // Lyrics: LRCLIB, or none (then the worker transcribes).
                 progress?.Report(new IngestProgress(IngestStage.FetchingLyrics, 0));
-                var lyrics = await _lyrics.FindAsync(source.Artist, source.Title, source.Album, durationMs, ct);
-                if (lyrics is null) notes.Add("No lyrics found online; the words were transcribed.");
+                (string Text, LyricsKind Kind)? lyrics;
+                try
+                {
+                    lyrics = await _lyrics.FindAsync(source.Artist, source.Title, source.Album, durationMs, ct);
+                    if (lyrics is null) notes.Add("No lyrics found online; the words were transcribed.");
+                }
+                catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+                {
+                    // The lyrics site being down mustn't cost the song: the worker transcribes the words instead.
+                    _logger.LogWarning("Ingest: lyrics lookup failed for {Artist} - {Title}: {Error}", source.Artist, source.Title, ex.Message);
+                    lyrics = null;
+                    notes.Add("The lyrics site couldn't be reached; the words were transcribed.");
+                }
 
                 // The chart: stems (reused when the community attempt made them), alignment and pitch from the worker.
                 progress?.Report(new IngestProgress(IngestStage.GeneratingChart, 0));
