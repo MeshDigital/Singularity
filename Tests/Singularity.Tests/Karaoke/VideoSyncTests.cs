@@ -8,7 +8,7 @@ public class VideoSyncTests
     private const int Rate = 8000;
 
     /// <summary>A minute-plus of "music": irregular percussive hits over noise, deterministic.</summary>
-    private static float[] Music(int seconds, int seed = 3)
+    internal static float[] Music(int seconds, int seed = 3)
     {
         var rng = new Random(seed);
         var x = new float[seconds * Rate];
@@ -26,7 +26,7 @@ public class VideoSyncTests
     }
 
     /// <summary>The video's soundtrack: the master shifted by <paramref name="gapMs"/> (video = audio + gap), a bit quieter, with its own noise.</summary>
-    private static float[] Video(float[] master, int gapMs, int seed = 9)
+    internal static float[] Video(float[] master, int gapMs, int seed = 9)
     {
         var rng = new Random(seed);
         int shift = gapMs * Rate / 1000;

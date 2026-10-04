@@ -38,7 +38,7 @@ public static class SongScanner
     public static SongScanResult Scan(IEnumerable<string> roots, CancellationToken ct = default)
     {
         var txts = roots.Where(Directory.Exists)
-            .SelectMany(r => Directory.EnumerateFiles(r, "*.txt", SearchOption.AllDirectories))
+            .SelectMany(r => Directory.EnumerateFiles(r, "*.txt", SearchOption.AllDirectories).Where(t => !InHiddenFolder(r, t)))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -62,6 +62,15 @@ public static class SongScanner
                  .ThenBy(s => s.TxtPath, StringComparer.OrdinalIgnoreCase).ToList(),
             failures.OrderBy(f => f.TxtPath, StringComparer.OrdinalIgnoreCase).ToList());
     }
+
+    /// <summary>
+    /// Folders whose name starts with a dot are skipped: song import assembles a new song in
+    /// "{root}\.incoming\..." before moving it into place, and it mustn't show up half-built.
+    /// </summary>
+    private static bool InHiddenFolder(string root, string txt) =>
+        Path.GetRelativePath(root, Path.GetDirectoryName(txt)!)
+            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Any(part => part.Length > 1 && part[0] == '.' && part != "..");
 
     private static SongEntry Resolve(string txt, UltraStarSong song)
     {

@@ -39,6 +39,19 @@ public sealed class SongScannerTests : IDisposable
     }
 
     [Fact]
+    public void HiddenFolders_AreSkipped()
+    {
+        Folder("a", Txt("Abba", "First"), "song.mp3");
+        var hidden = Directory.CreateDirectory(Path.Combine(_root.FullName, ".incoming", "x")).FullName;
+        File.WriteAllText(Path.Combine(hidden, "song.txt"), Txt("Half", "Built"));
+        File.WriteAllBytes(Path.Combine(hidden, "song.mp3"), new byte[] { 1 });
+
+        var result = SongScanner.Scan(new[] { _root.FullName });
+
+        Assert.Equal(new[] { "Abba" }, result.Songs.Select(s => s.Song.Artist));
+    }
+
+    [Fact]
     public void CoverAndBackground_FallBackToNamingConventions()
     {
         Folder("c", Txt("Artist", "Song", "#COVER:missing.jpg\n"), "song.mp3", "Artist - Song [CO].jpg", "Artist - Song [BG].png");
