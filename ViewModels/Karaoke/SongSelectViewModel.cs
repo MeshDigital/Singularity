@@ -345,6 +345,7 @@ public sealed class SongSelectViewModel : ReactiveObject
             if (value is null || value.Key == _stage.SelectedKey) return;
             _stage.SelectedKey = value.Key;
             this.RaisePropertyChanged();
+            ShowOnStage();
         }
     }
 
@@ -361,6 +362,14 @@ public sealed class SongSelectViewModel : ReactiveObject
     }
 
     public string TextScaleText => $"{TextScale:P0}";
+
+    private StageBrowseViewModel? _browse;
+
+    /// <summary>Song select as the projector shows it.</summary>
+    public StageBrowseViewModel Browse => _browse ??= new StageBrowseViewModel(this);
+
+    /// <summary>Puts song select on the stage display, when one is chosen (and takes it down otherwise).</summary>
+    public void ShowOnStage() => _stage.ShowIdle(_stage.SelectedKey == StageScreenService.MainWindowKey ? null : Browse);
 
     /// <summary>Refreshes the display list (projectors come and go).</summary>
     public void RefreshScreens()

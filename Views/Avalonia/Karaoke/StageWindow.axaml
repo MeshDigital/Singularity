@@ -3,13 +3,16 @@
         xmlns:vm="clr-namespace:Singularity.ViewModels.Karaoke"
         xmlns:k="clr-namespace:Singularity.Views.Avalonia.Karaoke"
         x:Class="Singularity.Views.Avalonia.Karaoke.StageWindow"
-        x:DataType="vm:SingViewModel"
-        x:CompileBindings="True"
         Title="Singularity - Stage"
         Background="Black"
         SystemDecorations="None"
         ShowInTaskbar="False"
         CanResize="False">
-    <!-- The audience screen: full screen on the projector or TV while the main window keeps the library. -->
-    <k:SingStageView/>
+    <!-- The audience screen: full screen on the projector or TV while the main window keeps the library.
+         Between songs it shows song select for the room; while singing, the stage. -->
+    <Window.DataTemplates>
+        <DataTemplate DataType="vm:SingViewModel"><k:SingStageView/></DataTemplate>
+        <DataTemplate DataType="vm:StageBrowseViewModel"><k:StageBrowseView/></DataTemplate>
+    </Window.DataTemplates>
+    <ContentControl Content="{Binding}"/>
 </Window>

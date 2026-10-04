@@ -25,10 +25,15 @@ public sealed class StageScreenService
 {
     public const string MainWindowKey = "";
 
+    /// <summary>The stage in an ordinary 1280x720 window that doesn't take the focus (development, <c>--stage window</c>).</summary>
+    public const string WindowedKey = "window";
+
     private readonly AppConfig _config;
     private readonly ConfigManager _configManager;
     private readonly ILogger<StageScreenService> _logger;
     private Window? _window;
+    private string? _windowKey;
+    private object? _idle;
 
     public StageScreenService(AppConfig config, ConfigManager configManager, ILogger<StageScreenService> logger)
     {
@@ -60,17 +65,57 @@ public sealed class StageScreenService
         return options;
     }
 
-    /// <summary>Opens the stage on the chosen display. Returns the display's name, or null to sing in the main window.</summary>
+    /// <summary>
+    /// What the stage shows between songs (song select for the room). Shown now when a stage display is
+    /// chosen, and again whenever a song ends; null takes the stage down between songs.
+    /// </summary>
+    public void ShowIdle(object? idle)
+    {
+        _idle = idle;
+        if (idle is null || SelectedKey == MainWindowKey) CloseWindow();
+        else if (_window?.DataContext is null || _window.DataContext == idle || _window.DataContext.GetType() == idle.GetType()) Open(idle);
+    }
+
+    /// <summary>
+    /// Shows <paramref name="dataContext"/> on the chosen display, reusing the stage window when it's
+    /// already there. Returns the display's name, or null to sing in the main window.
+    /// </summary>
     public string? Open(object dataContext)
     {
-        Close();
-        if (SelectedKey == MainWindowKey) return null;
+        if (SelectedKey == MainWindowKey)
+        {
+            CloseWindow();
+            return null;
+        }
+        if (SelectedKey == WindowedKey)
+        {
+            if (_window is null || _windowKey != WindowedKey)
+            {
+                CloseWindow();
+                _window = new Views.Avalonia.Karaoke.StageWindow
+                {
+                    DataContext = dataContext, Width = 1280, Height = 720, ShowActivated = false,
+                    SystemDecorations = SystemDecorations.Full, CanResize = true, ShowInTaskbar = true,
+                };
+                _window.Show();
+                _windowKey = WindowedKey;
+            }
+            _window.DataContext = dataContext;
+            return "a window";
+        }
         var screen = Screens().FirstOrDefault(s => KeyOf(s) == SelectedKey);
         if (screen is null)
         {
+            CloseWindow();
             _logger.LogWarning("Stage display {Key} is not connected; singing in the main window", SelectedKey);
             return null;
         }
+        if (_window is not null && _windowKey == SelectedKey)
+        {
+            _window.DataContext = dataContext;
+            return screen.DisplayName ?? "the second screen";
+        }
+        CloseWindow();
 
         var window = new Views.Avalonia.Karaoke.StageWindow { DataContext = dataContext, WindowStartupLocation = WindowStartupLocation.Manual };
         window.Position = screen.Bounds.Position;
@@ -79,14 +124,23 @@ public sealed class StageScreenService
         window.Show();
         window.WindowState = WindowState.FullScreen;
         _window = window;
+        _windowKey = SelectedKey;
         _logger.LogInformation("Stage shown full screen on {Screen}", screen.DisplayName ?? SelectedKey);
         return screen.DisplayName ?? "the second screen";
     }
 
+    /// <summary>A song ended: back to song select on the stage, or down if there is none.</summary>
     public void Close()
+    {
+        if (_idle is not null && _window is not null) _window.DataContext = _idle;
+        else CloseWindow();
+    }
+
+    private void CloseWindow()
     {
         var window = _window;
         _window = null;
+        _windowKey = null;
         window?.Close();
     }
 

@@ -33,6 +33,7 @@ public partial class SongSelectPage : UserControl
         if (DataContext is not SongSelectViewModel vm) return;
         vm.RefreshScreens();
         await vm.EnsureLoadedAsync();
+        vm.ShowOnStage();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)

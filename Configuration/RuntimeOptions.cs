@@ -32,7 +32,10 @@ public static class RuntimeOptions
     /// <summary>Development shortcut: <c>--players 2</c> adds a second singer on player 1's microphone for this run only.</summary>
     public static int? Players { get; private set; }
 
-    /// <summary>Development shortcut: <c>--stage "x,y"</c> shows the stage on the display at that desktop position for this run.</summary>
+    /// <summary>
+    /// Development shortcut: <c>--stage "x,y"</c> shows the stage on the display at that desktop position for
+    /// this run; <c>--stage window</c> shows it in an ordinary window, to preview the projector on one screen.
+    /// </summary>
     public static string? StageScreen { get; private set; }
 
     public static void Initialize(IEnumerable<string> args)

@@ -1,0 +1,88 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Karaoke"
+             x:Class="Singularity.Views.Avalonia.Karaoke.StageBrowseView"
+             x:DataType="vm:StageBrowseViewModel"
+             x:CompileBindings="True"
+             Background="Black" Foreground="White">
+    <!-- Designed at 1920x1080 and scaled to the projector, so it reads the same from the back of the room at any resolution. -->
+    <Viewbox Stretch="Uniform">
+        <Grid Width="1920" Height="1080">
+            <Grid.Background>
+                <RadialGradientBrush Center="50%,42%" GradientOrigin="50%,42%" RadiusX="70%" RadiusY="70%">
+                    <GradientStop Offset="0" Color="{Binding Glow}"/>
+                    <GradientStop Offset="0.85" Color="#00000000"/>
+                </RadialGradientBrush>
+            </Grid.Background>
+            <Border Background="#40000000"/>
+
+            <TextBlock Text="No songs yet" FontSize="56" Foreground="#888" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       IsVisible="{Binding !HasSong}"/>
+
+            <Grid ColumnDefinitions="*,640,*" RowDefinitions="Auto,Auto" Margin="0,90,0,0" IsVisible="{Binding HasSong}">
+                <!-- The songs before, fading out to the left. -->
+                <ItemsControl ItemsSource="{Binding Before}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,150,10,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="30"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SongCardViewModel">
+                            <StackPanel Width="250" Opacity="0.45" Spacing="10">
+                                <Border Width="250" Height="250" CornerRadius="14" ClipToBounds="True" Background="#222">
+                                    <Image Source="{Binding Cover}" Stretch="UniformToFill"/>
+                                </Border>
+                                <TextBlock Text="{Binding Title}" FontSize="24" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- The highlighted song, with its other versions peeking out behind it. -->
+                <Grid Grid.Column="1" Width="560" Height="560" HorizontalAlignment="Center">
+                        <Border Width="520" Height="520" CornerRadius="22" Background="#3A3F4C" BorderBrush="#556" BorderThickness="2"
+                                IsVisible="{Binding HasStack2}" RenderTransform="translate(36px,-36px)"/>
+                        <Border Width="520" Height="520" CornerRadius="22" Background="#4A5060" BorderBrush="#667" BorderThickness="2"
+                                IsVisible="{Binding HasStack1}" RenderTransform="translate(18px,-18px)"/>
+                        <Border Width="520" Height="520" CornerRadius="22" ClipToBounds="True" Background="#1C1F26"
+                                BoxShadow="0 18 60 0 #C0000000">
+                            <Grid>
+                                <TextBlock Text="♪" FontSize="200" Foreground="#445" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Image Source="{Binding LargeCover}" Stretch="UniformToFill"/>
+                            </Grid>
+                        </Border>
+                </Grid>
+                <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Spacing="22" HorizontalAlignment="Center" Margin="0,22,0,0">
+                    <TextBlock Text="{Binding Current.Title}" FontSize="64" FontWeight="Bold" TextAlignment="Center"
+                               TextTrimming="CharacterEllipsis" MaxWidth="1100" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding Current.Artist}" FontSize="40" Foreground="#DDE" TextAlignment="Center"
+                               TextTrimming="CharacterEllipsis" MaxWidth="1100" HorizontalAlignment="Center" Margin="0,-12,0,0"/>
+                    <Border Background="#33FFFFFF" CornerRadius="26" Padding="28,10" HorizontalAlignment="Center">
+                        <TextBlock Text="{Binding VersionBadge}" FontSize="30" Foreground="#E8ECFF"/>
+                    </Border>
+                </StackPanel>
+
+                <!-- The songs after, fading out to the right. -->
+                <ItemsControl Grid.Column="2" ItemsSource="{Binding After}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10,150,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="30"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SongCardViewModel">
+                            <StackPanel Width="250" Opacity="0.45" Spacing="10">
+                                <Border Width="250" Height="250" CornerRadius="14" ClipToBounds="True" Background="#222">
+                                    <Image Source="{Binding Cover}" Stretch="UniformToFill"/>
+                                </Border>
+                                <TextBlock Text="{Binding Title}" FontSize="24" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+
+            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Bottom" Margin="60,0,60,40">
+                <TextBlock Text="◀ ▶  song        ▲ ▼  version        Enter  sing" FontSize="26" Foreground="#99A"/>
+                <TextBlock Grid.Column="1" Text="{Binding Position}" FontSize="26" Foreground="#99A"/>
+            </Grid>
+        </Grid>
+    </Viewbox>
+</UserControl>
