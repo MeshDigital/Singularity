@@ -235,7 +235,10 @@ public class ImportOrchestrator
                             Artist = t.Artist ?? string.Empty,
                             Title = t.Title ?? string.Empty,
                             Album = t.Album ?? string.Empty,
-                            TrackUniqueHash = t.TrackHash ?? string.Empty,
+                            // Pasted lists carry no hash; the Spotify formula keeps them recognisable (dedup, download events).
+                            TrackUniqueHash = !string.IsNullOrEmpty(t.TrackHash) ? t.TrackHash
+                                : !string.IsNullOrWhiteSpace(t.Artist) && !string.IsNullOrWhiteSpace(t.Title) ? Utils.TrackHashUtil.Compute(t.Artist, t.Title)
+                                : string.Empty,
                             SpotifyTrackId = t.SpotifyTrackId,
                             ISRC = t.ISRC,
                             SpotifyAlbumId = t.SpotifyAlbumId,

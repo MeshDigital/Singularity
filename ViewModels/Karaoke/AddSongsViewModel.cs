@@ -127,8 +127,12 @@ public sealed class AddSongsViewModel : ReactiveObject
         {
             this.RaiseAndSetIfChanged(ref _link, value);
             ((AsyncRelayCommand)ImportCommand).RaiseCanExecuteChanged();
+            this.RaisePropertyChanged(nameof(DetectedText));
         }
     }
+
+    /// <summary>What the pasted text is ("Spotify playlist", "12 songs"), shown before adding it.</summary>
+    public string DetectedText => _ingest.Describe(Link);
 
     public string Message { get => _message; private set => this.RaiseAndSetIfChanged(ref _message, value); }
 
@@ -203,7 +207,7 @@ public sealed class AddSongsViewModel : ReactiveObject
         try
         {
             var error = await _ingest.ImportAsync(Link);
-            Message = error ?? "Added. Songs appear below as they're found.";
+            Message = error ?? "Added. Each song appears below as it is found and made.";
             if (error is null) Link = "";
         }
         catch (Exception ex)

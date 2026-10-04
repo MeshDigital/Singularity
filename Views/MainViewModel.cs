@@ -1123,9 +1123,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _navigationService.NavigateTo("Player");
     }
 
+    /// <summary>Importing (Spotify links, pasted lists) happens on the Add songs page.</summary>
     private void NavigateToImport()
     {
-        _navigationService.NavigateTo("Import");
+        _navigationService.NavigateTo("AddSongs");
     }
 
     private void NavigateToUsers()

@@ -27,6 +27,11 @@ public sealed class KaraokeIngestService : IDisposable
 
     private readonly ImportOrchestrator _orchestrator;
     private readonly SpotifyImportProvider _spotify;
+    private readonly TracklistImportProvider _tracklist;
+    private readonly DownloadManager _downloads;
+
+    /// <summary>Single tracks queued this session, by hash: their download context fills in the file path.</summary>
+    private readonly Dictionary<string, PlaylistTrack> _singles = new(StringComparer.Ordinal);
     private readonly ILibraryService _library;
     private readonly KaraokeLibrary _songs;
     private readonly Singularity.Configuration.AppConfig _config;
@@ -60,6 +65,8 @@ public sealed class KaraokeIngestService : IDisposable
     public KaraokeIngestService(
         ImportOrchestrator orchestrator,
         SpotifyImportProvider spotify,
+        TracklistImportProvider tracklist,
+        DownloadManager downloads,
         ILibraryService library,
         IEventBus events,
         KaraokeWorker worker,
@@ -71,6 +78,8 @@ public sealed class KaraokeIngestService : IDisposable
         _config = config;
         _orchestrator = orchestrator;
         _spotify = spotify;
+        _tracklist = tracklist;
+        _downloads = downloads;
         _library = library;
         _logger = loggers.CreateLogger<KaraokeIngestService>();
         var packager = new KaraokePackager(
@@ -96,16 +105,95 @@ public sealed class KaraokeIngestService : IDisposable
     /// <summary>Where finished songs go.</summary>
     public Func<string> IngestFolder { get; }
 
-    /// <summary>True for links ORBIT's Spotify import understands (a song, album or playlist).</summary>
-    public bool CanImport(string link) => _spotify.CanHandle(link?.Trim() ?? "");
+    /// <summary>A Spotify link (song, album, playlist) or pasted text with at least one "Artist - Title".</summary>
+    public bool CanImport(string input) => !string.IsNullOrWhiteSpace(input) && (_spotify.CanHandle(input.Trim()) || ParseList(input).Count > 0);
 
-    /// <summary>Imports a Spotify link; returns an error for the user, or null when its songs are on their way.</summary>
-    public async Task<string?> ImportAsync(string link)
+    /// <summary>What the input is, for the page to say before it's added.</summary>
+    public string Describe(string input)
     {
-        link = link.Trim();
-        if (!CanImport(link)) return "That isn't a Spotify link.";
-        var result = await _orchestrator.SilentImportWithResultAsync(_spotify, link);
-        if (result is null) return "Spotify returned no songs for that link.";
+        input = input?.Trim() ?? "";
+        if (input.Length == 0) return "";
+        if (_spotify.CanHandle(input))
+        {
+            return SpotifyInputSource.ExtractTrackId(input) is not null ? "Spotify song"
+                : input.Contains("/album/") || input.StartsWith("spotify:album:", StringComparison.OrdinalIgnoreCase) ? "Spotify album"
+                : "Spotify playlist";
+        }
+        int n = ParseList(input).Count;
+        return n switch { 0 => "", 1 => "1 song", _ => $"{n} songs" };
+    }
+
+    private static List<SearchQuery> ParseList(string text) =>
+        Utils.CommentTracklistParser.Parse(text, out _, out _).Where(q => !string.IsNullOrWhiteSpace(q.Artist) && !string.IsNullOrWhiteSpace(q.Title)).ToList();
+
+    /// <summary>
+    /// Adds what was pasted: a Spotify song, album or playlist link, or a list of "Artist - Title" lines.
+    /// One song becomes a single library entry; an album, playlist or list becomes a playlist. Returns an
+    /// error for the user, or null when the songs are on their way.
+    /// </summary>
+    public async Task<string?> ImportAsync(string input)
+    {
+        input = input.Trim();
+        if (_spotify.CanHandle(input))
+        {
+            if (SpotifyInputSource.ExtractTrackId(input) is not null)
+            {
+                SearchQuery? song = null;
+                await foreach (var batch in _spotify.ImportStreamAsync(input))
+                {
+                    song ??= batch.Tracks.FirstOrDefault();
+                }
+                return song is null ? "Spotify didn't return that song." : AddSingle(song, input);
+            }
+            return await ImportListAsync(_spotify, input);
+        }
+
+        var list = ParseList(input);
+        if (list.Count == 0) return "Paste a Spotify link, or songs as \"Artist - Title\", one per line.";
+        if (list.Count == 1) return AddSingle(list[0], "pasted");
+        return await ImportListAsync(_tracklist, input);
+    }
+
+    /// <summary>One song: a library entry of its own (like a download from Search), not a playlist of one.</summary>
+    private string? AddSingle(SearchQuery q, string from)
+    {
+        var hash = !string.IsNullOrEmpty(q.TrackHash) ? q.TrackHash : Utils.TrackHashUtil.Compute(q.Artist!, q.Title!);
+        var track = new PlaylistTrack
+        {
+            Id = Guid.NewGuid(),
+            PlaylistId = Guid.Empty,
+            Artist = q.Artist ?? "",
+            Title = q.Title ?? "",
+            Album = q.Album ?? "",
+            TrackUniqueHash = hash,
+            SpotifyTrackId = q.SpotifyTrackId,
+            ISRC = q.ISRC,
+            SpotifyAlbumId = q.SpotifyAlbumId,
+            SpotifyArtistId = q.SpotifyArtistId,
+            AlbumArtUrl = q.AlbumArtUrl,
+            CanonicalDuration = q.CanonicalDuration,
+            ReleaseDate = q.ReleaseDate,
+            Status = TrackStatus.Missing,
+            Priority = 0, // asked for now: not held back by the auto-acquire setting
+            AddedAt = DateTime.UtcNow,
+        };
+        lock (_lock)
+        {
+            _singles[hash] = track;
+            _pending[hash] = new Pending(track.Artist, track.Title, new List<Guid> { Guid.Empty }, TrackDetails.Of(track));
+            Save();
+        }
+        Queue.Track(hash, track.Artist, track.Title);
+        _downloads.QueueTracks(new List<PlaylistTrack> { track });
+        _logger.LogInformation("Karaoke import of one song ({From}): {Artist} - {Title}", from, track.Artist, track.Title);
+        return null;
+    }
+
+    private async Task<string?> ImportListAsync(IImportProvider provider, string input)
+    {
+        var result = await _orchestrator.SilentImportWithResultAsync(provider, input);
+        if (result is null) return provider == _spotify ? "Spotify returned no songs for that link." : "No songs found in that list.";
+        var link = input.Length > 80 ? input[..80] + "…" : input;
 
         lock (_lock)
         {
@@ -166,7 +254,12 @@ public sealed class KaraokeIngestService : IDisposable
             case PlaylistTrackState.Completed:
                 try
                 {
-                    if (await _library.GetPlaylistTrackByHashAsync(e.ProjectId, e.TrackGlobalId) is { } track) EnqueueDownloaded(track, pending.Details);
+                    var track = await _library.GetPlaylistTrackByHashAsync(e.ProjectId, e.TrackGlobalId);
+                    if (track is null || string.IsNullOrEmpty(track.ResolvedFilePath))
+                    {
+                        lock (_lock) track = _singles.GetValueOrDefault(e.TrackGlobalId) ?? track;
+                    }
+                    if (track is not null) EnqueueDownloaded(track, pending.Details);
                     else _logger.LogWarning("Karaoke import: download {Hash} finished but its track isn't in project {Project}", e.TrackGlobalId, e.ProjectId);
                 }
                 catch (Exception ex)

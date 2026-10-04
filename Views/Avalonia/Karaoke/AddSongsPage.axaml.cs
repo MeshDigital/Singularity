@@ -1,5 +1,6 @@
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Singularity.ViewModels.Karaoke;
@@ -8,7 +9,17 @@ namespace Singularity.Views.Avalonia.Karaoke;
 
 public partial class AddSongsPage : UserControl
 {
-    public AddSongsPage() => InitializeComponent();
+    public AddSongsPage()
+    {
+        InitializeComponent();
+        // The box takes lists, so it accepts new lines; plain Enter still adds (Shift+Enter is a new line).
+        Input.AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (e.Key != Key.Enter || e.KeyModifiers.HasFlag(KeyModifiers.Shift)) return;
+            if (DataContext is AddSongsViewModel vm && vm.ImportCommand.CanExecute(null)) vm.ImportCommand.Execute(null);
+            e.Handled = true;
+        }, RoutingStrategies.Tunnel);
+    }
 
     public AddSongsPage(AddSongsViewModel viewModel) : this()
     {

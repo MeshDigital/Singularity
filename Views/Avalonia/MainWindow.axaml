@@ -351,14 +351,7 @@
                                     </StackPanel>
                                 </Button>
 
-                                <Button Classes="nav" Command="{Binding NavigateImportCommand}"
-                                        ToolTip.Tip="Import"
-                                        Classes.selected="{Binding IsImportOverlayActive}">
-                                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="16,0">
-                                        <TextBlock Text="🔗" FontSize="16"/>
-                                        <TextBlock Text="Import" FontSize="14"/>
-                                    </StackPanel>
-                                </Button>
+<!-- Import lives on the Add songs page (Spotify links and pasted lists). -->
                             </StackPanel>
                         </StackPanel>
 
