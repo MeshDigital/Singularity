@@ -146,6 +146,11 @@
             <Border Classes="card">
                 <StackPanel Spacing="12">
                     <TextBlock Classes="section" Text="Singing"/>
+                    <Grid ColumnDefinitions="220,Auto,Auto">
+                        <TextBlock Classes="label" Text="Singers (for high scores)"/>
+                        <TextBox Grid.Column="1" Text="{Binding Player1Name}" Watermark="Player 1" Width="180"/>
+                        <TextBox Grid.Column="2" Text="{Binding Player2Name}" Watermark="Player 2" Width="180" Margin="8,0,0,0"/>
+                    </Grid>
                     <Grid ColumnDefinitions="220,Auto">
                         <TextBlock Classes="label" Text="Difficulty"/>
                         <ComboBox Grid.Column="1" ItemsSource="{Binding Difficulties}" SelectedItem="{Binding Difficulty}" MinWidth="140"/>

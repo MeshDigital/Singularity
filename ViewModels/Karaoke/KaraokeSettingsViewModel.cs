@@ -158,6 +158,10 @@ public sealed class KaraokeSettingsViewModel : ReactiveObject
 
     public string[] Difficulties { get; } = { "Easy", "Medium", "Hard" };
 
+    /// <summary>Names on the high scores.</summary>
+    public string Player1Name { get => _config.KaraokePlayer1Name; set => Set(v => _config.KaraokePlayer1Name = string.IsNullOrWhiteSpace(v) ? "Player 1" : v.Trim(), value); }
+    public string Player2Name { get => _config.KaraokePlayer2Name; set => Set(v => _config.KaraokePlayer2Name = string.IsNullOrWhiteSpace(v) ? "Player 2" : v.Trim(), value); }
+
     /// <summary>How close singing must be to count (also on the Sing page).</summary>
     public string Difficulty
     {

@@ -38,7 +38,12 @@ public sealed record StageSnapshot(double Beat, IReadOnlyList<PlayerSnapshot> Pl
     bool VideoAmbient = false, double SongProgress = 0);
 
 /// <summary>A singer's line on the results screen.</summary>
-public sealed record PlayerResult(string Name, int Score, string Title, string Notes, string Golden, string LineBonus, string Lines);
+/// <param name="HighScoreText">"New high score!", "3rd best on this song", or empty.</param>
+public sealed record PlayerResult(string Name, int Score, string Title, string Notes, string Golden, string LineBonus, string Lines,
+    string HighScoreText = "")
+{
+    public bool HasHighScore => HighScoreText.Length > 0;
+}
 
 /// <summary>
 /// The sing screen for one or two singers: plays the song, scores each microphone, and gives the
@@ -88,8 +93,10 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     private bool _showResults;
 
     public SingViewModel(SingAudioEngine audio, StageScreenService stage, StemStore stems, StemBatchQueue batch, Services.Karaoke.Ingest.KaraokeIngestService ingest, ConfigManager configManager,
-        ILoggerFactory loggers, INavigationService navigation, AppConfig config, ILogger<SingViewModel> logger)
+        ILoggerFactory loggers, INavigationService navigation, AppConfig config, ILogger<SingViewModel> logger,
+        HighScoreStore? highScores = null)
     {
+        _highScores = highScores;
         _batch = batch;
         _ingest = ingest;
         _stems = stems;
@@ -360,6 +367,46 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         }
     }
 
+    private readonly HighScoreStore? _highScores;
+
+    /// <summary>The song's best scores at this difficulty, for the results screen ("1.  Anna  8,420").</summary>
+    public System.Collections.ObjectModel.ObservableCollection<string> TopScores { get; } = new();
+
+    public bool HasTopScores => TopScores.Count > 0;
+
+    public string TopScoresTitle => $"Best on this song · {Difficulty}";
+
+    private string SingerName(int player) => player == 2 ? _config.KaraokePlayer2Name : _config.KaraokePlayer1Name;
+
+    /// <summary>Keeps the score when it makes the song's top ten; says how it placed.</summary>
+    private string RecordHighScore(Player p, int total)
+    {
+        if (_highScores is null || _song is null || p.Session is null || total <= 0) return "";
+        int place = _highScores.Add(new Singularity.Karaoke.Scoring.HighScore(
+            Singularity.Karaoke.Scoring.HighScoreTable.SongKey(_song.Artist, _song.Title), Difficulty.ToString(), SingerName(p.Mic.Player), total, DateTime.UtcNow));
+        return place switch
+        {
+            1 => "New high score!",
+            2 => "2nd best on this song",
+            3 => "3rd best on this song",
+            > 3 => $"{place}th best on this song",
+            _ => "",
+        };
+    }
+
+    private void ShowTopScores()
+    {
+        TopScores.Clear();
+        if (_highScores is not null && _song is not null)
+        {
+            int i = 0;
+            foreach (var s in _highScores.Top(Singularity.Karaoke.Scoring.HighScoreTable.SongKey(_song.Artist, _song.Title), Difficulty.ToString()))
+                TopScores.Add($"{++i}.  {s.Singer}  {s.Score:N0}");
+        }
+        this.RaisePropertyChanged(nameof(HasTopScores));
+        this.RaisePropertyChanged(nameof(TopScoresTitle));
+    }
+
     private PlayerResult Result(Player p)
     {
         var score = p.Session?.Scorer.Score ?? new ScoreBreakdown(0, 0, 0);
@@ -370,10 +417,11 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         _logger.LogInformation("Sing results P{Player}: {Notes} notes + {Golden} golden + {Bonus} line bonus = {Total}",
             p.Mic.Player, score.Notes, score.Golden, score.LineBonus, score.Total);
         return new PlayerResult(
-            _players.Count > 1 ? $"Player {p.Mic.Player}" : "",
+            _players.Count > 1 || SingerName(p.Mic.Player) != $"Player {p.Mic.Player}" ? SingerName(p.Mic.Player) : "",
             shown.Total, ScoreTitles.For(shown.Total),
             $"{shown.Notes:N0}", $"{shown.Golden:N0}", $"{shown.LineBonus:N0}",
-            p.Session is null ? "No microphone" : lines.Count == 0 ? "" : $"{perfect} perfect, {great} great of {lines.Count} lines");
+            p.Session is null ? "No microphone" : lines.Count == 0 ? "" : $"{perfect} perfect, {great} great of {lines.Count} lines",
+            RecordHighScore(p, shown.Total));
     }
 
     private void PublishResults(IReadOnlyList<PlayerResult> results)
@@ -384,6 +432,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         _ingest.Queue.Release();
         Results.Clear();
         foreach (var r in results) Results.Add(r);
+        ShowTopScores();
         ShowResults = true;
     }
 

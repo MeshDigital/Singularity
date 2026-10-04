@@ -736,6 +736,7 @@ public partial class App : Application
         services.AddSingleton<Services.Karaoke.StageScreenService>();
         services.AddSingleton<Services.Karaoke.StemStore>();
         services.AddSingleton<Services.Karaoke.KaraokeWorker>();
+        services.AddSingleton<Services.Karaoke.HighScoreStore>();
         services.AddSingleton<Services.Karaoke.Ingest.KaraokeIngestService>();
         services.AddSingleton<Services.Karaoke.StemSeparationService>();
         services.AddSingleton<Services.Karaoke.IStemSeparator>(sp => sp.GetRequiredService<Services.Karaoke.StemSeparationService>());

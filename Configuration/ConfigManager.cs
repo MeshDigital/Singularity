@@ -209,6 +209,8 @@ public class ConfigManager
                 KaraokeStageScreen = config["Karaoke:StageScreen"] ?? "",
                 KaraokeVocals = config["Karaoke:Vocals"] ?? "Off",
                 KaraokeDifficulty = config["Karaoke:Difficulty"] is "Easy" or "Hard" ? config["Karaoke:Difficulty"]! : "Medium",
+                KaraokePlayer1Name = string.IsNullOrWhiteSpace(config["Karaoke:Player1Name"]) ? "Player 1" : config["Karaoke:Player1Name"]!.Trim(),
+                KaraokePlayer2Name = string.IsNullOrWhiteSpace(config["Karaoke:Player2Name"]) ? "Player 2" : config["Karaoke:Player2Name"]!.Trim(),
                 KaraokeBatchRestSeconds = int.TryParse(config["Karaoke:BatchRestSeconds"], out var batchRest) ? Math.Clamp(batchRest, 0, 600) : 3,
                 KaraokeIngestFolder = config["Karaoke:IngestFolder"] ?? "",
                 KaraokeIngestAllDownloads = !bool.TryParse(config["Karaoke:IngestAllDownloads"], out var ingestAll) || ingestAll,
@@ -425,6 +427,8 @@ public class ConfigManager
         iniContent.AppendLine($"StageScreen = {config.KaraokeStageScreen}");
         iniContent.AppendLine($"Vocals = {config.KaraokeVocals}");
         iniContent.AppendLine($"Difficulty = {config.KaraokeDifficulty}");
+        iniContent.AppendLine($"Player1Name = {config.KaraokePlayer1Name}");
+        iniContent.AppendLine($"Player2Name = {config.KaraokePlayer2Name}");
         iniContent.AppendLine($"BatchRestSeconds = {config.KaraokeBatchRestSeconds}");
         iniContent.AppendLine($"IngestFolder = {config.KaraokeIngestFolder}");
         iniContent.AppendLine($"IngestAllDownloads = {config.KaraokeIngestAllDownloads}");

@@ -42,6 +42,10 @@ public class AppConfig
     /// <summary>How close to the note singing has to be: Easy (2 semitones), Medium (1) or Hard (exact).</summary>
     public string KaraokeDifficulty { get; set; } = "Medium";
 
+    /// <summary>Singer names for the high scores (player 1 and 2).</summary>
+    public string KaraokePlayer1Name { get; set; } = "Player 1";
+    public string KaraokePlayer2Name { get; set; } = "Player 2";
+
     /// <summary>Size of everything drawn on the sing stage (lyrics, scores, ratings, notes), 0.75-2.0.</summary>
     public double KaraokeTextScale { get; set; } = 1.0;
 

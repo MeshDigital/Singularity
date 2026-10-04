@@ -83,6 +83,9 @@ public sealed class SongCardViewModel : ReactiveObject
         }
     }
 
+    /// <summary>The song's best score at any difficulty; null when it was never sung.</summary>
+    public int? BestScore { get; init; }
+
     /// <summary>The shown version was imported in the last few days.</summary>
     public bool IsNew => _isNewFor(Entry);
 
@@ -97,6 +100,7 @@ public sealed class SongCardViewModel : ReactiveObject
         get
         {
             var parts = new List<string>();
+            if (BestScore is { } best) parts.Add($"Best {best:N0}");
             if (Entry.Song.Year is { } y) parts.Add(y.ToString());
             if (!string.IsNullOrEmpty(Entry.Song.Language)) parts.Add(Entry.Song.Language!);
             if (Entry.VideoPath is not null) parts.Add("Video");
@@ -197,6 +201,7 @@ public sealed class SongSelectViewModel : ReactiveObject
     private readonly INavigationService _navigation;
     private readonly ILogger<SongSelectViewModel> _logger;
     private readonly Singularity.Configuration.AppConfig _config;
+    private readonly HighScoreStore? _highScores;
     private List<SongCardViewModel> _all = new();
     private string _searchText = "";
     private string _statusText = "";
@@ -205,9 +210,12 @@ public sealed class SongSelectViewModel : ReactiveObject
 
     public SongSelectViewModel(KaraokeLibrary library, SingViewModel sing, SongPreviewPlayer preview, StageScreenService stage,
         StemStore stems, StemSeparationService separation, StemBatchQueue batch, INavigationService navigation, ILogger<SongSelectViewModel> logger,
-        Singularity.Configuration.AppConfig config)
+        Singularity.Configuration.AppConfig config, HighScoreStore? highScores = null)
     {
         _config = config;
+        _highScores = highScores;
+        // A new high score shows on the song's card the next time the list is loaded.
+        if (highScores is not null) highScores.Changed += () => Dispatcher.UIThread.Post(() => _loaded = false);
         PreviewClock = () => _preview.PositionMs;
         preview.Changed += () => Dispatcher.UIThread.Post(RaisePreview);
         NextVersionCommand = new RelayCommand<SongCardViewModel>(card => StepVersion(card, +1), card => card?.HasVersions == true);
@@ -461,7 +469,10 @@ public sealed class SongSelectViewModel : ReactiveObject
             var result = await _library.ScanAsync();
             // One card per song; charts of the same song are its versions.
             var clusters = await Task.Run(() => SongClusters.Build(result.Songs, _library.TierOf, twoPlayers: _config.KaraokeMic2Enabled));
-            _all = clusters.Select(c => new SongCardViewModel(c, e => _stems.Find(e) is not null, _library.IsNew)).ToList();
+            _all = clusters.Select(c => new SongCardViewModel(c, e => _stems.Find(e) is not null, _library.IsNew)
+            {
+                BestScore = _highScores?.Best(Singularity.Karaoke.Scoring.HighScoreTable.SongKey(c.Artist, c.Title))?.Score,
+            }).ToList();
             ApplyFilter();
             int extra = result.Songs.Count - clusters.Count;
             StatusText = (clusters.Count == 1 ? "1 song" : $"{clusters.Count} songs") + (extra > 0 ? $" · {extra} more {(extra == 1 ? "version" : "versions")}" : "")
