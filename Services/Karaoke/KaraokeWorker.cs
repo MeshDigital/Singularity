@@ -37,12 +37,32 @@ public sealed class KaraokeWorker : Ingest.ITrackAnalyzer, IAsyncDisposable
     Task<TrackAnalysisResult> Ingest.ITrackAnalyzer.AnalyzeAsync(ProcessTrackCommand command, IProgress<WorkerEvent>? progress, CancellationToken ct) =>
         ProcessTrackAsync(command, progress, ct);
 
+    /// <summary>
+    /// Songs one worker process handles before it is replaced. Its resident memory creeps up by about
+    /// 0.6 GB over 50 songs (measured), which an overnight batch of the whole collection would pile up;
+    /// a fresh process costs a few seconds.
+    /// </summary>
+    public const int TasksPerWorker = 25;
+
+    private int _tasks;
+
     private async Task RunAsync(Func<InferenceWorkerHost, Task> task, CancellationToken ct)
     {
         await _gate.WaitAsync(ct);
         try
         {
-            await task(_host ??= CreateHost());
+            if (_host is not null && _tasks >= TasksPerWorker)
+            {
+                await _host.DisposeAsync();
+                _host = null;
+            }
+            if (_host is null)
+            {
+                _host = CreateHost();
+                _tasks = 0;
+            }
+            _tasks++;
+            await task(_host);
         }
         finally
         {
