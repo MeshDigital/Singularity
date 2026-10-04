@@ -16,21 +16,57 @@ using Singularity.Views;
 
 namespace Singularity.ViewModels.Karaoke;
 
-/// <summary>One song in the song-select list. The cover is decoded lazily, off the UI thread, when first shown.</summary>
+/// <summary>
+/// One song in the song-select list, with its versions (community and AI charts, solo and duet) to
+/// choose from; everything shown is the chosen version's. The cover is decoded lazily, off the UI
+/// thread, when first shown.
+/// </summary>
 public sealed class SongCardViewModel : ReactiveObject
 {
+    private readonly Func<SongEntry, bool> _hasStemsFor;
+    private readonly Func<SongEntry, bool> _isNewFor;
     private bool _coverRequested;
+    private int _versionIndex;
 
-    public SongCardViewModel(SongEntry entry)
+    public SongCardViewModel(SongCluster cluster, Func<SongEntry, bool> hasStems, Func<SongEntry, bool> isNew)
     {
-        Entry = entry;
-        SearchKey = $"{entry.Song.Artist} {entry.Song.Title}".ToLowerInvariant();
+        Cluster = cluster;
+        _hasStemsFor = hasStems;
+        _isNewFor = isNew;
+        SearchKey = string.Join(" ", cluster.Versions.Select(v => $"{v.Entry.Song.Artist} {v.Entry.Song.Title}").Distinct()).ToLowerInvariant();
+        _hasStems = hasStems(Entry);
+    }
+
+    /// <summary>A single chart, for callers that have no cluster.</summary>
+    public SongCardViewModel(SongEntry entry)
+        : this(new SongCluster("", new[] { new SongVersion(entry, false, null) }), _ => false, _ => false)
+    {
     }
 
     private bool _hasStems;
     private string? _separating;
 
-    public SongEntry Entry { get; }
+    public SongCluster Cluster { get; }
+    public SongVersion Version => Cluster.Versions[_versionIndex];
+    public SongEntry Entry => Version.Entry;
+    public bool HasVersions => Cluster.Versions.Count > 1;
+
+    /// <summary>E.g. "2 of 3 · Duet · Community chart"; just the label when there is one version.</summary>
+    public string VersionText => HasVersions ? $"{_versionIndex + 1} of {Cluster.Versions.Count} · {Version.Label}" : Version.Label;
+
+    /// <summary>Moves to the next (+1) or previous (-1) version, wrapping around.</summary>
+    public void StepVersion(int step)
+    {
+        if (!HasVersions) return;
+        _versionIndex = ((_versionIndex + step) % Cluster.Versions.Count + Cluster.Versions.Count) % Cluster.Versions.Count;
+        _coverRequested = false;
+        _hasStems = _hasStemsFor(Entry);
+        foreach (var name in new[] { nameof(Version), nameof(Entry), nameof(VersionText), nameof(Details), nameof(Cover), nameof(HasStems), nameof(CanSeparate), nameof(IsNew), nameof(Artist) })
+            this.RaisePropertyChanged(name);
+    }
+
+    /// <summary>Re-checks the shown version's stems (after background separation).</summary>
+    public void RefreshStems() => HasStems = _hasStemsFor(Entry);
 
     /// <summary>Vocals and instrumental are separated, so the original vocals can be turned off while singing.</summary>
     public bool HasStems { get => _hasStems; set { this.RaiseAndSetIfChanged(ref _hasStems, value); this.RaisePropertyChanged(nameof(CanSeparate)); } }
@@ -47,12 +83,12 @@ public sealed class SongCardViewModel : ReactiveObject
         }
     }
 
-    /// <summary>Imported in the last few days.</summary>
-    public bool IsNew { get; init; }
+    /// <summary>The shown version was imported in the last few days.</summary>
+    public bool IsNew => _isNewFor(Entry);
 
     public bool IsSeparating => _separating is not null;
     public bool CanSeparate => !_hasStems && _separating is null && Entry.IsPlayable;
-    public string Title => Entry.Song.Title;
+    public string Title => Cluster.Title;
     public string Artist => Entry.Song.Artist;
     public string SearchKey { get; }
 
@@ -61,7 +97,6 @@ public sealed class SongCardViewModel : ReactiveObject
         get
         {
             var parts = new List<string>();
-            if (Entry.Song.IsDuet) parts.Add("Duet");
             if (Entry.Song.Year is { } y) parts.Add(y.ToString());
             if (!string.IsNullOrEmpty(Entry.Song.Language)) parts.Add(Entry.Song.Language!);
             if (Entry.VideoPath is not null) parts.Add("Video");
@@ -161,6 +196,7 @@ public sealed class SongSelectViewModel : ReactiveObject
     private SongCardViewModel? _selectedSong;
     private readonly INavigationService _navigation;
     private readonly ILogger<SongSelectViewModel> _logger;
+    private readonly Singularity.Configuration.AppConfig _config;
     private List<SongCardViewModel> _all = new();
     private string _searchText = "";
     private string _statusText = "";
@@ -168,8 +204,12 @@ public sealed class SongSelectViewModel : ReactiveObject
     private bool _loaded;
 
     public SongSelectViewModel(KaraokeLibrary library, SingViewModel sing, SongPreviewPlayer preview, StageScreenService stage,
-        StemStore stems, StemSeparationService separation, StemBatchQueue batch, INavigationService navigation, ILogger<SongSelectViewModel> logger)
+        StemStore stems, StemSeparationService separation, StemBatchQueue batch, INavigationService navigation, ILogger<SongSelectViewModel> logger,
+        Singularity.Configuration.AppConfig config)
     {
+        _config = config;
+        NextVersionCommand = new RelayCommand<SongCardViewModel>(card => StepVersion(card, +1), card => card?.HasVersions == true);
+        PreviousVersionCommand = new RelayCommand<SongCardViewModel>(card => StepVersion(card, -1), card => card?.HasVersions == true);
         _batch = batch;
         _batch.Changed += status => Dispatcher.UIThread.Post(() => OnBatchChanged(status));
         StartBatchCommand = new RelayCommand(StartBatch, () => !_batch.Status.IsRunning);
@@ -229,6 +269,17 @@ public sealed class SongSelectViewModel : ReactiveObject
         }
     }
 
+    public ICommand NextVersionCommand { get; }
+    public ICommand PreviousVersionCommand { get; }
+
+    /// <summary>Shows another version of a song; the preview follows when it's the highlighted one.</summary>
+    public void StepVersion(SongCardViewModel? card, int step)
+    {
+        if (card is null || !card.HasVersions) return;
+        card.StepVersion(step);
+        if (card == SelectedSong) _preview.Preview(card.Entry);
+    }
+
     /// <summary>Called when the page is hidden.</summary>
     public void StopPreview() => _preview.Stop();
 
@@ -251,14 +302,15 @@ public sealed class SongSelectViewModel : ReactiveObject
             StatusText = "Removing vocals needs the AI worker (inference\\.venv), which isn't installed.";
             return;
         }
-        int todo = _all.Count(c => !c.HasStems && c.Entry.IsPlayable);
+        var entries = _all.SelectMany(c => c.Cluster.Versions.Select(v => v.Entry)).ToList();
+        int todo = entries.Count(e => e.IsPlayable && _stems.Find(e) is null);
         if (todo == 0)
         {
             BatchText = "Every song already has its vocals removable.";
             return;
         }
         // Songs that already have stems are skipped quickly, so pass everything: the counts stay honest.
-        _batch.Start(_all.Select(c => c.Entry));
+        _batch.Start(entries);
     }
 
     private void OnBatchChanged(StemBatchStatus s)
@@ -267,7 +319,7 @@ public sealed class SongSelectViewModel : ReactiveObject
         {
             _lastBatchFinished = s.Finished;
             foreach (var card in _all.Where(c => !c.HasStems))
-                card.HasStems = _stems.Find(card.Entry) is not null;
+                card.RefreshStems();
         }
 
         string eta = s.Remaining is { } r ? $" · about {(r.TotalHours >= 1 ? $"{(int)r.TotalHours} h {r.Minutes} min" : $"{Math.Max(1, (int)r.TotalMinutes)} min")} left" : "";
@@ -364,9 +416,13 @@ public sealed class SongSelectViewModel : ReactiveObject
         try
         {
             var result = await _library.ScanAsync();
-            _all = result.Songs.Select(s => new SongCardViewModel(s) { HasStems = _stems.Find(s) is not null, IsNew = _library.IsNew(s) }).ToList();
+            // One card per song; charts of the same song are its versions.
+            var clusters = await Task.Run(() => SongClusters.Build(result.Songs, _library.TierOf, twoPlayers: _config.KaraokeMic2Enabled));
+            _all = clusters.Select(c => new SongCardViewModel(c, e => _stems.Find(e) is not null, _library.IsNew)).ToList();
             ApplyFilter();
-            StatusText = $"{result.Songs.Count} songs" + (result.Failures.Count > 0 ? $" · {result.Failures.Count} unreadable" : "");
+            int extra = result.Songs.Count - clusters.Count;
+            StatusText = (clusters.Count == 1 ? "1 song" : $"{clusters.Count} songs") + (extra > 0 ? $" · {extra} more {(extra == 1 ? "version" : "versions")}" : "")
+                         + (result.Failures.Count > 0 ? $" · {result.Failures.Count} unreadable" : "");
         }
         catch (Exception ex)
         {

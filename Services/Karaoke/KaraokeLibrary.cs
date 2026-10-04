@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Singularity.Configuration;
+using Singularity.Contracts.Song;
 using Singularity.Karaoke.Library;
 
 namespace Singularity.Services.Karaoke;
@@ -13,7 +14,7 @@ namespace Singularity.Services.Karaoke;
 /// <summary>The karaoke song collection: the configured UltraStar folders, scanned on demand (never written to).</summary>
 public sealed class KaraokeLibrary
 {
-    /// <summary>Extra song folder for development runs, on top of the configured ones.</summary>
+    /// <summary>Extra song folders for development runs (separated by ';'), on top of the configured ones.</summary>
     public const string SongsDirEnvironmentVariable = "SINGULARITY_SONGS_DIR";
 
     private readonly AppConfig _config;
@@ -34,7 +35,8 @@ public sealed class KaraokeLibrary
             var folders = (_config.KaraokeSongFolders ?? "")
                 .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToList();
-            if (Environment.GetEnvironmentVariable(SongsDirEnvironmentVariable) is { Length: > 0 } dev) folders.Add(dev);
+            if (Environment.GetEnvironmentVariable(SongsDirEnvironmentVariable) is { Length: > 0 } dev)
+                folders.AddRange(dev.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
             folders.Add(IngestFolder);
             return folders.Distinct(StringComparer.OrdinalIgnoreCase).Where(Directory.Exists).ToList();
         }
@@ -68,8 +70,23 @@ public sealed class KaraokeLibrary
     {
         var root = Path.GetFullPath(IngestFolder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         if (!entry.Folder.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return false;
-        var metadata = new FileInfo(Path.Combine(entry.Folder, Singularity.Contracts.Song.SongPackage.MetadataFileName));
+        var metadata = new FileInfo(Path.Combine(entry.Folder, SongPackage.MetadataFileName));
         return metadata.Exists && DateTime.UtcNow - metadata.LastWriteTimeUtc < NewFor;
+    }
+
+    /// <summary>The quality tier in the song's metadata.json (charts Singularity made); null when there is none.</summary>
+    public QualityTier? TierOf(SongEntry entry)
+    {
+        var path = Path.Combine(entry.Folder, SongPackage.MetadataFileName);
+        if (!File.Exists(path)) return null;
+        try
+        {
+            return SongPackage.Deserialize(File.ReadAllText(path)).Quality.Tier;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or NotSupportedException)
+        {
+            return null;
+        }
     }
 
     public async Task<SongScanResult> ScanAsync(CancellationToken ct = default)

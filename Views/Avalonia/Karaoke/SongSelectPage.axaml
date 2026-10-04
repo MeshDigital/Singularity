@@ -5,6 +5,14 @@
              x:DataType="vm:SongSelectViewModel"
              x:CompileBindings="True"
              Background="{DynamicResource BrushBg1}" Foreground="White">
+    <UserControl.Styles>
+        <Style Selector="Button.version">
+            <Setter Property="Padding" Value="6,0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Background" Value="#2A2F3A"/>
+        </Style>
+    </UserControl.Styles>
     <Grid RowDefinitions="Auto,Auto,*" Margin="28,24">
         <Grid ColumnDefinitions="*,Auto">
             <StackPanel Spacing="4">
@@ -49,7 +57,16 @@
                         <StackPanel Grid.Column="1" Margin="14,0" VerticalAlignment="Center" Spacing="2">
                             <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                             <TextBlock Text="{Binding Artist}" Foreground="#BBB" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Text="{Binding Details}" Foreground="#778" FontSize="11"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button Classes="version" Content="◀" IsVisible="{Binding HasVersions}" ToolTip.Tip="Previous version (Left)"
+                                        Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).PreviousVersionCommand}"
+                                        CommandParameter="{Binding}"/>
+                                <TextBlock Text="{Binding VersionText}" Foreground="#9BD" FontSize="11" VerticalAlignment="Center"/>
+                                <Button Classes="version" Content="▶" IsVisible="{Binding HasVersions}" ToolTip.Tip="Next version (Right)"
+                                        Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).NextVersionCommand}"
+                                        CommandParameter="{Binding}"/>
+                                <TextBlock Text="{Binding Details}" Foreground="#778" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                            </StackPanel>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="8,0" VerticalAlignment="Center">
                             <Border Background="#E8457A" CornerRadius="4" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding IsNew}"

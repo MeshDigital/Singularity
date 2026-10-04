@@ -14,6 +14,11 @@ public partial class SongSelectPage : UserControl
         SongList.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter) SingSelected();
+            else if (e.Key is Key.Left or Key.Right && DataContext is SongSelectViewModel vm && SongList.SelectedItem is SongCardViewModel card && card.HasVersions)
+            {
+                vm.StepVersion(card, e.Key == Key.Right ? +1 : -1);
+                e.Handled = true;
+            }
         };
     }
 
