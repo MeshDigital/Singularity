@@ -16,8 +16,21 @@ namespace Singularity.Views.Avalonia
             AddHandler(InputElement.GotFocusEvent, OnAnyControlFocused, RoutingStrategies.Bubble);
         }
 
-        public SettingsPage(SettingsViewModel viewModel) : this()
+        public SettingsPage(SettingsViewModel viewModel, ViewModels.Karaoke.KaraokeSettingsViewModel simple) : this()
         {
+            SimpleView.DataContext = simple;
+            void Apply()
+            {
+                SimpleView.IsVisible = !simple.ShowAdvanced;
+                AdvancedView.IsVisible = simple.ShowAdvanced;
+                BackToSimple.IsVisible = simple.ShowAdvanced;
+            }
+            simple.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(simple.ShowAdvanced)) Apply();
+            };
+            BackToSimple.Click += (_, _) => simple.ShowAdvanced = false;
+            Apply();
             DataContext = viewModel;
             viewModel.EnsureInitialized();
         }

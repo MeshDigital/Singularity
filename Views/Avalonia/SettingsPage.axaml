@@ -5,6 +5,7 @@
              xmlns:conv="clr-namespace:Singularity.Views.Avalonia.Converters"
              xmlns:controls="clr-namespace:Singularity.Views.Avalonia.Controls"
              xmlns:vm="clr-namespace:Singularity.ViewModels"
+             xmlns:karaoke="clr-namespace:Singularity.Views.Avalonia.Karaoke"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
              x:Class="Singularity.Views.Avalonia.SettingsPage"
              Background="#1E1E1E" Foreground="White">
@@ -65,7 +66,11 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid ColumnDefinitions="*,240">
+    <Panel>
+    <!-- Karaoke first: the settings that matter for a karaoke setup. ORBIT's full settings are the advanced view. -->
+    <karaoke:KaraokeSettingsView x:Name="SimpleView"/>
+
+    <Grid x:Name="AdvancedView" IsVisible="False" ColumnDefinitions="*,240">
         <ScrollViewer Grid.Column="0">
         <StackPanel Margin="24" Spacing="24" MaxWidth="820">
 
@@ -1917,4 +1922,8 @@
             </ScrollViewer>
         </Border>
     </Grid>
+
+    <Button x:Name="BackToSimple" Content="Simple view" IsVisible="False" HorizontalAlignment="Right" VerticalAlignment="Top"
+            Margin="0,10,258,0" Padding="12,6" CornerRadius="8" Background="#334EC9B0"/>
+    </Panel>
 </UserControl>

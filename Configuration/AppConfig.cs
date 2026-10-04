@@ -56,6 +56,12 @@ public class AppConfig
     /// Add songs page. Songs already in the karaoke collection are skipped.
     /// </summary>
     public bool KaraokeIngestAllDownloads { get; set; } = true;
+
+    /// <summary>Use a community chart from USDB when there is a good one, before making an AI chart.</summary>
+    public bool KaraokeUseCommunityCharts { get; set; } = true;
+
+    /// <summary>Look for the music video on YouTube (yt-dlp) for new songs.</summary>
+    public bool KaraokeDownloadVideos { get; set; } = true;
     public int ListenPort { get; set; } = 49998;
     public bool UseUPnP { get; set; } = false;
     public int ConnectTimeout { get; set; } = 60000; // ms

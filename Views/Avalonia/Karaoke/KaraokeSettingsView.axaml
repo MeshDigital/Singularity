@@ -1,0 +1,181 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Karaoke"
+             x:Class="Singularity.Views.Avalonia.Karaoke.KaraokeSettingsView"
+             x:DataType="vm:KaraokeSettingsViewModel"
+             x:CompileBindings="True"
+             Background="{DynamicResource BrushBg1}" Foreground="White">
+    <UserControl.Styles>
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="#0DFFFFFF"/>
+            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="Padding" Value="20,16"/>
+            <Setter Property="Margin" Value="0,0,0,14"/>
+        </Style>
+        <Style Selector="TextBlock.section">
+            <Setter Property="FontSize" Value="17"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style Selector="TextBlock.hint">
+            <Setter Property="Foreground" Value="#8A93A0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style Selector="TextBlock.label">
+            <Setter Property="Foreground" Value="#C8CDD4"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.quiet">
+            <Setter Property="Background" Value="#1AFFFFFF"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12,6"/>
+        </Style>
+        <Style Selector="TextBlock.ok"><Setter Property="Foreground" Value="#6C8"/></Style>
+        <Style Selector="TextBlock.warn"><Setter Property="Foreground" Value="#FC6"/></Style>
+    </UserControl.Styles>
+
+    <ScrollViewer>
+        <StackPanel Margin="32,26" MaxWidth="900" HorizontalAlignment="Left">
+            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,18">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Settings" FontSize="32" FontWeight="Bold"/>
+                    <TextBlock Text="Where songs come from, where they're kept, and how they're sung." Foreground="#9AA" FontSize="14"/>
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1" IsChecked="{Binding ShowAdvanced}" OnContent="Advanced" OffContent="Advanced" VerticalAlignment="Top"
+                              ToolTip.Tip="Every setting, including search, quality and diagnostics"/>
+            </Grid>
+
+            <!-- Accounts -->
+            <Border Classes="card">
+                <StackPanel Spacing="14">
+                    <TextBlock Classes="section" Text="Accounts"/>
+
+                    <Grid ColumnDefinitions="140,*,Auto" RowDefinitions="Auto,Auto">
+                        <TextBlock Classes="label" Text="Soulseek"/>
+                        <TextBox Grid.Column="1" Text="{Binding Orbit.SoulseekUsername, Mode=TwoWay}" Watermark="Soulseek username" MaxWidth="320" HorizontalAlignment="Left" MinWidth="240"/>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                            <Button Classes="quiet" Content="Connect" Command="{Binding Orbit.SoulseekConnectCommand}" IsVisible="{Binding !Orbit.SoulseekIsConnected}"/>
+                            <Button Classes="quiet" Content="Disconnect" Command="{Binding Orbit.SoulseekDisconnectCommand}" IsVisible="{Binding Orbit.SoulseekIsConnected}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Spacing="4" Margin="0,6,0,0">
+                            <TextBlock Classes="hint" Text="{Binding Orbit.SoulseekConnectionStatusText}"/>
+                            <CheckBox Content="Connect when Singularity starts" IsChecked="{Binding Orbit.SoulseekAutoConnectEnabled, Mode=TwoWay}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="140,*,Auto">
+                        <TextBlock Classes="label" Text="Spotify"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Orbit.SpotifyDisplayName}" IsVisible="{Binding Orbit.IsSpotifyConnected}"/>
+                            <TextBlock Classes="hint" Text="Connect to add songs from Spotify links (playlists, albums, songs)." IsVisible="{Binding !Orbit.IsSpotifyConnected}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                            <Button Classes="quiet" Content="Connect" Command="{Binding Orbit.ConnectSpotifyCommand}" IsVisible="{Binding !Orbit.IsSpotifyConnected}"/>
+                            <Button Classes="quiet" Content="Disconnect" Command="{Binding Orbit.DisconnectSpotifyCommand}" IsVisible="{Binding Orbit.IsSpotifyConnected}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto">
+                        <TextBlock Classes="label" Text="USDB" VerticalAlignment="Top" Margin="0,6,0,0"/>
+                        <StackPanel Grid.Column="1" Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBox Text="{Binding UsdbUser}" Watermark="USDB username" Width="200"/>
+                                <TextBox Text="{Binding UsdbPassword}" PasswordChar="●" Watermark="Password" Width="200"/>
+                                <Button Classes="quiet" Content="Save" Command="{Binding SaveUsdbCommand}"/>
+                            </StackPanel>
+                            <TextBlock Classes="hint" Text="{Binding UsdbStatus}"/>
+                            <TextBlock Classes="hint" Text="usdb.animux.de has charts made by people. With an account, a song gets one of those (3 stars or more) when there is one, and an AI chart otherwise."/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Folders -->
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="section" Text="Folders"/>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="label" Text="Your karaoke songs (UltraStar folders)"/>
+                        <ItemsControl ItemsSource="{Binding SongFolders}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                        <TextBlock Text="{Binding}" VerticalAlignment="Center" FontFamily="Consolas" FontSize="13"/>
+                                        <Button Grid.Column="1" Classes="quiet" Content="Remove" Padding="10,3"
+                                                Command="{Binding $parent[ItemsControl].((vm:KaraokeSettingsViewModel)DataContext).RemoveFolderCommand}"
+                                                CommandParameter="{Binding}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Button Classes="quiet" Content="Add folder…" Click="OnAddSongFolder"/>
+                            <TextBlock Classes="hint" VerticalAlignment="Center" Text="Found by itself; add folders to choose." IsVisible="{Binding UsesDefaultFolder}"/>
+                        </StackPanel>
+                        <TextBlock Classes="hint" Text="Only read: Singularity never changes these folders."/>
+                    </StackPanel>
+
+                    <Grid ColumnDefinitions="220,*,Auto">
+                        <TextBlock Classes="label" Text="New songs are made in"/>
+                        <TextBlock Grid.Column="1" Text="{Binding IngestFolder}" VerticalAlignment="Center" FontFamily="Consolas" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                        <Button Grid.Column="2" Classes="quiet" Content="Change…" Click="OnChangeIngestFolder"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="220,*,Auto">
+                        <TextBlock Classes="label" Text="Downloads go to"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Orbit.DownloadPath}" VerticalAlignment="Center" FontFamily="Consolas" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                        <Button Grid.Column="2" Classes="quiet" Content="Change…" Command="{Binding Orbit.BrowseDownloadPathCommand}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Adding songs -->
+            <Border Classes="card">
+                <StackPanel Spacing="10">
+                    <TextBlock Classes="section" Text="Adding songs"/>
+                    <CheckBox Content="Every download becomes a karaoke song" IsChecked="{Binding IngestAllDownloads}"/>
+                    <TextBlock Classes="hint" Margin="28,-6,0,0" Text="Also downloads from Search. Songs your collection already has are skipped."/>
+                    <CheckBox Content="Use community charts from USDB when there is a good one" IsChecked="{Binding UseCommunityCharts}"/>
+                    <CheckBox Content="Find the music video" IsChecked="{Binding DownloadVideos}"/>
+                    <TextBlock Classes="hint" Margin="28,-6,0,0" Text="From YouTube. A video that isn't in sync plays dimmed in the background."/>
+                </StackPanel>
+            </Border>
+
+            <!-- Singing -->
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="section" Text="Singing"/>
+                    <Grid ColumnDefinitions="220,Auto">
+                        <TextBlock Classes="label" Text="Original vocals"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding VocalsOptions}" SelectedItem="{Binding Vocals}" MinWidth="140"/>
+                    </Grid>
+                    <TextBlock Classes="hint" Margin="0,-6,0,0" Text="For songs with removed vocals: Off for real karaoke, Guide plays them quietly. V switches while singing."/>
+                    <Grid ColumnDefinitions="220,240,Auto">
+                        <TextBlock Classes="label" Text="Text size on the stage"/>
+                        <Slider Grid.Column="1" Minimum="0.75" Maximum="2" SmallChange="0.05" LargeChange="0.25" Value="{Binding TextScale}"/>
+                        <TextBlock Grid.Column="2" Text="{Binding TextScaleText}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Classes="quiet" Content="Microphones and latency…" Command="{Binding OpenMicrophoneCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- System -->
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="section" Text="System"/>
+                    <Grid ColumnDefinitions="220,*">
+                        <TextBlock Classes="label" Text="AI worker"/>
+                        <TextBlock Grid.Column="1" Text="{Binding AiStatus}" Classes.ok="{Binding AiInstalled}" Classes.warn="{Binding !AiInstalled}" TextWrapping="Wrap"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="220,*">
+                        <TextBlock Classes="label" Text="Music videos"/>
+                        <TextBlock Grid.Column="1" Text="{Binding VideoToolStatus}" Classes.ok="{Binding VideoToolInstalled}" Classes.warn="{Binding !VideoToolInstalled}" TextWrapping="Wrap"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

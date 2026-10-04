@@ -88,9 +88,11 @@ public sealed class KaraokeIngestService : IDisposable
             new FfmpegIngestMedia(Http),
             KaraokePackager.DefaultStagingRoot,
             loggers.CreateLogger<KaraokePackager>(),
-            new YtDlpVideoFinder(loggers.CreateLogger<YtDlpVideoFinder>()),
-            new Usdb.UsdbCommunityCharts(new Usdb.UsdbClient(Usdb.UsdbCredentials.Load, loggers.CreateLogger<Usdb.UsdbClient>()),
-                loggers.CreateLogger<Usdb.UsdbCommunityCharts>()));
+            new SwitchableVideoFinder(new YtDlpVideoFinder(loggers.CreateLogger<YtDlpVideoFinder>()), () => config.KaraokeDownloadVideos),
+            new SwitchableCommunityCharts(
+                new Usdb.UsdbCommunityCharts(new Usdb.UsdbClient(Usdb.UsdbCredentials.Load, loggers.CreateLogger<Usdb.UsdbClient>()),
+                    loggers.CreateLogger<Usdb.UsdbCommunityCharts>()),
+                () => config.KaraokeUseCommunityCharts));
         Queue = new IngestQueue(packager, () => songs.IngestFolder, _logger);
         Queue.Changed += ForgetFinished;
         Queue.PackageReady += _ => songs.NotifySongsAdded();
