@@ -123,6 +123,19 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     public const double MinTextScale = 0.75, MaxTextScale = 2.0;
 
     /// <summary>Size of all stage text and note bars, 0.75-2.0 (1 = default); saved to config.</summary>
+    /// <summary>The difficulty songs are scored at (saved); applies from the next song.</summary>
+    public Difficulty Difficulty
+    {
+        get => Enum.TryParse<Difficulty>(_config.KaraokeDifficulty, out var d) ? d : Difficulty.Medium;
+        set
+        {
+            if (value == Difficulty) return;
+            _config.KaraokeDifficulty = value.ToString();
+            _ = _configManager.SaveAsync(_config);
+            this.RaisePropertyChanged();
+        }
+    }
+
     public double TextScale
     {
         get => _config.KaraokeTextScale is > 0 ? _config.KaraokeTextScale : 1.0;
@@ -272,7 +285,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                 foreach (var p in players)
                 {
                     var player = p;
-                    p.Session = new SingerSession(song, p.Voice, capture.SampleRate, Difficulty.Medium, _config.KaraokeMicLatencyMs);
+                    p.Session = new SingerSession(song, p.Voice, capture.SampleRate, Difficulty, _config.KaraokeMicLatencyMs);
                     p.Session.Scorer.BeatJudged += (note, beat, hit) => { if (hit) player.Hits.Add((note, beat)); };
                     p.Session.Scorer.LineCompleted += line => { player.LastLine = line; player.LastLineBeat = song.MsToBeat(_audio.PositionMs); };
                 }

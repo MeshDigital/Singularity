@@ -147,6 +147,11 @@
                 <StackPanel Spacing="12">
                     <TextBlock Classes="section" Text="Singing"/>
                     <Grid ColumnDefinitions="220,Auto">
+                        <TextBlock Classes="label" Text="Difficulty"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding Difficulties}" SelectedItem="{Binding Difficulty}" MinWidth="140"/>
+                    </Grid>
+                    <TextBlock Classes="hint" Margin="0,-6,0,0" Text="Easy: within 2 semitones of the note counts. Medium: within 1. Hard: the exact note. Octaves never matter."/>
+                    <Grid ColumnDefinitions="220,Auto">
                         <TextBlock Classes="label" Text="Original vocals"/>
                         <ComboBox Grid.Column="1" ItemsSource="{Binding VocalsOptions}" SelectedItem="{Binding Vocals}" MinWidth="140"/>
                     </Grid>

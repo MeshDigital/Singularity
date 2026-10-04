@@ -39,6 +39,9 @@ public class AppConfig
     /// <summary>Original vocals while singing, when the song has separated stems: Off, Guide (quiet) or Full.</summary>
     public string KaraokeVocals { get; set; } = "Off";
 
+    /// <summary>How close to the note singing has to be: Easy (2 semitones), Medium (1) or Hard (exact).</summary>
+    public string KaraokeDifficulty { get; set; } = "Medium";
+
     /// <summary>Size of everything drawn on the sing stage (lyrics, scores, ratings, notes), 0.75-2.0.</summary>
     public double KaraokeTextScale { get; set; } = 1.0;
 

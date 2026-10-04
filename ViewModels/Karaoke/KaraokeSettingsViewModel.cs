@@ -155,6 +155,19 @@ public sealed class KaraokeSettingsViewModel : ReactiveObject
 
     public string[] VocalsOptions { get; } = { "Off", "Guide", "Full" };
 
+    public string[] Difficulties { get; } = { "Easy", "Medium", "Hard" };
+
+    /// <summary>How close singing must be to count (also on the Sing page).</summary>
+    public string Difficulty
+    {
+        get => _sing.Difficulty.ToString();
+        set
+        {
+            if (Enum.TryParse<Singularity.Karaoke.Scoring.Difficulty>(value, out var d)) _sing.Difficulty = d;
+            this.RaisePropertyChanged();
+        }
+    }
+
     /// <summary>The original vocals while singing a song with separated stems: off, quiet guide, or full.</summary>
     public string Vocals
     {

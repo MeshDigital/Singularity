@@ -208,6 +208,7 @@ public class ConfigManager
                 KaraokeMic2Channel = config["Karaoke:Mic2Channel"] ?? "Right",
                 KaraokeStageScreen = config["Karaoke:StageScreen"] ?? "",
                 KaraokeVocals = config["Karaoke:Vocals"] ?? "Off",
+                KaraokeDifficulty = config["Karaoke:Difficulty"] is "Easy" or "Hard" ? config["Karaoke:Difficulty"]! : "Medium",
                 KaraokeBatchRestSeconds = int.TryParse(config["Karaoke:BatchRestSeconds"], out var batchRest) ? Math.Clamp(batchRest, 0, 600) : 3,
                 KaraokeIngestFolder = config["Karaoke:IngestFolder"] ?? "",
                 KaraokeIngestAllDownloads = !bool.TryParse(config["Karaoke:IngestAllDownloads"], out var ingestAll) || ingestAll,
@@ -422,6 +423,7 @@ public class ConfigManager
         iniContent.AppendLine($"Mic2Channel = {config.KaraokeMic2Channel}");
         iniContent.AppendLine($"StageScreen = {config.KaraokeStageScreen}");
         iniContent.AppendLine($"Vocals = {config.KaraokeVocals}");
+        iniContent.AppendLine($"Difficulty = {config.KaraokeDifficulty}");
         iniContent.AppendLine($"BatchRestSeconds = {config.KaraokeBatchRestSeconds}");
         iniContent.AppendLine($"IngestFolder = {config.KaraokeIngestFolder}");
         iniContent.AppendLine($"IngestAllDownloads = {config.KaraokeIngestAllDownloads}");

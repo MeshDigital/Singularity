@@ -22,7 +22,10 @@
             </StackPanel>
             <StackPanel Grid.Column="1" Spacing="10" HorizontalAlignment="Right">
                 <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
-                    <TextBlock Text="Sing on" VerticalAlignment="Center" Foreground="#AAB"/>
+                    <TextBlock Text="Difficulty" VerticalAlignment="Center" Foreground="#AAB"/>
+                    <ComboBox ItemsSource="{Binding Difficulties}" SelectedItem="{Binding Difficulty}" MinWidth="110"
+                              ToolTip.Tip="Easy: within 2 semitones counts. Medium: within 1. Hard: the exact note."/>
+                    <TextBlock Text="Sing on" VerticalAlignment="Center" Foreground="#AAB" Margin="12,0,0,0"/>
                     <ComboBox ItemsSource="{Binding StageScreens}" SelectedItem="{Binding SelectedStageScreen}" MinWidth="260"
                               ToolTip.Tip="Show the singing full screen on a projector or TV, and keep this window for the library"/>
                     <Button Content="Rescan" Command="{Binding RefreshCommand}"/>

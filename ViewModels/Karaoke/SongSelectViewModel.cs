@@ -370,6 +370,19 @@ public sealed class SongSelectViewModel : ReactiveObject
         }
     }
 
+    public string[] Difficulties { get; } = { "Easy", "Medium", "Hard" };
+
+    /// <summary>How close singing must be to count: Easy 2 semitones, Medium 1, Hard exact.</summary>
+    public string Difficulty
+    {
+        get => _sing.Difficulty.ToString();
+        set
+        {
+            if (Enum.TryParse<Singularity.Karaoke.Scoring.Difficulty>(value, out var d)) _sing.Difficulty = d;
+            this.RaisePropertyChanged();
+        }
+    }
+
     /// <summary>Size of the stage's text and notes (also adjustable while singing with + and -).</summary>
     public double TextScale
     {
