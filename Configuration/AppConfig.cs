@@ -50,6 +50,12 @@ public class AppConfig
     /// see <see cref="Services.Karaoke.KaraokeLibrary.IngestFolder"/>. It is also scanned as a song folder.
     /// </summary>
     public string KaraokeIngestFolder { get; set; } = "";
+
+    /// <summary>
+    /// Every finished download (Import tab, Search, …) becomes a karaoke song, not only links added on the
+    /// Add songs page. Songs already in the karaoke collection are skipped.
+    /// </summary>
+    public bool KaraokeIngestAllDownloads { get; set; } = true;
     public int ListenPort { get; set; } = 49998;
     public bool UseUPnP { get; set; } = false;
     public int ConnectTimeout { get; set; } = 60000; // ms

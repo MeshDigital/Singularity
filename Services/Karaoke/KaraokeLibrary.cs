@@ -28,6 +28,10 @@ public sealed class KaraokeLibrary
 
     public SongScanResult? Last { get; private set; }
 
+    private IReadOnlySet<string> _communityKeys = new HashSet<string>();
+    private IReadOnlySet<string> _allKeys = new HashSet<string>();
+    private readonly SemaphoreSlim _scanGate = new(1, 1);
+
     public IReadOnlyList<string> Folders
     {
         get
@@ -89,6 +93,29 @@ public sealed class KaraokeLibrary
         }
     }
 
+    /// <summary>
+    /// Whether the collection already has this song (same artist and title, as versions are grouped).
+    /// <paramref name="includeImported"/> false only counts the user's own song folders, not songs Singularity made.
+    /// Scans once if nothing was scanned yet.
+    /// </summary>
+    public async Task<bool> HasSongAsync(string artist, string title, bool includeImported, CancellationToken ct = default)
+    {
+        if (Last is null)
+        {
+            await _scanGate.WaitAsync(ct);
+            try
+            {
+                if (Last is null) await ScanAsync(ct);
+            }
+            finally
+            {
+                _scanGate.Release();
+            }
+        }
+        var key = SongClusters.KeyOf(artist, title);
+        return (includeImported ? _allKeys : _communityKeys).Contains(key);
+    }
+
     public async Task<SongScanResult> ScanAsync(CancellationToken ct = default)
     {
         var folders = Folders;
@@ -96,6 +123,10 @@ public sealed class KaraokeLibrary
         var result = await Task.Run(() => SongScanner.Scan(folders, ct), ct).ConfigureAwait(false);
         _logger.LogInformation("Karaoke: scanned {Folders} folder(s): {Songs} songs, {Failures} unreadable, in {Ms} ms",
             folders.Count, result.Songs.Count, result.Failures.Count, sw.ElapsedMilliseconds);
+        var ingest = Path.GetFullPath(IngestFolder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        _allKeys = result.Songs.Select(s => SongClusters.KeyOf(s.Song.Artist, s.Song.Title)).ToHashSet();
+        _communityKeys = result.Songs.Where(s => !s.Folder.StartsWith(ingest, StringComparison.OrdinalIgnoreCase))
+            .Select(s => SongClusters.KeyOf(s.Song.Artist, s.Song.Title)).ToHashSet();
         Last = result;
         return result;
     }

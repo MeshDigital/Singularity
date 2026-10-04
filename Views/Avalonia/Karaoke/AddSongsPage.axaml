@@ -26,6 +26,12 @@
 
             <TextBlock Text="{Binding Message}" Foreground="#CCD" IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
             <TextBlock Text="{Binding OfflineText}" Foreground="#FC6" TextWrapping="Wrap" IsVisible="{Binding IsOffline}"/>
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <CheckBox Content="Also make karaoke songs from every other download (Import tab, Search)" IsChecked="{Binding IngestAllDownloads}"
+                          ToolTip.Tip="Songs your karaoke collection already has are skipped"/>
+                <Button Content="Make karaoke songs from my downloads" Command="{Binding CatchUpCommand}"
+                        ToolTip.Tip="For songs downloaded before, e.g. a playlist from the Import tab. Songs already in the collection are skipped."/>
+            </StackPanel>
             <TextBlock Text="{Binding FolderText}" Foreground="#778" FontSize="12"/>
             <TextBlock Text="{Binding HeldText}" Foreground="#FC6" FontSize="12"
                        IsVisible="{Binding HeldText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>

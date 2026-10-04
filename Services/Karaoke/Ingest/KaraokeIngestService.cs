@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Singularity.Models;
@@ -27,6 +28,11 @@ public sealed class KaraokeIngestService : IDisposable
     private readonly ImportOrchestrator _orchestrator;
     private readonly SpotifyImportProvider _spotify;
     private readonly ILibraryService _library;
+    private readonly KaraokeLibrary _songs;
+    private readonly Singularity.Configuration.AppConfig _config;
+
+    /// <summary>Songs (by cluster key) queued or made this session, so a second download of one isn't charted twice.</summary>
+    private readonly HashSet<string> _made = new(StringComparer.Ordinal);
     private readonly ILogger<KaraokeIngestService> _logger;
     private readonly IDisposable _subscription;
     private readonly string _statePath;
@@ -58,8 +64,11 @@ public sealed class KaraokeIngestService : IDisposable
         IEventBus events,
         KaraokeWorker worker,
         KaraokeLibrary songs,
+        Singularity.Configuration.AppConfig config,
         ILoggerFactory loggers)
     {
+        _songs = songs;
+        _config = config;
         _orchestrator = orchestrator;
         _spotify = spotify;
         _library = library;
@@ -129,7 +138,14 @@ public sealed class KaraokeIngestService : IDisposable
         Pending? pending;
         lock (_lock)
         {
-            if (!_pending.TryGetValue(e.TrackGlobalId, out pending) || !pending.JobIds.Contains(e.ProjectId)) return;
+            if (!_pending.TryGetValue(e.TrackGlobalId, out pending) || !pending.JobIds.Contains(e.ProjectId)) pending = null;
+        }
+        if (pending is null)
+        {
+            // Not asked for on the Add songs page: a download from the Import tab, Search, … becomes a
+            // karaoke song too (unless switched off), when the collection doesn't have it yet.
+            if (e.State == PlaylistTrackState.Completed && _config.KaraokeIngestAllDownloads) await OnOtherDownloadAsync(e);
+            return;
         }
 
         switch (e.State)
@@ -159,6 +175,62 @@ public sealed class KaraokeIngestService : IDisposable
                 }
                 break;
         }
+    }
+
+    private async Task OnOtherDownloadAsync(TrackStateChangedEvent e)
+    {
+        try
+        {
+            if (await _library.GetPlaylistTrackByHashAsync(e.ProjectId, e.TrackGlobalId) is { } track)
+                await EnqueueIfNewAsync(track, TrackDetails.Of(track), includeImported: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Karaoke import: couldn't take on the download {Hash}", e.TrackGlobalId);
+        }
+    }
+
+    /// <summary>
+    /// Makes karaoke songs from everything already downloaded (e.g. a playlist imported before this was
+    /// switched on), skipping songs the collection has. Returns how many were queued and skipped.
+    /// </summary>
+    public async Task<(int Queued, int Skipped)> MakeSongsFromDownloadsAsync(CancellationToken ct = default)
+    {
+        int queued = 0, skipped = 0;
+        var tracks = (await _library.GetAllPlaylistTracksAsync())
+            .Where(t => t.Status == TrackStatus.Downloaded && !string.IsNullOrEmpty(t.ResolvedFilePath) && File.Exists(t.ResolvedFilePath))
+            .GroupBy(t => t.TrackUniqueHash.Length > 0 ? t.TrackUniqueHash : t.ResolvedFilePath, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+        foreach (var track in tracks)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (await EnqueueIfNewAsync(track, TrackDetails.Of(track), includeImported: true, ct)) queued++;
+            else skipped++;
+        }
+        _logger.LogInformation("Karaoke import from downloads: {Queued} queued, {Skipped} already in the collection", queued, skipped);
+        return (queued, skipped);
+    }
+
+    /// <summary>Queues the download unless the collection (or this session) already has the song.</summary>
+    private async Task<bool> EnqueueIfNewAsync(PlaylistTrack track, TrackDetails? details, bool includeImported, CancellationToken ct = default)
+    {
+        var key = Singularity.Karaoke.Library.SongClusters.KeyOf(track.Artist, track.Title);
+        lock (_lock)
+        {
+            if (_made.Contains(key)) return false;
+        }
+        if (await _songs.HasSongAsync(track.Artist, track.Title, includeImported, ct))
+        {
+            _logger.LogDebug("Karaoke import: {Artist} - {Title} is already in the collection", track.Artist, track.Title);
+            return false;
+        }
+        lock (_lock)
+        {
+            if (!_made.Add(key)) return false;
+        }
+        EnqueueDownloaded(track, details);
+        return true;
     }
 
     private TrackDetails? DetailsFor(string hash)

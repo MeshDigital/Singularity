@@ -98,13 +98,19 @@ public sealed class AddSongsViewModel : ReactiveObject
 {
     private readonly KaraokeIngestService _ingest;
     private readonly ILogger<AddSongsViewModel> _logger;
+    private readonly AppConfig _config;
+    private readonly ConfigManager _configManager;
+    private bool _isCatchingUp;
     private string _link = "";
     private string _message = "";
     private bool _isImporting;
     private bool _refreshPosted;
 
-    public AddSongsViewModel(KaraokeIngestService ingest, ILogger<AddSongsViewModel> logger)
+    public AddSongsViewModel(KaraokeIngestService ingest, AppConfig config, ConfigManager configManager, ILogger<AddSongsViewModel> logger)
     {
+        _config = config;
+        _configManager = configManager;
+        CatchUpCommand = new AsyncRelayCommand(CatchUpAsync, () => !_isCatchingUp);
         _ingest = ingest;
         _logger = logger;
         ImportCommand = new AsyncRelayCommand(ImportAsync, () => !IsImporting && _ingest.CanImport(Link));
@@ -139,6 +145,46 @@ public sealed class AddSongsViewModel : ReactiveObject
     public ICommand ImportCommand { get; }
 
     public string FolderText => $"New songs are saved to {_ingest.IngestFolder()}";
+
+    /// <summary>Every finished download becomes a karaoke song, not only links added here.</summary>
+    public bool IngestAllDownloads
+    {
+        get => _config.KaraokeIngestAllDownloads;
+        set
+        {
+            if (value == _config.KaraokeIngestAllDownloads) return;
+            _config.KaraokeIngestAllDownloads = value;
+            _ = _configManager.SaveAsync(_config);
+            this.RaisePropertyChanged();
+        }
+    }
+
+    /// <summary>Makes karaoke songs from everything already downloaded that the collection doesn't have.</summary>
+    public ICommand CatchUpCommand { get; }
+
+    private async Task CatchUpAsync()
+    {
+        _isCatchingUp = true;
+        ((AsyncRelayCommand)CatchUpCommand).RaiseCanExecuteChanged();
+        Message = "Looking through your downloads…";
+        try
+        {
+            var (queued, skipped) = await _ingest.MakeSongsFromDownloadsAsync();
+            Message = queued == 0
+                ? $"Nothing new: all {skipped} downloaded songs are already karaoke songs."
+                : $"Making {queued} karaoke songs from your downloads ({skipped} were already in the collection).";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Making karaoke songs from downloads failed");
+            Message = "That didn't work: " + ex.Message;
+        }
+        finally
+        {
+            _isCatchingUp = false;
+            ((AsyncRelayCommand)CatchUpCommand).RaiseCanExecuteChanged();
+        }
+    }
 
     public string? OfflineText => RuntimeOptions.Offline
         ? "Offline mode (--offline): Soulseek is not connected, so Spotify songs will wait in the list until you start Singularity normally. Audio files work."
