@@ -62,10 +62,48 @@ Sources: UltraStar Deluxe and UltraStar Play.
 
 ## Next
 
-1. Highscores, then a party queue that guests fill from the projector's song select.
-2. Better AI charts, measured with ChartBench (recall about 70% at 100 ms, pitch within a semitone about 85%).
-3. A simple correction editor: shift the gap, nudge lines, fix a pitch.
-4. The phone companion.
+Released: **0.1.0-alpha** (installer on GitHub Releases). Ordered by value for the effort.
+
+### Quick wins (hours each)
+
+1. **High scores** per song, difficulty and singer: stored locally, "new high score!" on the results screen, the
+   best score on song cards and on the projector's version badge.
+2. **Skip intro**: a key and a button that jump to three seconds before the first note.
+3. **Jukebox mode**: play a song with its lyrics and video and no scoring, for background music between singers.
+4. **Sort and filter song select**: new, artist, title, year, language, has video, duets, community or AI chart.
+5. **One-click AI setup**: a script and a Settings button that create the worker in
+   `%LOCALAPPDATA%\Singularity\inference` (venv, CUDA torch, models), so installed copies get AI charts without a
+   source checkout.
+6. **Per-song chart choice**: "make an AI chart" or "look for a community chart" on a song's card; the packager
+   already supports both.
+7. **Results screen and top bar** in the new stage look.
+8. **Licence file**, and later a code-signing certificate so SmartScreen doesn't warn.
+
+### Integrations (days each)
+
+1. **Phones as remote controls, in the browser**: a small local web server and a QR code on the projector; guests
+   browse the collection and queue songs from their phone without installing anything. This is the first step
+   towards phones as microphones.
+2. **Party queue**: singers' names, who's next, shown on the projector between songs; filled from phones, the laptop
+   or the projector's song select.
+3. **Watched Spotify playlists**: a "karaoke" playlist that's re-synced now and then, so songs added on Spotify
+   appear in Singularity by themselves (ORBIT's playlist sync does the work).
+4. **Fingerprint check** (Chromaprint and AcoustID) to confirm a download is the requested recording; it raises the
+   audio part of the quality grade and catches wrong files.
+5. **Now singing** to Discord (Rich Presence) or as an OBS overlay.
+
+### Larger work
+
+- **Better AI charts**, measured with ChartBench: recall is about 70% at 100 ms and pitch within a semitone about 85%.
+- **A simple correction editor**: shift the gap, nudge lines, fix a pitch; opened from songs that need checking.
+- **Phones as microphones** (the companion): pitch on the phone, clock sync and per-phone latency calibration.
+- **Party modes**: teams, rounds, duel, blind, until-5000.
+
+### Known issues
+
+- *Remove* on the found-by-itself song folder doesn't stick; add your own folder instead.
+- The default song folder `D:\KARAOKE\songs` is a fixed guess; other machines choose theirs in Settings.
+- Songs queued from "Make karaoke songs from my downloads" before 0.1.0-alpha weren't saved; click it again once.
 
 ## Licensing notes
 
