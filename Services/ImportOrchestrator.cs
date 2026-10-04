@@ -237,6 +237,7 @@ public class ImportOrchestrator
                             Album = t.Album ?? string.Empty,
                             TrackUniqueHash = t.TrackHash ?? string.Empty,
                             SpotifyTrackId = t.SpotifyTrackId,
+                            ISRC = t.ISRC,
                             SpotifyAlbumId = t.SpotifyAlbumId,
                             SpotifyArtistId = t.SpotifyArtistId,
                             AlbumArtUrl = t.AlbumArtUrl,

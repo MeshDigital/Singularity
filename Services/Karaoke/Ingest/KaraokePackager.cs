@@ -319,6 +319,14 @@ public sealed class KaraokePackager
             {
                 Directory.Move(incoming, target);
             }
+            try
+            {
+                if (!Directory.EnumerateFileSystemEntries(incomingRoot).Any()) Directory.Delete(incomingRoot);
+            }
+            catch (IOException)
+            {
+                // Another import is gathering its files there right now.
+            }
             return target;
         }
         catch

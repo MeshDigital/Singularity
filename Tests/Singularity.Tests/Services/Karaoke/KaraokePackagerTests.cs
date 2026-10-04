@@ -63,7 +63,7 @@ public sealed class KaraokePackagerTests : IDisposable
 
         Assert.True(File.Exists(audio)); // the download is the user's: copied, not moved
         Assert.Empty(Directory.GetFileSystemEntries(Staging));
-        Assert.Empty(Directory.GetFileSystemEntries(Path.Combine(Output, KaraokePackager.IncomingFolderName)));
+        Assert.False(Directory.Exists(Path.Combine(Output, KaraokePackager.IncomingFolderName)));
         Assert.Equal((Lyrics: "la la\nla la", Kind: LyricsKind.Plain), (_analyzer.Last!.Lyrics, _analyzer.Last.LyricsKind));
     }
 

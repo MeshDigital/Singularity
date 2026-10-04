@@ -33,8 +33,23 @@ public sealed class KaraokeIngestService : IDisposable
     private readonly object _lock = new();
     private readonly Dictionary<string, Pending> _pending = new(StringComparer.Ordinal);
 
-    /// <summary>A track asked for as karaoke whose song isn't built yet.</summary>
-    private sealed record Pending(string Artist, string Title, List<Guid> JobIds);
+    /// <summary>
+    /// A track asked for as karaoke whose song isn't built yet, with what Spotify said about it at import.
+    /// Kept here because ORBIT's database row can lose those details (re-linking a file that was already
+    /// downloaded refills it from the library entry), while the song needs them for its metadata.
+    /// </summary>
+    internal sealed record Pending(string Artist, string Title, List<Guid> JobIds, TrackDetails? Details = null);
+
+    internal sealed record TrackDetails(string? Album, string? SpotifyTrackId, string? Isrc, int? DurationMs, string? CoverUrl, int? Year)
+    {
+        public static TrackDetails Of(PlaylistTrack t) => new(
+            string.IsNullOrWhiteSpace(t.Album) ? null : t.Album,
+            string.IsNullOrWhiteSpace(t.SpotifyTrackId) ? null : t.SpotifyTrackId,
+            string.IsNullOrWhiteSpace(t.ISRC) ? null : t.ISRC,
+            t.CanonicalDuration is > 30_000 and var ms ? ms : null,
+            string.IsNullOrWhiteSpace(t.AlbumArtUrl) ? null : t.AlbumArtUrl,
+            t.ReleaseDate?.Year);
+    }
 
     public KaraokeIngestService(
         ImportOrchestrator orchestrator,
@@ -85,15 +100,19 @@ public sealed class KaraokeIngestService : IDisposable
         {
             foreach (var track in result.Queued.Concat(result.AlreadyDownloaded).Where(t => t.TrackUniqueHash.Length > 0))
             {
-                if (_pending.TryGetValue(track.TrackUniqueHash, out var known)) known.JobIds.AddRange(result.JobIds.Except(known.JobIds));
-                else _pending[track.TrackUniqueHash] = new Pending(track.Artist, track.Title, result.JobIds.ToList());
+                if (_pending.TryGetValue(track.TrackUniqueHash, out var known))
+                {
+                    known.JobIds.AddRange(result.JobIds.Except(known.JobIds));
+                    if (known.Details is null) _pending[track.TrackUniqueHash] = known with { Details = TrackDetails.Of(track) };
+                }
+                else _pending[track.TrackUniqueHash] = new Pending(track.Artist, track.Title, result.JobIds.ToList(), TrackDetails.Of(track));
             }
             Save();
         }
         foreach (var track in result.Queued)
             Queue.Track(track.TrackUniqueHash, track.Artist, track.Title);
         foreach (var track in result.AlreadyDownloaded)
-            EnqueueDownloaded(track);
+            EnqueueDownloaded(track, DetailsFor(track.TrackUniqueHash));
         _logger.LogInformation("Karaoke import of {Link}: {Queued} to download, {Present} already downloaded",
             link, result.Queued.Count, result.AlreadyDownloaded.Count);
         return null;
@@ -129,7 +148,8 @@ public sealed class KaraokeIngestService : IDisposable
             case PlaylistTrackState.Completed:
                 try
                 {
-                    if (await _library.GetPlaylistTrackByHashAsync(e.ProjectId, e.TrackGlobalId) is { } track) EnqueueDownloaded(track);
+                    if (await _library.GetPlaylistTrackByHashAsync(e.ProjectId, e.TrackGlobalId) is { } track) EnqueueDownloaded(track, pending.Details);
+                    else _logger.LogWarning("Karaoke import: download {Hash} finished but its track isn't in project {Project}", e.TrackGlobalId, e.ProjectId);
                 }
                 catch (Exception ex)
                 {
@@ -139,14 +159,37 @@ public sealed class KaraokeIngestService : IDisposable
         }
     }
 
-    private void EnqueueDownloaded(PlaylistTrack track)
+    private TrackDetails? DetailsFor(string hash)
+    {
+        lock (_lock) return _pending.TryGetValue(hash, out var p) ? p.Details : null;
+    }
+
+    private void EnqueueDownloaded(PlaylistTrack track, TrackDetails? details)
     {
         if (string.IsNullOrEmpty(track.ResolvedFilePath) || !File.Exists(track.ResolvedFilePath))
         {
+            _logger.LogWarning("Karaoke import: {Artist} - {Title} is downloaded but its file isn't there ({Path})", track.Artist, track.Title, track.ResolvedFilePath);
             Queue.Track(track.TrackUniqueHash, track.Artist, track.Title, IngestState.Failed, "The downloaded file is missing.");
             return;
         }
-        Queue.Enqueue(track.TrackUniqueHash, SourceFor(track));
+        _logger.LogInformation("Karaoke import: {Artist} - {Title} downloaded, making the song from {Path}", track.Artist, track.Title, track.ResolvedFilePath);
+        Queue.Enqueue(track.TrackUniqueHash, SourceFor(track, details));
+    }
+
+    /// <summary>The download as the packager needs it: the file from ORBIT's row, the details as Spotify gave them at import.</summary>
+    internal static IngestSource SourceFor(PlaylistTrack t, TrackDetails? details)
+    {
+        var fromRow = SourceFor(t);
+        if (details is null) return fromRow;
+        return fromRow with
+        {
+            Album = details.Album ?? fromRow.Album,
+            TrackId = details.SpotifyTrackId is { } id ? "spotify:track:" + id : fromRow.TrackId,
+            Isrc = details.Isrc ?? fromRow.Isrc,
+            ExpectedDurationMs = details.DurationMs ?? fromRow.ExpectedDurationMs,
+            CoverUrl = details.CoverUrl ?? fromRow.CoverUrl,
+            Year = details.Year ?? fromRow.Year,
+        };
     }
 
     internal static IngestSource SourceFor(PlaylistTrack t) => new(
@@ -179,7 +222,7 @@ public sealed class KaraokeIngestService : IDisposable
                 {
                     if (await _library.GetPlaylistTrackByHashAsync(job, hash) is { Status: TrackStatus.Downloaded } t) { done = t; break; }
                 }
-                if (done is not null) EnqueueDownloaded(done);
+                if (done is not null) EnqueueDownloaded(done, p.Details);
                 else Queue.Track(hash, p.Artist, p.Title);
             }
         }

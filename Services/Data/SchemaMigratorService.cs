@@ -730,6 +730,17 @@ public class SchemaMigratorService
                 await command.ExecuteNonQueryAsync();
             }
 
+            // Loudness analysis and "prepared" flags: older databases have them on PlaylistTracks and
+            // LibraryEntries but not on the legacy Tracks table, so every download status update failed
+            // with "no such column: t.DynamicRange".
+            foreach (var (column, type) in new[] { ("Loudness", "REAL NULL"), ("TruePeak", "REAL NULL"), ("DynamicRange", "REAL NULL"), ("IsPrepared", "INTEGER NOT NULL DEFAULT 0") })
+            {
+                if (ColumnExists("Tracks", column)) continue;
+                _logger.LogInformation("Patching Schema: Adding {Column} to Tracks...", column);
+                command.CommandText = $@"ALTER TABLE ""Tracks"" ADD COLUMN ""{column}"" {type};";
+                await command.ExecuteNonQueryAsync();
+            }
+
             // Phase: FLAC-Gold Download Resilience & Failure Escalation
             if (!ColumnExists("Tracks", "SearchRetryCount"))
             {

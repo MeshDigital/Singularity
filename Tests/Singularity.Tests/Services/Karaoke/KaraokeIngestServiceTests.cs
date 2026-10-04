@@ -33,6 +33,30 @@ public class KaraokeIngestServiceTests
     }
 
     [Fact]
+    public void DetailsFromTheImport_FillWhatTheDatabaseRowLost()
+    {
+        var atImport = new PlaylistTrack
+        {
+            Artist = "The Killers", Title = "Mr. Brightside", Album = "Hot Fuss", SpotifyTrackId = "003vvx7Niy0yvhvHt4a68B",
+            ISRC = "USIR20400274", CanonicalDuration = 222_973, AlbumArtUrl = "https://i.scdn.co/image/x", ReleaseDate = new DateTime(2004, 6, 7),
+        };
+        // What the row looked like after ORBIT re-linked the already-downloaded file.
+        var row = new PlaylistTrack
+        {
+            Artist = "The Killers", Title = "Mr. Brightside", Album = "Hot Fuss", SpotifyTrackId = "003vvx7Niy0yvhvHt4a68B",
+            AlbumArtUrl = "https://i.scdn.co/image/x", ResolvedFilePath = @"D:\Music\The Killers - Mr. Brightside.flac",
+        };
+
+        var source = KaraokeIngestService.SourceFor(row, KaraokeIngestService.TrackDetails.Of(atImport));
+
+        Assert.Equal(@"D:\Music\The Killers - Mr. Brightside.flac", source.AudioPath);
+        Assert.Equal("USIR20400274", source.Isrc);
+        Assert.Equal(222_973, source.ExpectedDurationMs);
+        Assert.Equal(2004, source.Year);
+        Assert.Equal("spotify:track:003vvx7Niy0yvhvHt4a68B", source.TrackId);
+    }
+
+    [Fact]
     public void ADurationBackfilledInSeconds_IsNotTakenAsMilliseconds()
     {
         var track = new PlaylistTrack { Artist = "A", Title = "B", ResolvedFilePath = "x.mp3", CanonicalDuration = 223 };

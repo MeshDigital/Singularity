@@ -56,16 +56,23 @@ public sealed class SingStage : Control
         base.OnDetachedFromVisualTree(e);
     }
 
+    /// <summary>The frame to draw, taken before the render pass.</summary>
+    private StageSnapshot? _frame;
+
+    // The view model is advanced here, before the render pass, never inside Render: Tick updates bound
+    // properties (live scores, results), and changing a bound control while Avalonia renders throws
+    // "Visual was invalidated during the render pass".
     private void RequestFrame() => TopLevel.GetTopLevel(this)?.RequestAnimationFrame(_ =>
     {
         if (!_attached) return;
+        _frame = (DataContext as SingViewModel)?.Tick();
         InvalidateVisual();
         RequestFrame();
     });
 
     public override void Render(DrawingContext ctx)
     {
-        if (DataContext is not SingViewModel vm || vm.Tick() is not { } s) return;
+        if (DataContext is not SingViewModel || _frame is not { } s) return;
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 100 || h < 100) return;
 
