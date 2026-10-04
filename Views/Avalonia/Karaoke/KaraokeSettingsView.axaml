@@ -175,6 +175,7 @@
                         <TextBlock Classes="label" Text="AI worker"/>
                         <TextBlock Grid.Column="1" Text="{Binding AiStatus}" Classes.ok="{Binding AiInstalled}" Classes.warn="{Binding !AiInstalled}" TextWrapping="Wrap"/>
                     </Grid>
+                    <Button Classes="quiet" Content="Choose AI worker folder…" Click="OnChooseInferenceFolder" IsVisible="{Binding !AiInstalled}" Margin="220,0,0,0"/>
                     <Grid ColumnDefinitions="220,*">
                         <TextBlock Classes="label" Text="Music videos"/>
                         <TextBlock Grid.Column="1" Text="{Binding VideoToolStatus}" Classes.ok="{Binding VideoToolInstalled}" Classes.warn="{Binding !VideoToolInstalled}" TextWrapping="Wrap"/>

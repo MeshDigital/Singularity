@@ -37,6 +37,7 @@ public sealed class KaraokeSettingsViewModel : ReactiveObject
     {
         Orbit = orbit;
         _config = config;
+        InferenceWorkerOptions.ChosenDirectory = string.IsNullOrWhiteSpace(config.KaraokeInferenceFolder) ? null : config.KaraokeInferenceFolder;
         _configManager = configManager;
         _library = library;
         _sing = sing;
@@ -194,9 +195,26 @@ public sealed class KaraokeSettingsViewModel : ReactiveObject
 
     public string AiStatus => InferenceWorkerOptions.Discover() is not null
         ? "Installed: makes charts and removes vocals"
-        : "Not installed (inference\\.venv missing): no AI charts or vocal removal";
+        : "Not found: no AI charts or vocal removal. Set up inference/ (see its README), then choose its folder.";
 
     public bool AiInstalled => InferenceWorkerOptions.Discover() is not null;
+
+    /// <summary>Points Singularity at an AI worker folder (one holding .venv); false when there's no worker in it.</summary>
+    public bool ChooseInferenceFolder(string folder)
+    {
+        var previous = InferenceWorkerOptions.ChosenDirectory;
+        InferenceWorkerOptions.ChosenDirectory = folder;
+        if (InferenceWorkerOptions.Discover() is null)
+        {
+            InferenceWorkerOptions.ChosenDirectory = previous;
+            return false;
+        }
+        _config.KaraokeInferenceFolder = folder;
+        Save();
+        this.RaisePropertyChanged(nameof(AiStatus));
+        this.RaisePropertyChanged(nameof(AiInstalled));
+        return true;
+    }
 
     public string VideoToolStatus => YtDlpVideoFinder.Locate() is { } path
         ? "yt-dlp installed: music videos are found"

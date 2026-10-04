@@ -214,6 +214,7 @@ public class ConfigManager
                 KaraokeIngestAllDownloads = !bool.TryParse(config["Karaoke:IngestAllDownloads"], out var ingestAll) || ingestAll,
                 KaraokeUseCommunityCharts = !bool.TryParse(config["Karaoke:UseCommunityCharts"], out var community) || community,
                 KaraokeDownloadVideos = !bool.TryParse(config["Karaoke:DownloadVideos"], out var videos) || videos,
+                KaraokeInferenceFolder = config["Karaoke:InferenceFolder"] ?? "",
                 KaraokeTextScale = double.TryParse(config["Karaoke:TextScale"], System.Globalization.NumberStyles.Float,
                     System.Globalization.CultureInfo.InvariantCulture, out var textScale) ? Math.Clamp(textScale, 0.75, 2.0) : 1.0,
                 KaraokeMicLatencyMs = double.TryParse(config["Karaoke:MicLatencyMs"], System.Globalization.NumberStyles.Float,
@@ -429,6 +430,7 @@ public class ConfigManager
         iniContent.AppendLine($"IngestAllDownloads = {config.KaraokeIngestAllDownloads}");
         iniContent.AppendLine($"UseCommunityCharts = {config.KaraokeUseCommunityCharts}");
         iniContent.AppendLine($"DownloadVideos = {config.KaraokeDownloadVideos}");
+        iniContent.AppendLine($"InferenceFolder = {config.KaraokeInferenceFolder}");
         iniContent.AppendLine($"TextScale = {config.KaraokeTextScale.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}");
         iniContent.AppendLine($"MicLatencyMs = {config.KaraokeMicLatencyMs.ToString("0", System.Globalization.CultureInfo.InvariantCulture)}");
 

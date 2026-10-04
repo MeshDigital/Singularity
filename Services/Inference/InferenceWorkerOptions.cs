@@ -45,6 +45,13 @@ public sealed record InferenceWorkerOptions
     /// .venv is looked for next to the app and in its parent folders, which finds the repo's copy in a
     /// development checkout. Null when there is none.
     /// </summary>
+    /// <summary>The worker folder chosen in Settings (Karaoke:InferenceFolder); null when none was chosen.</summary>
+    public static string? ChosenDirectory { get; set; }
+
+    /// <summary>Where a worker is found without configuration: %LOCALAPPDATA%\Singularity\inference.</summary>
+    public static string DefaultInstallDirectory =>
+        Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Singularity", "inference");
+
     public static InferenceWorkerOptions? Discover(string? startDirectory = null)
     {
         var ffmpeg = AudioIngestionPipeline.ResolveFfmpegPath();
@@ -56,6 +63,17 @@ public sealed record InferenceWorkerOptions
                 ? d
                 : Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(python)))!; // …\inference\.venv\Scripts\python.exe
             return new InferenceWorkerOptions { PythonExecutable = python, WorkerDirectory = dir, FfmpegPath = Ffmpeg() };
+        }
+
+        // An installed app doesn't sit next to the source checkout: also try the folder chosen in Settings and
+        // %LOCALAPPDATA%\Singularity\inference (a worker set up there is found without any configuration).
+        foreach (var workerDir in new[] { ChosenDirectory, DefaultInstallDirectory }.OfType<string>())
+        {
+            var workerPython = OperatingSystem.IsWindows()
+                ? Path.Combine(workerDir, ".venv", "Scripts", "python.exe")
+                : Path.Combine(workerDir, ".venv", "bin", "python");
+            if (File.Exists(workerPython))
+                return new InferenceWorkerOptions { PythonExecutable = workerPython, WorkerDirectory = workerDir, FfmpegPath = Ffmpeg() };
         }
 
         for (var dir = new DirectoryInfo(startDirectory ?? AppContext.BaseDirectory); dir != null; dir = dir.Parent)

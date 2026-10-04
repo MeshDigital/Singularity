@@ -235,7 +235,11 @@ public sealed class AudioIngestionPipeline
             }
         }
 
-        // 4. Fall back to system PATH (let the OS find it)
+        // 4. winget's command aliases: an app started right after "winget install" doesn't see the new PATH yet.
+        string wingetLinks = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WinGet", "Links", query);
+        if (File.Exists(wingetLinks)) return wingetLinks;
+
+        // 5. Fall back to system PATH (let the OS find it)
         return query;
     }
 

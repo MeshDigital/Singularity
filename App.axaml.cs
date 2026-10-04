@@ -532,6 +532,8 @@ public partial class App : Application
             }
             if (string.IsNullOrEmpty(appConfig.DownloadDirectory))
                 appConfig.DownloadDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Singularity");
+            if (!string.IsNullOrWhiteSpace(appConfig.KaraokeInferenceFolder))
+                Singularity.Services.Inference.InferenceWorkerOptions.ChosenDirectory = appConfig.KaraokeInferenceFolder;
             return appConfig;
         });
 

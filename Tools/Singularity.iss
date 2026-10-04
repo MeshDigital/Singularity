@@ -50,6 +50,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"
+; Music videos need yt-dlp, and audio/video decoding needs FFmpeg (winget brings it along with yt-dlp).
+; Neither is bundled: they update often and FFmpeg's builds have their own licence terms.
+Name: "mediatools"; Description: "Install yt-dlp and FFmpeg with winget (for music videos; recommended)"; GroupDescription: "Tools:"
 
 [Files]
 ; Everything dotnet publish produced, recursively — Singularity.exe, appsettings.json, Data/, Tools/,
@@ -62,6 +65,7 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+Filename: "{cmd}"; Parameters: "/c winget install --id yt-dlp.yt-dlp -e --accept-source-agreements --accept-package-agreements --disable-interactivity"; StatusMsg: "Installing yt-dlp and FFmpeg..."; Flags: runhidden waituntilterminated; Tasks: mediatools
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName} now"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]

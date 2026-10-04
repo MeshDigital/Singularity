@@ -65,6 +65,9 @@ public class AppConfig
 
     /// <summary>Look for the music video on YouTube (yt-dlp) for new songs.</summary>
     public bool KaraokeDownloadVideos { get; set; } = true;
+
+    /// <summary>The AI worker's folder (holding .venv), when it isn't next to the app.</summary>
+    public string KaraokeInferenceFolder { get; set; } = "";
     public int ListenPort { get; set; } = 49998;
     public bool UseUPnP { get; set; } = false;
     public int ConnectTimeout { get; set; } = 60000; // ms

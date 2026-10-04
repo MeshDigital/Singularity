@@ -22,6 +22,12 @@ public partial class KaraokeSettingsView : UserControl
             vm.IngestFolder = folder;
     }
 
+    private async void OnChooseInferenceFolder(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is KaraokeSettingsViewModel vm && await PickFolderAsync("The inference folder (with .venv inside)") is { } folder)
+            vm.ChooseInferenceFolder(folder);
+    }
+
     private async System.Threading.Tasks.Task<string?> PickFolderAsync(string title)
     {
         if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage) return null;
