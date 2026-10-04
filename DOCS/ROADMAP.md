@@ -1,67 +1,76 @@
 # Singularity roadmap
 
-Singularity is a karaoke game that does everything UltraStar does, with three additions: it finds and downloads music itself (the Soulseek stack inherited from ORBIT), it creates charts for songs that don't have one (an AI worker modelled on UltraStarKaraokeMaker), and it supports multiplayer across a second monitor and phones on the same network.
+Singularity is a karaoke game that does what UltraStar does, plus three things:
 
-Singularity reads and writes standard UltraStar `song.txt` files (format 1.1.0), so existing song collections work unchanged, and other players can open songs that Singularity creates.
+- it finds and downloads music itself, using the Soulseek stack inherited from ORBIT;
+- it charts songs that don't have a chart: community charts from USDB first, then an AI worker modelled on
+  UltraStarKaraokeMaker;
+- it puts the show on a second screen.
+
+It reads and writes standard UltraStar `song.txt` files (format 1.1.0), so existing collections work unchanged and
+other players can open the songs it makes.
 
 ## Phases
 
 | # | Phase | Delivers | Status |
 |---|---|---|---|
-| 0 | Contracts | `Singularity.Contracts`: song package metadata, the quality rubric, the 3-window video-gap rule, the `song.txt` reader/writer (solo, duet, legacy relative), conversion from AI output to a chart, and the worker JSONL protocol. Includes the Pydantic mirror in `inference/` and shared fixtures. | Done |
-| 1 | Inference worker | Python worker: Demucs stems, forced alignment of LRCLIB lyrics (Whisper only without synced lyrics), SwiftF0 pitch, tempo. C# host with cancellation, process-tree kill and a kill-on-close job object. LRCLIB client. | Done. Measured with `Tools/ChartBench` against a 529-song human-charted collection; see below |
-| 2 | Ingestion | Track request → existing Soulseek search/download → fpcalc + AcoustID check → lyrics → worker → chart → song package. Video fetch with 3-window correlation. Quality tier shown in the library. | Next |
-| 3 | Sing core | Song player with a single audio clock and video rendered *inside* the Skia scene (avoids LibVLC's native-window airspace problem). Mic capture and pitch detection per player, a note lane, a lyric line, UltraStar scoring. 1–6 players, duets. | In progress: `Singularity.Karaoke` has pitch detection, scoring, the mic-to-score session and the song scanner; player and UI next |
-| 4 | UltraStar parity | Everything in the checklist below. | |
-| 5 | Second screen | A second monitor as the audience/score view, plus a phone companion app (mic over Wi-Fi, remote control, QR pairing) with per-device latency calibration. | |
-| 6 | Editor | Correction editor (piano roll, BPM/GAP tapping, golden/freestyle marking) for `review_required` songs and any other chart. | |
+| 0 | Contracts | `Singularity.Contracts`: song package metadata, the quality grade, the video-gap rule, the `song.txt` reader and writer (solo, duet, legacy), conversion from AI output to a chart, the worker protocol, with the Pydantic mirror and shared fixtures | Done |
+| 1 | Inference worker | Python worker: Demucs stems, forced alignment of LRCLIB lyrics (Whisper only without lyrics), SwiftF0 pitch, tempo. C# host with cancellation and process-tree kill. LRCLIB client | Done; measured with `Tools/ChartBench` on the 529-song human-charted collection |
+| 2 | Ingestion | Spotify link or list → ORBIT's Soulseek search and download → USDB community chart fitted to the recording, or AI chart → music video synced by sound → song package with quality grade, built in staging and published in one step | Done, and run live. Not done: fingerprint check (fpcalc + AcoustID) |
+| 3 | Sing core | One audio clock, video drawn inside the scene, microphone capture and pitch per player, note lane, lyrics, UltraStar scoring, duets, the sing screen's look | Done |
+| 4 | UltraStar parity | The checklist below | In progress |
+| 5 | Second screen | A projector or TV as the stage, with song select for the room between songs | Done. The phone companion (mic over Wi-Fi, remote control) is not started; its protocol and clock sync exist |
+| 6 | Editor | Correction editor (piano roll, BPM/GAP tapping, golden/freestyle marking) for songs that need checking | Not started |
 
 ## UltraStar parity checklist
 
-Sources for this list are UltraStar Deluxe and UltraStar Play.
+Sources: UltraStar Deluxe and UltraStar Play.
 
 **Songs and library**
-- [x] Load existing UltraStar song folders (encoding detection, `#RELATIVE`, comma decimals, `#MP3`/`#AUDIO`, `[CO]`/`[BG]` images): `SongScanner`
-- [ ] Duets (P1/P2): parser done; game support pending
-- [ ] Song select: covers, preview playback from `#PREVIEWSTART`, search
+- [x] Load existing UltraStar song folders: encodings, `#RELATIVE`, comma decimals, `#MP3`/`#AUDIO`, `[CO]`/`[BG]`
+  images
+- [x] Duets (P1/P2, legacy P3)
+- [x] Song select: covers, preview from `#PREVIEWSTART` (or the medley, or a third in), search, preview video
+- [x] One entry per song, its charts as versions (community and AI, solo and duet, edits)
 - [ ] Sort and group by artist, title, edition, genre, language, year, folder
 - [ ] Playlists (reuse ORBIT playlists)
 - [ ] Jukebox mode (play with lyrics, no singing)
 
 **Singing**
-- [ ] 1–6 players, each with their own mic/channel, colour and name
-- [x] Difficulty (pitch tolerance easy/medium/hard): `SingScorer`
-- [ ] Note types: normal, golden (double score), freestyle (unscored), rap (rhythm only, ignores pitch)
-- [x] Scoring out of 10,000: notes, golden notes and line bonus, plus rating text per line: `SingScorer`
-- [x] Octave-independent pitch matching (singers can sing an octave off)
-- [ ] `#START`/`#END`, `#VIDEOGAP`, background image when there is no video
-- [ ] Medley mode (`#MEDLEYSTARTBEAT`/`#MEDLEYENDBEAT`, automatic medley detection when they're missing)
-- [ ] Pause, restart, skip intro
+- [ ] 1–6 players: 2 work (two microphones, or a two-mic adapter split left and right)
+- [x] Difficulty: Easy, Medium, Hard, chosen on the Sing page and in Settings
+- [x] Note types: normal, golden (double), freestyle (unscored), rap (voice only)
+- [x] Scoring out of 10,000 (notes, golden notes, line bonus) with ratings per line
+- [x] Octave-independent pitch matching
+- [x] `#START`/`#END`, `#VIDEOGAP`, cover or background when there is no video
+- [x] Original vocals off, guide or full (separated stems), for the whole collection in the background
+- [x] Pause and restart
+- [ ] Medley mode (the medley is detected; the mode isn't built)
+- [ ] Skip intro
 
 **Party and results**
-- [ ] Party mode: teams, rounds and modes such as duel, blind (hidden notes) and until-5000
+- [x] Results per singer: score, notes, golden notes, line bonus, rating
 - [ ] Highscores per song and difficulty, statistics
-- [ ] Webcam background (optional)
+- [ ] Party mode: teams, rounds, duel, blind (hidden notes), until-5000
+- [ ] Webcam background
 
 **Setup**
-- [ ] Mic setup with per-input channel selection, gain and a latency test
-- [ ] Keyboard, gamepad and remote navigation
+- [x] Microphone setup with per-input channel selection, a live pitch view and a latency (click) test
+- [x] Projector or TV as the stage
+- [ ] Gamepad and remote navigation (the keyboard works)
 - [ ] Themes and translations
 
-## Second screen and multiplayer
+## Next
 
-1. **Second monitor.** A second window shows lyrics and notes to the audience or a second group of singers, while the main window keeps scores and controls. Both windows are driven by the same audio clock.
-2. **Phone companion.** Phones join over the local network by scanning a QR code. A phone can:
-   - act as a microphone, streaming audio or pitch frames to the PC;
-   - act as a remote control for song select and queueing;
-   - show its singer's own lyric line.
-   Wi-Fi adds roughly 50–150 ms of variable delay, so each phone gets a calibration step and its timestamps are aligned to the PC's clock. Pitch detection on the phone sends far less data than streaming raw audio, so it's the default.
-3. **Online play**, using ORBIT's social and rooms layer, is out of scope until 1 and 2 work.
-
-The companion protocol will become a second set of contracts in `Singularity.Contracts`, built the same way as the worker protocol, with shared fixtures.
+1. Highscores, then a party queue that guests fill from the projector's song select.
+2. Better AI charts, measured with ChartBench (recall about 70% at 100 ms, pitch within a semitone about 85%).
+3. A simple correction editor: shift the gap, nudge lines, fix a pitch.
+4. The phone companion.
 
 ## Licensing notes
 
-- The UltraStar `song.txt` format is open; reading and writing it is fine. UltraStar Deluxe's code is GPL, so we implement its behaviour ourselves and copy no code.
-- UltraStarKaraokeMaker is MIT: its pipeline ideas and code can be reused with attribution.
-- UltrastarCreatorTool has no stated licence: use it for ideas only.
+- The UltraStar `song.txt` format is open; reading and writing it is fine. UltraStar Deluxe's code is GPL, so
+  Singularity implements its behaviour itself and copies no code.
+- UltraStarKaraokeMaker and UltraStar-CLI are MIT: ideas and code can be reused with attribution. Singularity logs in
+  to USDB with the user's own account and never creates accounts.
+- UltrastarCreatorTool has no stated licence: ideas only.

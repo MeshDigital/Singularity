@@ -1,0 +1,172 @@
+# Singularity user guide
+
+This guide covers setting Singularity up, filling it with songs, and running a karaoke night. It's written for the
+person at the laptop; the people singing only need a microphone.
+
+## 1. First start
+
+Start Singularity. The menu on the left has three groups:
+
+- **Karaoke**: Sing (song select), Microphone, Add songs
+- **Acquire**: Search (find a single file on Soulseek by hand) and Downloads
+- **System**: Dashboard, Library, Users and Settings, mostly inherited from ORBIT
+
+Open **Settings** and work through the cards from the top.
+
+### Accounts
+
+| Account | What it's for | Without it |
+|---|---|---|
+| **Soulseek** | Downloading songs | You can only use songs you already have, or audio files on your PC |
+| **Spotify** | Adding songs from Spotify links | Paste songs as `Artist - Title` instead |
+| **USDB** ([usdb.animux.de](https://usdb.animux.de)) | Charts made by people, used before the AI makes one | Every new song gets an AI chart |
+
+Enter the Soulseek username and press **Connect**; it asks for the password the first time. Tick *Connect when
+Singularity starts* so downloads resume by themselves. The USDB password is stored encrypted for your Windows
+account and is never shown again; to change it, type the new one and press **Save**.
+
+### Folders
+
+- **Your karaoke songs**: folders with UltraStar songs (a folder per song, each with a `.txt` file). Singularity
+  only reads them. `D:\KARAOKE\songs` is used by itself when it exists.
+- **New songs are made in**: where songs Singularity makes are kept. They're ordinary UltraStar folders.
+- **Downloads go to**: where Soulseek downloads land before they become karaoke songs.
+
+### Microphones
+
+Open **Microphone** (or Settings → *Microphones and latency…*):
+
+1. Pick player 1's microphone. With a two-mic karaoke adapter (one stereo device), pick it for both players and set
+   player 1 to **Left** and player 2 to **Right**. Two separate microphones each use **Mix**.
+2. Sing or hum: the level bar should pass the gate line clearly, and a steady note should draw a flat line, not jump
+   between octaves.
+3. Run the **click test** with speakers (not headphones) to measure the microphone's delay, so scoring is fair.
+
+If the click test hears nothing, Windows' *Audio enhancements* (echo cancellation) may be on for the microphone; turn
+them off in the Windows sound settings.
+
+## 2. Adding songs
+
+Open **Add songs** and paste one of:
+
+- a Spotify **song** link: becomes a single song in your library;
+- a Spotify **album** or **playlist** link: every song in it;
+- songs as text, one per line: `Queen - Bohemian Rhapsody`.
+
+A label under the box says what it recognised ("Spotify playlist", "12 songs"). Press **Add** or Enter
+(Shift+Enter starts a new line).
+
+Each song then goes through these steps, which you can follow on **Add songs** and **Downloads**:
+
+| Step | What happens | Takes |
+|---|---|---|
+| Searching Soulseek | ORBIT's search finds the best file, lossless where possible | seconds |
+| Downloading audio | The file downloads | seconds to minutes |
+| Looking for a community chart | USDB is checked for a chart with 3 stars or more | a few seconds |
+| Generating AI chart | Vocals are separated; the community chart is fitted to your recording, or the AI makes one | 30–45 s on the GPU |
+| Downloading video | The music video is found on YouTube (alongside the previous step) | 10–20 s |
+| Ready | The song appears on the Sing page with a **NEW** badge | |
+
+Songs are made one at a time, and the AI pauses while someone is singing so the game keeps the GPU.
+
+**Other ways in:**
+
+- **Every download becomes a karaoke song** (on by default): songs downloaded from Search or elsewhere are made into
+  karaoke songs too.
+- **Make karaoke songs from my downloads**: turns everything already downloaded into karaoke songs, for example a
+  playlist imported before.
+- **Audio file…**: makes a song from a file on your PC.
+
+Songs your collection already has are skipped, so nothing is charted twice.
+
+### Quality grades
+
+Every song Singularity makes gets a grade, shown on its card:
+
+| Grade | Means |
+|---|---|
+| **A+** | A community chart, or an excellent AI chart, with a synced music video |
+| **A** | Fully singable |
+| **B** | Singable; some lines may be a little off |
+| **needs checking** | The AI wasn't sure (an unusual language, hardly any lyrics found, a very busy mix) |
+
+The grade comes from how sure the AI was of the words and the melody, whether the download matches the recording's
+length, the video sync and the song's details. It was tuned on 50 human-charted songs.
+
+## 3. Singing
+
+Open **Sing**. Search by artist or title; the highlighted song previews (with its video when it has one). A song with
+several versions (community and AI chart, solo and duet) shows **◀ 1 of 2 ▶** on its card: Left and Right switch
+versions. Press **Sing** (or Enter, or double-click).
+
+At the top of the page:
+
+- **Difficulty**: Easy (within 2 semitones counts), Medium (within 1) or Hard (the exact note). Octaves never matter.
+- **Sing on**: this window, or a projector or TV (see below).
+- **Text size**: the size of lyrics, notes and scores on the stage.
+
+**While singing**
+
+| Key | Does |
+|---|---|
+| Space or P | Pause and resume |
+| V | Original vocals: off, quiet guide, full (for songs with removed vocals) |
+| + / − | Bigger or smaller text |
+| Esc | Back to song select |
+
+The stage shows the notes in a lane, your voice as a dot with a trail (on the note is good), the lyrics with the sung
+part coloured, and a rating after each line. Golden notes score double. After the song, the results show each
+singer's score, notes, golden notes and line bonus: **R** sings again, **Enter** returns to song select.
+
+**Two singers.** Turn on *Two singers* on the Microphone page. Duet songs give each singer their own part; any other
+song becomes a sing-off on the same notes. The lanes go top and bottom, player 1 blue and player 2 red.
+
+**Removing vocals.** Songs Singularity makes come with their vocals already separated. For your own collection,
+press **Remove vocals** on a song, or **Remove vocals for all songs** for the whole collection: about 30 seconds a
+song on the GPU, in the background. It pauses while someone sings, can be stopped and resumed, and keeps the PC
+awake while it runs.
+
+## 4. The projector
+
+Connect the projector or TV as a second display (Windows: *Extend*), then choose it under **Sing on**. From then on:
+
+- **Between songs** the projector shows song select for the room: the highlighted song large, its neighbours either
+  side, the room lit in the cover's colour, and the music video playing in place of the cover during the preview.
+  Use the keyboard while the projector window has focus: **Left/Right** move between songs, **Up/Down** between a
+  song's versions, **Enter** sings.
+- **While singing** the stage is full screen on the projector; the laptop keeps the controls.
+
+Both screens share the same selection, so the laptop and the room can take turns choosing.
+
+## 5. Downloads
+
+**Downloads** lists every song on its way, with one status from *Searching Soulseek* to *Ready to sing*, and counts
+of songs on their way, becoming karaoke, ready and failed. **Retry failed** searches Soulseek again for songs that
+couldn't be downloaded. The **Advanced** switch shows ORBIT's full download center (peers, priorities, quality
+profiles).
+
+## 6. Troubleshooting
+
+| Problem | What to do |
+|---|---|
+| "No microphone" while singing | Check the Microphone page; replug the microphone and pick it again |
+| The score stays low though you sing well | Run the click test on the Microphone page; try Easy; check that the level passes the gate line |
+| Songs stay at *Searching Soulseek* | Check that Soulseek is connected (Settings → Accounts) |
+| A song fails at *Couldn't be downloaded* | Nobody on Soulseek shared it at that moment; **Retry failed** later |
+| No AI charts, no vocal removal | Settings → System shows whether the AI worker is installed; see `inference/README.md` |
+| No music videos | Settings → System shows whether yt-dlp is installed; *Find the music video* must be on |
+| The video is dimmed | It's a different version of the song (another edit, a long intro), so it plays as a backdrop instead of in sync |
+| A Spotify link isn't recognised | Connect Spotify in Settings, or paste the songs as `Artist - Title` |
+| The window closed but Singularity still runs | Closing hides it to the tray (downloads carry on); use the tray icon's **Exit** to quit |
+
+## 7. Where things are kept
+
+| What | Where |
+|---|---|
+| Settings | `%APPDATA%\Singularity\config.ini` |
+| Library database | `%APPDATA%\Singularity\library.db` (backed up at every start to `Backups\`) |
+| Soulseek, Spotify and USDB logins | `%LOCALAPPDATA%\Singularity\` (encrypted for your Windows account) |
+| Logs | `%LOCALAPPDATA%\Singularity\logs\` |
+| Removed vocals for your collection | `%LOCALAPPDATA%\Singularity\stems\` |
+| Songs being made | `%LOCALAPPDATA%\Singularity\staging\` (cleared when a song is done) |
+| AI models | `%LOCALAPPDATA%\Singularity\models\` |
