@@ -33,7 +33,9 @@ public sealed record PlayerSnapshot(
 
 /// <summary>Everything the stage draws for one frame, taken under the lock in <see cref="SingViewModel.Tick"/>.</summary>
 /// <param name="VideoAmbient">The video isn't synced to the song: draw it dimmed, as scenery.</param>
-public sealed record StageSnapshot(double Beat, IReadOnlyList<PlayerSnapshot> Players, bool Finished, WriteableBitmap? Video, double TextScale, bool VideoAmbient = false);
+/// <param name="SongProgress">How far through the song, 0..1.</param>
+public sealed record StageSnapshot(double Beat, IReadOnlyList<PlayerSnapshot> Players, bool Finished, WriteableBitmap? Video, double TextScale,
+    bool VideoAmbient = false, double SongProgress = 0);
 
 /// <summary>A singer's line on the results screen.</summary>
 public sealed record PlayerResult(string Name, int Score, string Title, string Notes, string Golden, string LineBonus, string Lines);
@@ -339,7 +341,9 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                 _lastLiveScoreTicks = Environment.TickCount64;
                 LiveScores = string.Join("     ", players.Select(p => (_players.Count > 1 ? $"P{p.Player} " : "Score ") + p.Score.ToString("N0")));
             }
-            return new StageSnapshot(beat, players, _finished, _hasVideoFrame ? _videoBitmap : null, TextScale, _videoAmbient);
+            double end = _song?.EndMs is { } e && e > 0 ? e : _audio.DurationMs;
+            double progress = end > 0 ? Math.Clamp(_audio.PositionMs / end, 0, 1) : 0;
+            return new StageSnapshot(beat, players, _finished, _hasVideoFrame ? _videoBitmap : null, TextScale, _videoAmbient, progress);
         }
     }
 
