@@ -32,9 +32,10 @@ Sources: UltraStar Deluxe and UltraStar Play.
 - [x] Duets (P1/P2, legacy P3)
 - [x] Song select: covers, preview from `#PREVIEWSTART` (or the medley, or a third in), search, preview video
 - [x] One entry per song, its charts as versions (community and AI, solo and duet, edits)
-- [ ] Sort and group by artist, title, edition, genre, language, year, folder
+- [x] Sort by artist, title, recently added, year, best score; filter by new, video, duet, community or AI chart, language
+- [ ] Group by edition, genre, folder
 - [ ] Playlists (reuse ORBIT playlists)
-- [ ] Jukebox mode (play with lyrics, no singing)
+- [x] Jukebox mode (play with lyrics, no singing; random next song, N skips)
 
 **Singing**
 - [ ] 1–6 players: 2 work (two microphones, or a two-mic adapter split left and right)
@@ -46,11 +47,12 @@ Sources: UltraStar Deluxe and UltraStar Play.
 - [x] Original vocals off, guide or full (separated stems), for the whole collection in the background
 - [x] Pause and restart
 - [ ] Medley mode (the medley is detected; the mode isn't built)
-- [ ] Skip intro
+- [x] Skip intro (S, or the button)
 
 **Party and results**
 - [x] Results per singer: score, notes, golden notes, line bonus, rating
-- [ ] Highscores per song and difficulty, statistics
+- [x] Highscores per song, difficulty and singer (top 10, "new high score!", best score on cards)
+- [ ] Statistics
 - [ ] Party mode: teams, rounds, duel, blind (hidden notes), until-5000
 - [ ] Webcam background
 
@@ -66,18 +68,22 @@ Released: **0.1.0-alpha** (installer on GitHub Releases). Ordered by value for t
 
 ### Quick wins (hours each)
 
-1. **High scores** per song, difficulty and singer: stored locally, "new high score!" on the results screen, the
-   best score on song cards and on the projector's version badge.
-2. **Skip intro**: a key and a button that jump to three seconds before the first note.
-3. **Jukebox mode**: play a song with its lyrics and video and no scoring, for background music between singers.
-4. **Sort and filter song select**: new, artist, title, year, language, has video, duets, community or AI chart.
-5. **One-click AI setup**: a script and a Settings button that create the worker in
-   `%LOCALAPPDATA%\Singularity\inference` (venv, CUDA torch, models), so installed copies get AI charts without a
-   source checkout.
-6. **Per-song chart choice**: "make an AI chart" or "look for a community chart" on a song's card; the packager
-   already supports both.
-7. **Results screen and top bar** in the new stage look.
-8. **Licence file**, and later a code-signing certificate so SmartScreen doesn't warn.
+Done after 0.1.0-alpha:
+
+- [x] **High scores** per song, difficulty and singer: stored locally, "new high score!" on the results screen, the
+  best score on song cards.
+- [x] **Skip intro**: a key and a button that jump to three seconds before the first note.
+- [x] **Jukebox mode**: a song with its lyrics and video and no scoring, then random songs from the list.
+- [x] **Sort and filter song select**: new, artist, title, year, language, has video, duets, community or AI chart.
+- [x] **One-click AI setup**: `inference/setup.ps1` and a Settings button create the worker in
+  `%LOCALAPPDATA%\Singularity\inference` (venv, CUDA torch, models), so installed copies get AI charts.
+- [x] **Per-song chart choice**: right-click a song card for "Make an AI chart" or "Look for a community chart".
+- [x] **Results screen and top bar** in the new stage look.
+
+Still open:
+
+- [ ] The best score on the projector's version badge.
+- [ ] **Licence file** (needs the owner's choice), and later a code-signing certificate so SmartScreen doesn't warn.
 
 ### Integrations (days each)
 

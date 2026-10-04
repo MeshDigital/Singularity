@@ -99,6 +99,18 @@ Open **Sing**. Search by artist or title; the highlighted song previews (with it
 several versions (community and AI chart, solo and duet) shows **◀ 1 of 2 ▶** on its card: Left and Right switch
 versions. Press **Sing** (or Enter, or double-click).
 
+**Finding songs.** Next to the search box: show only *New* songs, songs *With video*, *Duets*, *Community charts*,
+*AI charts* or songs *Not sung yet*; pick a language; sort by artist, title, recently added, year or best score.
+A card shows the song's best score once it's been sung.
+
+**Another chart for a song.** Right-click a song's card: **Make an AI chart** makes one (for a song from your own
+folders it becomes an extra version), and on an AI-charted song **Look for a community chart** tries USDB again.
+Follow it on *Add songs*.
+
+**Jukebox.** **Play** on a card, or **Jukebox** at the top, plays songs with their lyrics and video and the
+original vocals, no singing or scores: music between singers. When a song ends a random one from the list follows;
+**N** skips to the next.
+
 At the top of the page:
 
 - **Difficulty**: Easy (within 2 semitones counts), Medium (within 1) or Hard (the exact note). Octaves never matter.
@@ -110,13 +122,16 @@ At the top of the page:
 | Key | Does |
 |---|---|
 | Space or P | Pause and resume |
+| S | Skip the intro (to three seconds before the first note) |
 | V | Original vocals: off, quiet guide, full (for songs with removed vocals) |
 | + / − | Bigger or smaller text |
 | Esc | Back to song select |
 
 The stage shows the notes in a lane, your voice as a dot with a trail (on the note is good), the lyrics with the sung
 part coloured, and a rating after each line. Golden notes score double. After the song, the results show each
-singer's score, notes, golden notes and line bonus: **R** sings again, **Enter** returns to song select.
+singer's score, notes, golden notes and line bonus, and the song's best scores at this difficulty: a place in the
+top 10 shows as "New high score!" or "3rd best on this song". Singer names come from Settings → Singing. **R** sings
+again, **Enter** returns to song select.
 
 **Two singers.** Turn on *Two singers* on the Microphone page. Duet songs give each singer their own part; any other
 song becomes a sing-off on the same notes. The lanes go top and bottom, player 1 blue and player 2 red.
@@ -153,7 +168,7 @@ profiles).
 | The score stays low though you sing well | Run the click test on the Microphone page; try Easy; check that the level passes the gate line |
 | Songs stay at *Searching Soulseek* | Check that Soulseek is connected (Settings → Accounts) |
 | A song fails at *Couldn't be downloaded* | Nobody on Soulseek shared it at that moment; **Retry failed** later |
-| No AI charts, no vocal removal | Settings → System shows whether the AI worker is installed; see `inference/README.md` |
+| No AI charts, no vocal removal | Settings → System shows whether the AI worker is installed; **Set up the AI worker** there installs it (several GB) |
 | No music videos | Settings → System shows whether yt-dlp is installed; *Find the music video* must be on |
 | The video is dimmed | It's a different version of the song (another edit, a long intro), so it plays as a backdrop instead of in sync |
 | A Spotify link isn't recognised | Connect Spotify in Settings, or paste the songs as `Artist - Title` |

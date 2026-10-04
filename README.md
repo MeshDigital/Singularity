@@ -32,7 +32,9 @@ ORBIT's search, download, library and playlist engine and builds the karaoke gam
   several times (community and AI, solo and duet, album and radio edit) shows its versions on the same card.
 - One or two singers: two microphones, or one two-mic karaoke adapter split into left and right. Duets and sing-offs.
 - UltraStar scoring out of 10,000 (notes, golden notes, line bonus) with ratings per line; Easy, Medium or Hard;
-  singing an octave off is fine.
+  singing an octave off is fine. High scores per song, difficulty and singer.
+- Sort and filter song select (new, video, duets, community or AI chart, language, year, best score); skip intros;
+  a jukebox that plays songs with lyrics and video between singers.
 - The music video behind the notes, in sync; or the cover, blurred into a glow of its own colour.
 - Real karaoke: remove the original vocals with one click, or for the whole collection overnight, then sing with
   them off, as a quiet guide, or full (V while singing).
@@ -42,6 +44,7 @@ ORBIT's search, download, library and playlist engine and builds the karaoke gam
 
 **Add songs**
 - One box: a Spotify song, album or playlist link, or songs as `Artist - Title`, one per line.
+- Any song can get a new AI chart, or another look for a community chart, from a right-click on its card.
 - Every song is searched and downloaded on Soulseek, then gets a community chart (USDB, 3 stars or more, fitted to
   your recording) or an AI chart, its music video, and a quality grade (A+, A, B or "needs checking").
 - Optionally every download becomes a karaoke song, and one button turns everything you've downloaded so far into
@@ -92,7 +95,7 @@ Optional, for the full experience:
 | Downloading songs | A Soulseek account (Settings → Accounts) |
 | Spotify links | A Spotify developer app (client id and secret) or a Spotify login |
 | Community charts | A [USDB](https://usdb.animux.de) account (Settings → Accounts) |
-| AI charts and vocal removal | The Python inference worker in `inference/` (Python 3.11, an NVIDIA GPU with 8 GB recommended); see [inference/README.md](inference/README.md) |
+| AI charts and vocal removal | The Python inference worker: Settings → System → **Set up the AI worker**, or `inference/setup.ps1` (Python 3.11, an NVIDIA GPU with 8 GB recommended); see [inference/README.md](inference/README.md) |
 | Music videos | [yt-dlp](https://github.com/yt-dlp/yt-dlp) (`winget install yt-dlp.yt-dlp`) and FFmpeg on `PATH` |
 
 Your UltraStar songs are found in `D:\KARAOKE\songs`, or wherever you point Settings → Folders. Songs Singularity
@@ -127,7 +130,7 @@ The [user guide](DOCS/USER_GUIDE.md) walks through setting up, adding songs and 
 Alpha. The whole path from a Spotify link to a sung song with video works and has been run on real songs. Measured
 on a sample of 50 human-charted songs, AI charts get about 70% of the notes within 100 ms of the human chart and
 about 85% of pitches within a semitone; community charts from USDB are better wherever they exist. Not built yet:
-the phone companion (singing into your phone), a chart editor, party modes and high scores. See the
+the phone companion (singing into your phone), a chart editor and party modes. See the
 [roadmap](DOCS/ROADMAP.md).
 
 ## Credits
