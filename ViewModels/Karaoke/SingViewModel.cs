@@ -34,8 +34,9 @@ public sealed record PlayerSnapshot(
 /// <summary>Everything the stage draws for one frame, taken under the lock in <see cref="SingViewModel.Tick"/>.</summary>
 /// <param name="VideoAmbient">The video isn't synced to the song: draw it dimmed, as scenery.</param>
 /// <param name="SongProgress">How far through the song, 0..1.</param>
+/// <param name="Jukebox">Played for listening: draw the lyrics only, no lanes or scores.</param>
 public sealed record StageSnapshot(double Beat, IReadOnlyList<PlayerSnapshot> Players, bool Finished, WriteableBitmap? Video, double TextScale,
-    bool VideoAmbient = false, double SongProgress = 0);
+    bool VideoAmbient = false, double SongProgress = 0, bool Jukebox = false);
 
 /// <summary>A singer's line on the results screen.</summary>
 /// <param name="HighScoreText">"New high score!", "3rd best on this song", or empty.</param>
@@ -111,6 +112,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         PauseCommand = new RelayCommand(TogglePause);
         RestartCommand = new RelayCommand(() => { if (_entry is { } e) Start(e); });
         SkipIntroCommand = new RelayCommand(SkipIntro);
+        NextJukeboxCommand = new RelayCommand(() => { if (IsJukebox) PlayNextJukeboxSong(); });
         CycleVocalsCommand = new RelayCommand(CycleVocals);
         BiggerTextCommand = new RelayCommand(() => TextScale += 0.1);
         SmallerTextCommand = new RelayCommand(() => TextScale -= 0.1);
@@ -182,7 +184,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
     private void ApplyVocals()
     {
-        _audio.VocalsVolume = VocalsMode switch { "Full" => 1f, "Guide" => 0.3f, _ => 0f };
+        _audio.VocalsVolume = IsJukebox ? 1f : VocalsMode switch { "Full" => 1f, "Guide" => 0.3f, _ => 0f };
         this.RaisePropertyChanged(nameof(VocalsText));
     }
 
@@ -236,16 +238,39 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         if (_entry is not { } entry || ShowResults || FirstNoteMs is not { } first) return;
         double target = first - IntroLeadMs;
         if (target - _audio.PositionMs < 2000) return; // nothing worth skipping
-        Start(entry, target);
+        Start(entry, target, IsJukebox);
     }
 
     public bool ShowResults { get => _showResults; private set => this.RaiseAndSetIfChanged(ref _showResults, value); }
     public ObservableCollection<PlayerResult> Results { get; } = new();
 
     /// <param name="startMs">Where to start playing; null = the song's #START (or the beginning).</param>
-    public void Start(SongEntry entry, double? startMs = null)
+    public void Start(SongEntry entry, double? startMs = null) => Start(entry, startMs, jukebox: false);
+
+    /// <summary>
+    /// Plays a song for listening: lyrics and video, the original vocals, no microphones or scoring; when it
+    /// ends, <see cref="NextJukeboxSong"/> picks the next one.
+    /// </summary>
+    public void StartJukebox(SongEntry entry) => Start(entry, null, jukebox: true);
+
+    /// <summary>Picks the next jukebox song (song select shuffles its list); null ends the jukebox.</summary>
+    public Func<SongEntry?>? NextJukeboxSong { get; set; }
+
+    private bool _isJukebox;
+    public bool IsJukebox { get => _isJukebox; private set => this.RaiseAndSetIfChanged(ref _isJukebox, value); }
+
+    public ICommand NextJukeboxCommand { get; private set; } = null!;
+
+    private void PlayNextJukeboxSong()
+    {
+        if (NextJukeboxSong?.Invoke() is { } next) StartJukebox(next);
+        else Back();
+    }
+
+    private void Start(SongEntry entry, double? startMs, bool jukebox)
     {
         StopPlayback();
+        IsJukebox = jukebox;
         _entry = entry;
         _resultsShown = false;
         ShowResults = false;
@@ -255,9 +280,13 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         Background = LoadBackground(entry.BackgroundPath ?? entry.CoverPath);
         LoadGlow(entry.CoverPath ?? entry.BackgroundPath);
 
-        // Background vocal removal and song import give the GPU to the singers until the song ends.
-        _batch.Hold();
-        _ingest.Queue.Hold();
+        // Background vocal removal and song import give the GPU to the singers until the song ends (not for
+        // the jukebox: nobody is singing).
+        if (!jukebox)
+        {
+            _batch.Hold();
+            _ingest.Queue.Hold();
+        }
 
         var mics = MicAssignment.FromConfig(_config);
         lock (_sync)
@@ -288,7 +317,8 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
             return;
         }
 
-        StartMicrophones(song);
+        if (jukebox) Status = "Jukebox";
+        else StartMicrophones(song);
 
         // UltraStar's #VIDEOGAP: video position = audio position + gap.
         if (entry.VideoPath is { } videoPath)
@@ -380,12 +410,20 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
             LogDiagnostics(beat);
 
             bool audioEnded = _audio.IsLoaded && !_audio.IsPlaying && !IsPaused && beat > 0;
-            if (!_finished && (beat > _lastNoteEndBeat + OutroBeats || audioEnded))
+            if (_isJukebox)
+            {
+                if (audioEnded && !_finished)
+                {
+                    _finished = true;
+                    Avalonia.Threading.Dispatcher.UIThread.Post(PlayNextJukeboxSong);
+                }
+            }
+            else if (!_finished && (beat > _lastNoteEndBeat + OutroBeats || audioEnded))
             {
                 _finished = true;
                 foreach (var p in _players) p.Session?.Finish();
             }
-            if (_finished && !_resultsShown)
+            if (_finished && !_resultsShown && !_isJukebox)
             {
                 _resultsShown = true;
                 var results = _players.Select(Result).ToList();
@@ -402,7 +440,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
             if (skippable != _canSkipIntro) Avalonia.Threading.Dispatcher.UIThread.Post(() => CanSkipIntro = skippable);
             double end = _song?.EndMs is { } e && e > 0 ? e : _audio.DurationMs;
             double progress = end > 0 ? Math.Clamp(_audio.PositionMs / end, 0, 1) : 0;
-            return new StageSnapshot(beat, players, _finished, _hasVideoFrame ? _videoBitmap : null, TextScale, _videoAmbient, progress);
+            return new StageSnapshot(beat, players, _finished, _hasVideoFrame ? _videoBitmap : null, TextScale, _videoAmbient, progress, _isJukebox);
         }
     }
 

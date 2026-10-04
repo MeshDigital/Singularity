@@ -241,6 +241,9 @@ public sealed class SongSelectViewModel : ReactiveObject
             if (_loaded && !IsLoading) _ = LoadAsync();
         });
         SingCommand = new RelayCommand<SongCardViewModel>(Sing, card => card?.Entry.IsPlayable == true);
+        PlayCommand = new RelayCommand<SongCardViewModel>(card => { if (card?.Entry.IsPlayable == true) Jukebox(card.Entry); });
+        JukeboxCommand = new RelayCommand(() => { if (RandomSong() is { } first) Jukebox(first); });
+        _sing.NextJukeboxSong = RandomSong;
     }
 
     public ObservableCollection<SongCardViewModel> Songs { get; } = new();
@@ -449,6 +452,25 @@ public sealed class SongSelectViewModel : ReactiveObject
 
     public ICommand RefreshCommand { get; }
     public ICommand SingCommand { get; }
+
+    /// <summary>Plays a song in the jukebox (no singing), then carries on with random songs from the list.</summary>
+    public ICommand PlayCommand { get; }
+
+    /// <summary>The jukebox, shuffling the songs in the list (as searched).</summary>
+    public ICommand JukeboxCommand { get; }
+
+    private void Jukebox(SongEntry entry)
+    {
+        _preview.Stop();
+        _sing.StartJukebox(entry);
+        _navigation.NavigateTo("Sing");
+    }
+
+    private SongEntry? RandomSong()
+    {
+        var playable = Songs.Where(c => c.Entry.IsPlayable).ToList();
+        return playable.Count == 0 ? null : playable[Random.Shared.Next(playable.Count)].Entry;
+    }
 
     /// <summary>Scans once, the first time the page is shown.</summary>
     public Task EnsureLoadedAsync() => _loaded ? Task.CompletedTask : LoadAsync();

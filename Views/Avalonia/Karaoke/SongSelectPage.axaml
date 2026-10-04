@@ -42,6 +42,8 @@
         <StackPanel Grid.Row="1" Margin="0,16,0,12" Spacing="10">
             <TextBox Watermark="Search artist or title" Text="{Binding SearchText}"/>
             <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Content="Jukebox" Command="{Binding JukeboxCommand}"
+                        ToolTip.Tip="Play random songs from the list with lyrics and video, no singing. N skips to the next."/>
                 <Button Content="Remove vocals for all songs" Command="{Binding StartBatchCommand}"
                         ToolTip.Tip="Separates every song in the background (about 30 s each on the GPU). It pauses while someone sings and can be stopped and resumed any time."/>
                 <Button Content="{Binding PauseBatchText}" Command="{Binding PauseBatchCommand}" IsVisible="{Binding IsBatchRunning}"/>
@@ -100,6 +102,9 @@
                             <Button Content="Remove vocals" IsVisible="{Binding CanSeparate}"
                                     ToolTip.Tip="Separate the original vocals with the AI worker (about 40 s on the GPU) so they can be turned off while singing"
                                     Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).SeparateCommand}"
+                                    CommandParameter="{Binding}"/>
+                            <Button Content="Play" ToolTip.Tip="Listen: lyrics and video, no singing"
+                                    Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).PlayCommand}"
                                     CommandParameter="{Binding}"/>
                             <Button Content="Sing"
                                     Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).SingCommand}"

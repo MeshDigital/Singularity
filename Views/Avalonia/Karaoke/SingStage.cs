@@ -130,6 +130,15 @@ public sealed class SingStage : Control
         // Everything scales with the stage height (so a 1080p or 4K projector gets proportionally large,
         // sharp text) and with the user's text size; minimums keep it readable in a small window.
         double k = s.TextScale;
+        if (s.Jukebox)
+        {
+            // Listening, not singing: just the lyrics, a little larger, and a label.
+            if (s.Players.Count > 0)
+                DrawLyrics(ctx, w, s.Players[0].Lyrics, h * 0.66, h * 0.66 + h * 0.085 * k + 12, Math.Max(18, h * 0.065 * k), Color.FromRgb(120, 220, 200));
+            DrawOutlinedText(ctx, "Jukebox", Math.Max(14, h * 0.022), Dim, new Point(w - 24, 18), alignRight: true, bold: true);
+            DrawSongProgress(ctx, s.SongProgress, w, h);
+            return;
+        }
         if (s.Players.Count == 1)
         {
             DrawPlayer(ctx, s, s.Players[0], new Rect(w * 0.05, h * 0.10, w * 0.90, h * 0.50), lyricsY: h * 0.68, nextY: h * 0.68 + h * 0.075 * k + 12,

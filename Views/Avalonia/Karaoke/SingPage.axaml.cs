@@ -17,6 +17,7 @@ public partial class SingPage : UserControl
             else if ((e.Key is Key.Space or Key.P) && !vm.ShowResults) vm.PauseCommand.Execute(null);
             else if (e.Key == Key.V) vm.CycleVocalsCommand.Execute(null);
             else if (e.Key == Key.S && !vm.ShowResults) vm.SkipIntroCommand.Execute(null);
+            else if (e.Key == Key.N && vm.IsJukebox) vm.NextJukeboxCommand.Execute(null);
             else if (e.Key is Key.OemPlus or Key.Add) vm.BiggerTextCommand.Execute(null);
             else if (e.Key is Key.OemMinus or Key.Subtract) vm.SmallerTextCommand.Execute(null);
             else return;
