@@ -32,6 +32,12 @@ public sealed class KaraokeLibrary
 
     public SongScanResult? Last { get; private set; }
 
+    /// <summary>Where an UltraStar collection usually lives; used when no song folder is configured.</summary>
+    public const string DefaultCollectionFolder = @"D:\KARAOKE\songs";
+
+    /// <summary>Whether the last scan has this song (any folder); null before the first scan.</summary>
+    public bool? HasSongNow(string artist, string title) => Last is null ? null : _allKeys.Contains(SongClusters.KeyOf(artist, title));
+
     private IReadOnlySet<string> _communityKeys = new HashSet<string>();
     private IReadOnlySet<string> _allKeys = new HashSet<string>();
     private readonly SemaphoreSlim _scanGate = new(1, 1);
@@ -43,6 +49,8 @@ public sealed class KaraokeLibrary
             var folders = (_config.KaraokeSongFolders ?? "")
                 .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToList();
+            // Nothing configured: an UltraStar collection in the usual place is found by itself.
+            if (folders.Count == 0 && OperatingSystem.IsWindows() && Directory.Exists(DefaultCollectionFolder)) folders.Add(DefaultCollectionFolder);
             if (Environment.GetEnvironmentVariable(SongsDirEnvironmentVariable) is { Length: > 0 } dev)
                 folders.AddRange(dev.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
             folders.Add(IngestFolder);

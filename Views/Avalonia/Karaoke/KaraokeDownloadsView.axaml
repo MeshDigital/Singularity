@@ -1,0 +1,95 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Karaoke"
+             x:Class="Singularity.Views.Avalonia.Karaoke.KaraokeDownloadsView"
+             x:DataType="vm:KaraokeDownloadsViewModel"
+             x:CompileBindings="True"
+             Background="{DynamicResource BrushBg1}" Foreground="White">
+    <UserControl.Styles>
+        <Style Selector="Button.quiet">
+            <Setter Property="Background" Value="#1AFFFFFF"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12,6"/>
+        </Style>
+        <Style Selector="Border.count">
+            <Setter Property="Background" Value="#0FFFFFFF"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="16,10"/>
+            <Setter Property="MinWidth" Value="130"/>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Downloads for karaoke: one line per song, from the Soulseek search to "ready to sing". -->
+    <Grid RowDefinitions="Auto,Auto,*" Margin="32,26">
+        <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="6">
+                <TextBlock Text="Downloads" FontSize="32" FontWeight="Bold"/>
+                <TextBlock Text="Songs on their way: found on Soulseek, downloaded, then made into karaoke songs." Foreground="#9AA" FontSize="14"/>
+            </StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding ShowAdvanced}" OnContent="Advanced" OffContent="Advanced" VerticalAlignment="Top"
+                          ToolTip.Tip="The full download center: peers, priorities, quality profiles"/>
+        </Grid>
+
+        <StackPanel Grid.Row="1" Spacing="14" Margin="0,18,0,14">
+            <WrapPanel>
+                <Border Classes="count" Margin="0,0,10,8">
+                    <StackPanel><TextBlock Text="{Binding ComingCount}" FontSize="24" FontWeight="Bold"/><TextBlock Text="on their way" Foreground="#9AA" FontSize="12"/></StackPanel>
+                </Border>
+                <Border Classes="count" Margin="0,0,10,8">
+                    <StackPanel><TextBlock Text="{Binding MakingCount}" FontSize="24" FontWeight="Bold" Foreground="#9BD"/><TextBlock Text="becoming karaoke" Foreground="#9AA" FontSize="12"/></StackPanel>
+                </Border>
+                <Border Classes="count" Margin="0,0,10,8">
+                    <StackPanel><TextBlock Text="{Binding ReadyCount}" FontSize="24" FontWeight="Bold" Foreground="#6C8"/><TextBlock Text="ready" Foreground="#9AA" FontSize="12"/></StackPanel>
+                </Border>
+                <Border Classes="count" Margin="0,0,10,8">
+                    <StackPanel><TextBlock Text="{Binding FailedCount}" FontSize="24" FontWeight="Bold" Foreground="#F77"/><TextBlock Text="failed" Foreground="#9AA" FontSize="12"/></StackPanel>
+                </Border>
+            </WrapPanel>
+            <WrapPanel>
+                <Button Classes="quiet" Content="Pause" Command="{Binding PauseAllCommand}" Margin="0,0,8,0"/>
+                <Button Classes="quiet" Content="Resume" Command="{Binding ResumeAllCommand}" Margin="0,0,8,0"/>
+                <Button Classes="quiet" Content="Retry failed" Command="{Binding RetryFailedCommand}" IsVisible="{Binding HasFailed}" Margin="0,0,8,0"/>
+                <Button Classes="quiet" Content="Clear finished" Command="{Binding ClearFinishedCommand}"/>
+            </WrapPanel>
+        </StackPanel>
+
+        <TextBlock Grid.Row="2" Text="Nothing on its way. Add songs from a Spotify link or a list on the Add songs page."
+                   Foreground="#778" IsVisible="{Binding !HasRows}"/>
+
+        <ListBox Grid.Row="2" ItemsSource="{Binding Rows}" Background="Transparent" MaxWidth="1000" HorizontalAlignment="Left"
+                 IsVisible="{Binding HasRows}">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:KaraokeDownloadRow">
+                    <Border Background="#0DFFFFFF" CornerRadius="12" Padding="12,10" Width="940">
+                        <Grid ColumnDefinitions="52,*,260,Auto">
+                            <Border Width="52" Height="52" CornerRadius="8" ClipToBounds="True" Background="#1A1F28">
+                                <Panel>
+                                    <TextBlock Text="♪" FontSize="22" Foreground="#445" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Image Source="{Binding Cover}" Stretch="UniformToFill"/>
+                                </Panel>
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="14,0" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Artist}" Foreground="#AAB" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Detail}" Foreground="#889" FontSize="11" TextTrimming="CharacterEllipsis"
+                                           IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="6">
+                                <TextBlock Text="{Binding StatusText}" FontSize="13" HorizontalAlignment="Right"
+                                           Classes.ready="{Binding IsReady}" Classes.failed="{Binding IsFailed}">
+                                    <TextBlock.Styles>
+                                        <Style Selector="TextBlock.ready"><Setter Property="Foreground" Value="#6C8"/></Style>
+                                        <Style Selector="TextBlock.failed"><Setter Property="Foreground" Value="#F77"/></Style>
+                                    </TextBlock.Styles>
+                                </TextBlock>
+                                <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" Height="5" CornerRadius="3" IsVisible="{Binding ShowProgress}"/>
+                            </StackPanel>
+                            <Button Grid.Column="3" Classes="quiet" Content="Retry" Command="{Binding RetryCommand}" IsVisible="{Binding CanRetry}"
+                                    Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>

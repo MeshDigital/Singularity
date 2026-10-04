@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:Singularity.ViewModels.Downloads"
+             xmlns:karaoke="clr-namespace:Singularity.Views.Avalonia.Karaoke"
              xmlns:m="clr-namespace:Singularity.Models"
              xmlns:c="clr-namespace:Singularity.Views.Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
@@ -449,7 +450,11 @@
 
     </UserControl.Resources>
     
-    <Grid RowDefinitions="Auto,*" Grid.IsSharedSizeScope="True">
+    <Panel>
+    <!-- Karaoke first: a simple list of songs on their way. ORBIT's full download center is the advanced view. -->
+    <karaoke:KaraokeDownloadsView x:Name="SimpleView"/>
+
+    <Grid x:Name="AdvancedView" IsVisible="False" RowDefinitions="Auto,*" Grid.IsSharedSizeScope="True">
         
         <!-- Header: Control Center Dashboard -->
         <Border Grid.Row="0" Background="#1E1E1E" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1">
@@ -1301,5 +1306,8 @@
                 </Grid>
             </Grid>
     </Grid>
-</UserControl>
 
+    <Button x:Name="BackToSimple" Content="Simple view" IsVisible="False" HorizontalAlignment="Right" VerticalAlignment="Top"
+            Margin="0,10,18,0" Padding="12,6" CornerRadius="8" Background="#334EC9B0"/>
+    </Panel>
+</UserControl>

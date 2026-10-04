@@ -12,10 +12,23 @@ namespace Singularity.Views.Avalonia
             InitializeComponent();
         }
 
-        public DownloadsPage(DownloadCenterViewModel viewModel)
+        public DownloadsPage(DownloadCenterViewModel viewModel, ViewModels.Karaoke.KaraokeDownloadsViewModel simple)
         {
             InitializeComponent();
             DataContext = viewModel;
+            SimpleView.DataContext = simple;
+            void Apply()
+            {
+                SimpleView.IsVisible = !simple.ShowAdvanced;
+                AdvancedView.IsVisible = simple.ShowAdvanced;
+                BackToSimple.IsVisible = simple.ShowAdvanced;
+            }
+            simple.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(simple.ShowAdvanced)) Apply();
+            };
+            BackToSimple.Click += (_, _) => simple.ShowAdvanced = false;
+            Apply();
         }
 
         // Manual drag-to-reorder for the "Group by playlist" Active view — the group list is

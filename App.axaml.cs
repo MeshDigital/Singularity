@@ -746,6 +746,7 @@ public partial class App : Application
         services.AddSingleton<ViewModels.Karaoke.MicSetupViewModel>();
         services.AddTransient<Views.Avalonia.Karaoke.MicSetupPage>();
         services.AddSingleton<ViewModels.Karaoke.AddSongsViewModel>();
+        services.AddSingleton<ViewModels.Karaoke.KaraokeDownloadsViewModel>();
         services.AddTransient<Views.Avalonia.Karaoke.AddSongsPage>();
         services.AddTransient<Views.Avalonia.Karaoke.SongSelectPage>();
         services.AddTransient<Views.Avalonia.Karaoke.SingPage>();
