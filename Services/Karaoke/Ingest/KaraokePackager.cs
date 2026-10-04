@@ -229,8 +229,8 @@ public sealed class KaraokePackager
             var syllables = analysis.Lines.SelectMany(l => l.Syllables).ToList();
             var quality = QualityScoring.Assess(new QualityMetrics(
                 QualityScoring.AudioMatchScore(audioMatch),
-                QualityScoring.LyricScore(syllables.Where(s => s.StartsWord).Select(s => s.AlignmentConfidence)),
-                QualityScoring.PitchScore(syllables.Where(s => s.MidiTone is not null).Select(s => s.PitchConfidence)),
+                QualityScoring.LyricSubScore(syllables.Where(s => s.StartsWord).Select(s => s.AlignmentConfidence)),
+                QualityScoring.PitchSubScore(syllables.Where(s => s.MidiTone is not null).Select(s => s.PitchConfidence)),
                 videoGap.Score,
                 QualityScoring.MetadataScore(source.Isrc is { Length: > 0 }, analysis.TempoBpm > 0, cover is not null)));
             var trackId = source.TrackId ?? LocalTrackId(source);

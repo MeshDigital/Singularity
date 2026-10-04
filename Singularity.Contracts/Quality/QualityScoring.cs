@@ -14,9 +14,16 @@ public enum AudioMatchKind
 }
 
 /// <summary>
-/// The song quality rubric (RFC-001 §5):
-/// Q = 0.25·audio + 0.25·lyric + 0.20·pitch + 0.15·video + 0.15·metadata, tiered at 0.90 / 0.75 / 0.60.
-/// Note that a song without a usable video scores at most 0.85 and so tops out at tier A.
+/// The song quality rubric (RFC-001 §5, Rev 2026.3):
+/// Q = 0.25·audio + 0.25·lyric + 0.20·pitch + 0.15·video + 0.15·metadata, tiered at 0.80 / 0.68 / 0.50.
+///
+/// The lyric and pitch sub-scores are the AI's raw confidences passed through a sigmoid
+/// (<see cref="NormalizeConfidence"/>) fitted on 50 songs of the community collection, where each AI
+/// chart was compared with the human chart of the same song. Raw alignment confidences are low by
+/// nature (median 0.18 for charts that match the human one about 70 %), so taken as they were, every
+/// AI chart landed in "needs review". With the fit, the tiers sort charts by real accuracy: median
+/// 0.77 for A, 0.70 for B, 0.61 for review. Pitch confidence turned out a weak signal (it hardly
+/// predicts pitch accuracy), so its curve is gentle.
 /// </summary>
 public static class QualityScoring
 {
@@ -26,9 +33,17 @@ public static class QualityScoring
     public const double VideoWeight = 0.15;
     public const double MetadataWeight = 0.15;
 
-    public const double APlusThreshold = 0.90;
-    public const double AThreshold = 0.75;
-    public const double BThreshold = 0.60;
+    public const double APlusThreshold = 0.80;
+    public const double AThreshold = 0.68;
+    public const double BThreshold = 0.50;
+
+    /// <summary>Raw median word-alignment confidence that maps to a sub-score of 0.5 (the collection's lowest quarter starts near 0.08).</summary>
+    public const double LyricMidpoint = 0.10;
+    public const double LyricSteepness = 20;
+
+    /// <summary>Raw confident-pitch share that maps to a sub-score of 0.5.</summary>
+    public const double PitchMidpoint = 0.35;
+    public const double PitchSteepness = 8;
 
     /// <summary>A voiced syllable counts towards the pitch score when its periodicity confidence exceeds this.</summary>
     public const double PitchConfidenceThreshold = 0.75;
@@ -91,6 +106,18 @@ public static class QualityScoring
         }
         return total == 0 ? 0.0 : (double)confident / total;
     }
+
+    /// <summary>Maps a raw acoustic confidence onto a 0..1 sub-score with a sigmoid centred on <paramref name="midpoint"/>.</summary>
+    public static double NormalizeConfidence(double raw, double midpoint, double steepness) =>
+        1.0 / (1.0 + Math.Exp(-steepness * (raw - midpoint)));
+
+    /// <summary>The lyric sub-score: <see cref="LyricScore"/> normalised (see the class remarks).</summary>
+    public static double LyricSubScore(IEnumerable<double> wordConfidences) =>
+        NormalizeConfidence(LyricScore(wordConfidences), LyricMidpoint, LyricSteepness);
+
+    /// <summary>The pitch sub-score: <see cref="PitchScore"/> normalised (see the class remarks).</summary>
+    public static double PitchSubScore(IEnumerable<double> voicedSyllableConfidences) =>
+        NormalizeConfidence(PitchScore(voicedSyllableConfidences), PitchMidpoint, PitchSteepness);
 
     /// <summary>One third each for an ISRC, a known tempo and cover art.</summary>
     public static double MetadataScore(bool hasIsrc, bool hasTempo, bool hasCoverArt) =>

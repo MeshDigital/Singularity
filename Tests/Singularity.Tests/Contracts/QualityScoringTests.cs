@@ -15,19 +15,38 @@ public class QualityScoringTests
     }
 
     [Fact]
-    public void NoVideo_CapsAt085_TierA()
+    public void NoVideo_CapsAt085_APlusOnlyWithAPerfectEverythingElse()
     {
         var q = QualityScoring.Assess(new QualityMetrics(1, 1, 1, 0, 1));
         Assert.Equal(0.85, q.OverallScore);
-        Assert.Equal(QualityTier.A, q.Tier);
+        Assert.Equal(QualityTier.APlus, q.Tier);
+        // A duration-checked download (no fingerprint) without video can't reach A+.
+        Assert.Equal(QualityTier.A, QualityScoring.Assess(new QualityMetrics(0.6, 1, 1, 0, 1)).Tier);
     }
 
     [Theory]
-    [InlineData(0.90, QualityTier.APlus)]
-    [InlineData(0.8999, QualityTier.A)]
-    [InlineData(0.75, QualityTier.A)]
-    [InlineData(0.60, QualityTier.B)]
-    [InlineData(0.5999, QualityTier.ReviewRequired)]
+    [InlineData(0.10, 0.5)]
+    [InlineData(0.18, 0.832)]
+    [InlineData(0.0, 0.119)]
+    [InlineData(0.31, 0.985)]
+    public void LyricConfidence_IsNormalisedOnTheFittedCurve(double raw, double expected) =>
+        Assert.Equal(expected, QualityScoring.NormalizeConfidence(raw, QualityScoring.LyricMidpoint, QualityScoring.LyricSteepness), 3);
+
+    [Fact]
+    public void SubScores_NormaliseTheRawScores()
+    {
+        // Median word confidence 0.18 (a typical AI chart) is a good lyric sub-score, not a failing one.
+        Assert.InRange(QualityScoring.LyricSubScore(new[] { 0.1, 0.18, 0.3 }), 0.8, 0.86);
+        // 7 of 20 voiced syllables confident: the pitch midpoint.
+        Assert.Equal(0.5, QualityScoring.PitchSubScore(Enumerable.Repeat(0.9, 7).Concat(Enumerable.Repeat(0.1, 13))), 6);
+    }
+
+    [Theory]
+    [InlineData(0.80, QualityTier.APlus)]
+    [InlineData(0.7999, QualityTier.A)]
+    [InlineData(0.68, QualityTier.A)]
+    [InlineData(0.50, QualityTier.B)]
+    [InlineData(0.4999, QualityTier.ReviewRequired)]
     [InlineData(0.0, QualityTier.ReviewRequired)]
     public void TierBoundaries(double score, QualityTier expected) =>
         Assert.Equal(expected, QualityScoring.TierFor(score));

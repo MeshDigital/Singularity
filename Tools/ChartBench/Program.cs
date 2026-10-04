@@ -12,6 +12,7 @@ using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Singularity.Contracts.Inference;
+using Singularity.Contracts.Quality;
 using Singularity.Contracts.UltraStar;
 using Singularity.Services.Inference;
 using Singularity.Services.Lyrics;
@@ -48,7 +49,7 @@ var ready = await host.StartAsync();
 Console.WriteLine($"worker on {ready.Device}; models {string.Join(", ", ready.Models.Values)}");
 
 var lrclib = new LrclibClient(new HttpClient(), NullLogger<LrclibClient>.Instance);
-var rows = new List<(string Song, string Lyrics, string? Offset, ChartComparison? Result, string? Error, double Seconds)>();
+var rows = new List<(string Song, string Lyrics, string? Offset, ChartComparison? Result, string? Error, double Seconds, double LyricConf, double PitchConf)>();
 
 var folders = Directory.GetDirectories(songsDir).Order(StringComparer.OrdinalIgnoreCase)
     .Where(d => filter is null || Path.GetFileName(d).Contains(filter, StringComparison.OrdinalIgnoreCase))
@@ -103,14 +104,18 @@ foreach (var folder in group)
         File.WriteAllText(Path.Combine(songOut, "song.generated.txt"), UltraStarSerializer.Write(generated));
 
         var c = ChartComparison.Compare(reference, generated);
-        rows.Add((name, lyricsLabel, offset, c, null, sw.Elapsed.TotalSeconds));
+        // The raw confidences the quality score is built from, to calibrate it against real accuracy.
+        var syllables = result.Lines.SelectMany(l => l.Syllables).ToList();
+        double lyricConf = QualityScoring.LyricScore(syllables.Where(x => x.StartsWord).Select(x => x.AlignmentConfidence));
+        double pitchConf = QualityScoring.PitchScore(syllables.Where(x => x.MidiTone is not null).Select(x => x.PitchConfidence));
+        rows.Add((name, lyricsLabel, offset, c, null, sw.Elapsed.TotalSeconds, lyricConf, pitchConf));
         var key = c.Transposition == 0 ? "" : $" (ref transposed {c.Transposition:+0;-0}: {c.PitchClassTransposed:P0})";
         Console.WriteLine($"{c.Recall100,4:P0} recall {c.Precision100,4:P0} prec {c.PitchClass,4:P0} pitch {c.Coverage,4:P0} cover  {sw.Elapsed.TotalSeconds,5:0}s  {name}  [{lyricsLabel}]{key}");
     }
     catch (Exception ex) when (ex is not OperationCanceledException and not InferenceWorkerException)
     {
         // One bad song (odd LRCLIB record, unreadable audio, failed task) mustn't end the run.
-        rows.Add((name, "-", null, null, ex.Message, sw.Elapsed.TotalSeconds));
+        rows.Add((name, "-", null, null, ex.Message, sw.Elapsed.TotalSeconds, double.NaN, double.NaN));
         Console.WriteLine($"FAIL  {name}: {ex.Message}");
     }
     if (rows.Count > rowsBefore) break; // this group has its song
@@ -132,13 +137,13 @@ if (ok.Count > 0)
                       $"onset error {Median(c => c.MedianOnsetErrorMs):+0;-0} ms; failed {rows.Count - ok.Count}");
 }
 
-var csv = new StringBuilder("song,lyrics,lrc_offset,ref_notes,gen_notes,recall50,recall100,precision100,onset_err_ms,coverage,pitch_class,pitch_semitone,transposition,pitch_class_transposed,seconds,error\n");
-foreach (var (song, kind, offset, c, error, seconds) in rows)
+var csv = new StringBuilder("song,lyrics,lrc_offset,ref_notes,gen_notes,recall50,recall100,precision100,onset_err_ms,coverage,pitch_class,pitch_semitone,transposition,pitch_class_transposed,seconds,lyric_conf,pitch_conf,error\n");
+foreach (var (song, kind, offset, c, error, seconds, lyricConf, pitchConf) in rows)
 {
     string F(double x) => double.IsNaN(x) ? "" : x.ToString("0.###", CultureInfo.InvariantCulture);
     csv.Append(Quote(song)).Append(',').Append(kind).Append(',').Append(Quote(offset ?? "")).Append(',');
     csv.Append(c is null ? ",,,,,,,,,,," : $"{c.ReferenceNotes},{c.GeneratedNotes},{F(c.Recall50)},{F(c.Recall100)},{F(c.Precision100)},{F(c.MedianOnsetErrorMs)},{F(c.Coverage)},{F(c.PitchClass)},{F(c.PitchWithinSemitone)},{c.Transposition},{F(c.PitchClassTransposed)},");
-    csv.Append(F(seconds)).Append(',').Append(Quote(error ?? "")).Append('\n');
+    csv.Append(F(seconds)).Append(',').Append(F(lyricConf)).Append(',').Append(F(pitchConf)).Append(',').Append(Quote(error ?? "")).Append('\n');
 }
 File.WriteAllText(Path.Combine(outDir, "results.csv"), csv.ToString());
 Console.WriteLine($"results: {Path.Combine(outDir, "results.csv")}");
