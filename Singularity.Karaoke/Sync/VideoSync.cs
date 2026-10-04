@@ -46,16 +46,27 @@ public static class VideoSync
 
     /// <param name="master">Master audio, mono, at <paramref name="sampleRate"/>.</param>
     /// <param name="video">The video's soundtrack, mono, same rate.</param>
-    public static VideoSyncResult Measure(ReadOnlySpan<float> master, ReadOnlySpan<float> video, int sampleRate)
-    {
-        var m = OnsetEnvelope(master, sampleRate);
-        var v = OnsetEnvelope(video, sampleRate);
-        int window = WindowMs / FrameMs, maxLag = MaxOffsetMs / FrameMs;
+    public static VideoSyncResult Measure(ReadOnlySpan<float> master, ReadOnlySpan<float> video, int sampleRate) =>
+        MeasureEnvelopes(OnsetEnvelope(master, sampleRate), OnsetEnvelope(video, sampleRate), WindowMs, MaxOffsetMs, MinCorrelation,
+            VideoGapConsensus.ToleranceMs, WindowPositions, minInlierShare: 0);
 
-        var starts = WindowPositions.Select(p => (int)(m.Length * p) - window / 2).ToArray();
+    /// <summary>
+    /// The windowed offset measurement on any two envelopes at <see cref="FrameMs"/> per frame (also used
+    /// to place a chart's notes on a recording's vocals): where <paramref name="m"/>'s windows sit in
+    /// <paramref name="v"/>, as v position = m position + offset.
+    /// </summary>
+    /// <param name="toleranceMs">How closely the windows must agree (see <see cref="VideoGapConsensus.EvaluateWithDrift"/>).</param>
+    /// <param name="positions">Where the windows sit, as fractions of <paramref name="m"/>.</param>
+    /// <param name="minInlierShare">The consensus rule (see <see cref="VideoGapConsensus.EvaluateWithDrift"/>).</param>
+    public static VideoSyncResult MeasureEnvelopes(float[] m, float[] v, int windowMs, int maxOffsetMs, double minCorrelation, int toleranceMs,
+        IReadOnlyList<double> positions, double minInlierShare)
+    {
+        int window = windowMs / FrameMs, maxLag = maxOffsetMs / FrameMs;
+
+        var starts = positions.Select(p => (int)(m.Length * p) - window / 2).ToArray();
         var peaks = starts.Select(start => start < 0 || start + window > m.Length
             ? new List<(double OffsetMs, double Correlation)>()
-            : Peaks(m, start, window, v, maxLag)).ToArray();
+            : Peaks(m, start, window, v, maxLag, minCorrelation)).ToArray();
 
         // The offset most windows have a peak near; ties go to the stronger peaks.
         var all = peaks.SelectMany(p => p).ToList();
@@ -78,7 +89,7 @@ public static class VideoSync
             windows.Add(new SyncWindow(starts[i] * (double)FrameMs, (int)Math.Round(pick.OffsetMs), pick.Correlation));
         }
 
-        return new VideoSyncResult(VideoGapConsensus.EvaluateWithDrift(windows.Select(w => (w.MasterMs, w.OffsetMs)).ToArray()), windows);
+        return new VideoSyncResult(VideoGapConsensus.EvaluateWithDrift(windows.Select(w => (w.MasterMs, w.OffsetMs)).ToArray(), toleranceMs, minInlierShare), windows);
     }
 
     /// <summary>Positive log-energy differences per frame, normalised to zero mean and unit variance.</summary>
@@ -108,14 +119,14 @@ public static class VideoSync
     /// reach <see cref="MinCorrelation"/> and <see cref="PeakShare"/> of the best, as offsets in ms.
     /// Empty when nothing correlates reliably.
     /// </summary>
-    private static List<(double OffsetMs, double Correlation)> Peaks(float[] master, int start, int length, float[] video, int maxLag)
+    private static List<(double OffsetMs, double Correlation)> Peaks(float[] master, int start, int length, float[] video, int maxLag, double minCorrelation)
     {
         var (lo, scores) = Correlate(master, start, length, video, maxLag);
         var result = new List<(double, double)>();
         if (scores.Length == 0) return result;
         double best = scores.Max();
-        if (best < MinCorrelation) return result;
-        double floor = Math.Max(MinCorrelation, best * PeakShare);
+        if (best < minCorrelation) return result;
+        double floor = Math.Max(minCorrelation, best * PeakShare);
         int separation = PeakSeparationMs / FrameMs;
 
         var candidates = new List<int>();

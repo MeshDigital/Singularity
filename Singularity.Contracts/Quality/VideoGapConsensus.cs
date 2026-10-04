@@ -51,11 +51,18 @@ public static class VideoGapConsensus
     /// have found a match. With four or more matches, one window that doesn't fit may be left out. The gap is the line's value mid-song, which halves the worst error at either end.
     /// </summary>
     /// <param name="windows">Each window's position in the master and the offset it found (null: no match).</param>
-    public static VideoGapResult EvaluateWithDrift(IReadOnlyList<(double AtMs, int? OffsetMs)> windows)
+    /// <param name="toleranceMs">How far a window may sit off the fitted line (default <see cref="ToleranceMs"/>).</param>
+    /// <param name="minInlierShare">
+    /// 0 (default): all windows must fit, bar one stray when four or more found a match. Above 0: the line
+    /// that most windows fit wins, and it must hold at least this share of them (for noisier measurements
+    /// with many windows, such as placing a chart on vocals).
+    /// </param>
+    public static VideoGapResult EvaluateWithDrift(IReadOnlyList<(double AtMs, int? OffsetMs)> windows, int toleranceMs = ToleranceMs, double minInlierShare = 0)
     {
         var found = windows.Where(w => w.OffsetMs is not null).Select(w => (T: w.AtMs, O: (double)w.OffsetMs!.Value)).ToArray();
         if (found.Length < MinimumWindows) return new VideoGapResult(false, 0);
-        if (FitLine(found) is { } all) return all;
+        if (minInlierShare > 0) return BestLine(found, toleranceMs, minInlierShare);
+        if (FitLine(found, toleranceMs) is { } all) return all;
 
         // One stray window (a weak spurious peak, or an outro the video cuts differently) is forgiven when
         // all the others still fit, and enough remain. A real structural change - an inserted section - shifts
@@ -63,17 +70,32 @@ public static class VideoGapConsensus
         if (found.Length - 1 < MinimumWindows + 1) return new VideoGapResult(false, 0);
         for (int skip = 0; skip < found.Length; skip++)
         {
-            if (FitLine(found.Where((_, i) => i != skip).ToArray()) is { } rest) return rest;
+            if (FitLine(found.Where((_, i) => i != skip).ToArray(), toleranceMs) is { } rest) return rest;
         }
         return new VideoGapResult(false, 0);
     }
 
-    private static VideoGapResult? FitLine((double T, double O)[] found)
+    /// <summary>The line through two windows that the most windows fit, refitted on those; null-result when too few fit.</summary>
+    private static VideoGapResult BestLine((double T, double O)[] found, int toleranceMs, double minInlierShare)
+    {
+        (double T, double O)[] best = Array.Empty<(double, double)>();
+        for (int i = 0; i < found.Length; i++)
+        for (int j = i; j < found.Length; j++)
+        {
+            double slope = j == i || found[j].T == found[i].T ? 0 : (found[j].O - found[i].O) / (found[j].T - found[i].T);
+            var inliers = found.Where(w => Math.Abs(w.O - (found[i].O + slope * (w.T - found[i].T))) < toleranceMs).ToArray();
+            if (inliers.Length > best.Length) best = inliers;
+        }
+        if (best.Length < MinimumWindows || best.Length < minInlierShare * found.Length) return new VideoGapResult(false, 0);
+        return FitLine(best, toleranceMs) ?? new VideoGapResult(false, 0);
+    }
+
+    private static VideoGapResult? FitLine((double T, double O)[] found, int toleranceMs)
     {
         double meanT = found.Average(w => w.T), meanO = found.Average(w => w.O);
         double sxx = found.Sum(w => (w.T - meanT) * (w.T - meanT));
         double slope = sxx > 0 ? found.Sum(w => (w.T - meanT) * (w.O - meanO)) / sxx : 0;
-        if (found.Any(w => Math.Abs(w.O - (meanO + slope * (w.T - meanT))) >= ToleranceMs)) return null;
+        if (found.Any(w => Math.Abs(w.O - (meanO + slope * (w.T - meanT))) >= toleranceMs)) return null;
 
         double driftPerMinute = slope * 60_000;
         if (Math.Abs(driftPerMinute) > MaxDriftMsPerMinute) return null;

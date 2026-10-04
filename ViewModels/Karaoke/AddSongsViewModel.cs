@@ -58,6 +58,7 @@ public sealed class IngestRowViewModel : ReactiveObject
         IngestState.Building => item.Stage switch
         {
             IngestStage.Preparing => "Preparing",
+            IngestStage.FindingChart => "Looking for a community chart",
             IngestStage.FetchingLyrics => "Finding lyrics",
             IngestStage.GeneratingChart => "Generating AI chart",
             IngestStage.DownloadingVideo => "Downloading video",
@@ -78,7 +79,8 @@ public sealed class IngestRowViewModel : ReactiveObject
     /// <summary>The chart is nearly all of the time; the other stages are a sliver each.</summary>
     private static double OverallProgress(IngestStage stage, double fraction) => stage switch
     {
-        IngestStage.Preparing => 0.02 * fraction,
+        IngestStage.Preparing => 0.01 * fraction,
+        IngestStage.FindingChart => 0.01 + 0.01 * fraction,
         IngestStage.FetchingLyrics => 0.02 + 0.03 * fraction,
         IngestStage.GeneratingChart => 0.05 + 0.80 * fraction,
         IngestStage.DownloadingVideo => 0.85 + 0.05 * fraction,

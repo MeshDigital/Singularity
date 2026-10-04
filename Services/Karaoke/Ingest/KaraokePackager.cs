@@ -33,9 +33,10 @@ public sealed record IngestSource(
     string? CoverUrl = null,
     string? VideoPath = null,
     string? Language = null,
-    int? Year = null);
+    int? Year = null,
+    bool PreferAi = false);
 
-public enum IngestStage { Preparing, FetchingLyrics, GeneratingChart, DownloadingVideo, SyncingVideo, Finishing }
+public enum IngestStage { Preparing, FindingChart, FetchingLyrics, GeneratingChart, DownloadingVideo, SyncingVideo, Finishing }
 
 /// <param name="Fraction">Progress within the stage, 0..1.</param>
 public sealed record IngestProgress(IngestStage Stage, double Fraction);
@@ -43,7 +44,20 @@ public sealed record IngestProgress(IngestStage Stage, double Fraction);
 /// <param name="HasVideo">The music video is synced to the song.</param>
 /// <param name="Notes">What was left out and why (no lyrics found, video not synced, …), for the queue's detail line.</param>
 /// <param name="AmbientVideo">A video is there but not synced; it plays dimmed as a backdrop.</param>
-public sealed record IngestResult(string PackageFolder, QualityAssessment Quality, bool HasVideo, IReadOnlyList<string> Notes, bool AmbientVideo = false);
+/// <param name="ChartSource">Where a community chart came from (e.g. "usdb:295"); null for an AI chart.</param>
+public sealed record IngestResult(string PackageFolder, QualityAssessment Quality, bool HasVideo, IReadOnlyList<string> Notes, bool AmbientVideo = false,
+    string? ChartSource = null);
+
+/// <summary>A chart a person made for the song (from USDB), not yet placed on our recording.</summary>
+/// <param name="SourceId">E.g. "usdb:295".</param>
+/// <param name="YoutubeId">The video the chart names, tried first for the music video.</param>
+public sealed record CommunityChart(UltraStarSong Chart, string SourceId, string? YoutubeId);
+
+/// <summary>Finds community charts; USDB in the app.</summary>
+public interface ICommunityCharts
+{
+    Task<CommunityChart?> FindAsync(string artist, string title, CancellationToken ct);
+}
 
 /// <summary>Finds lyrics for a recording; the LRCLIB client in the app.</summary>
 public interface ILyricsLookup
@@ -55,6 +69,9 @@ public interface ILyricsLookup
 public interface ITrackAnalyzer
 {
     Task<TrackAnalysisResult> AnalyzeAsync(ProcessTrackCommand command, IProgress<WorkerEvent>? progress, CancellationToken ct);
+
+    /// <summary>Only the vocal separation: vocals.wav and instrumental.wav into the command's folder.</summary>
+    Task SeparateAsync(SeparateStemsCommand command, IProgress<WorkerEvent>? progress, CancellationToken ct);
 }
 
 /// <summary>The media work the packager needs: ffmpeg and a download in the app.</summary>
@@ -93,11 +110,15 @@ public sealed class KaraokePackager
     private readonly string _stagingRoot;
     private readonly ILogger _logger;
     private readonly IVideoFinder? _videos;
+    private readonly ICommunityCharts? _community;
 
     /// <param name="videos">Finds a music video when the source brings none; null: songs without one get the cover.</param>
-    public KaraokePackager(ITrackAnalyzer analyzer, ILyricsLookup lyrics, IIngestMedia media, string stagingRoot, ILogger logger, IVideoFinder? videos = null)
+    /// <param name="community">Community charts to use before making an AI one; null: always AI.</param>
+    public KaraokePackager(ITrackAnalyzer analyzer, ILyricsLookup lyrics, IIngestMedia media, string stagingRoot, ILogger logger, IVideoFinder? videos = null,
+        ICommunityCharts? community = null)
     {
         _videos = videos;
+        _community = community;
         _analyzer = analyzer;
         _lyrics = lyrics;
         _media = media;
@@ -132,28 +153,79 @@ public sealed class KaraokePackager
             if (audioMatch == AudioMatchKind.Mismatch)
                 notes.Add($"The download is {Seconds(durationMs)} long, the recording {Seconds(source.ExpectedDurationMs!.Value)}.");
 
-            // Lyrics: LRCLIB, or none (then the worker transcribes).
-            progress?.Report(new IngestProgress(IngestStage.FetchingLyrics, 0));
-            var lyrics = await _lyrics.FindAsync(source.Artist, source.Title, source.Album, durationMs, ct);
-            if (lyrics is null) notes.Add("No lyrics found online; the words were transcribed.");
+            // A chart a person made beats an AI one, when there is one and it fits this recording.
+            CommunityChart? community = null;
+            if (_community is not null && !source.PreferAi)
+            {
+                progress?.Report(new IngestProgress(IngestStage.FindingChart, 0));
+                community = await FindCommunityChartAsync(source, ct);
+            }
 
-            // The music video downloads while the AI works on the chart (network and GPU don't compete).
+            // The music video downloads while the GPU works on the chart (network and GPU don't compete).
             if (source.VideoPath is null && _videos is not null)
-                videoDownload = FindVideoAsync(source, durationMs, staging, videoCts.Token);
+                videoDownload = FindVideoAsync(source, durationMs, staging, community?.YoutubeId, videoCts.Token);
 
-            // The chart: stems, alignment and pitch from the worker.
             progress?.Report(new IngestProgress(IngestStage.GeneratingChart, 0));
             var workerProgress = new InlineProgress<WorkerEvent>(e =>
             {
                 if (e is ProgressUpdateEvent p) progress?.Report(new IngestProgress(IngestStage.GeneratingChart, StageShare(p)));
             });
-            var analysis = await _analyzer.AnalyzeAsync(
-                new ProcessTrackCommand($"ingest-{id}", audio, staging, lyrics?.Text, lyrics?.Kind ?? LyricsKind.Plain, source.Language, ReuseStems: false),
-                workerProgress, ct);
-            var (bpm, gapMs, voice) = UltraStarChartBuilder.Build(analysis.TempoBpm, analysis.Lines);
-            if (voice.Notes.Count == 0) throw new InvalidOperationException("No singing was found in the recording.");
-            var vocals = TakeInto(staging, analysis.VocalsPath, SongPackage.VocalsFileName);
-            var instrumental = TakeInto(staging, analysis.InstrumentalPath, SongPackage.InstrumentalFileName);
+
+            UltraStarSong? chart = null;
+            string? chartSource = null, languageCode = null;
+            double lyricScore = 1, pitchScore = 1;
+            bool hasTempo = true;
+            IReadOnlyDictionary<string, string> models = new Dictionary<string, string>();
+            string vocals = SongPackage.VocalsFileName, instrumental = SongPackage.InstrumentalFileName;
+
+            if (community is not null)
+            {
+                // Place the community chart on our recording by its vocals (which the song needs anyway).
+                await _analyzer.SeparateAsync(new SeparateStemsCommand($"ingest-{id}", audio, staging), workerProgress, ct);
+                var sung = await _media.DecodeMonoAsync(Path.Combine(staging, SongPackage.VocalsFileName), SyncSampleRate, ct);
+                var fit = ChartSync.Measure(community.Chart, sung, SyncSampleRate);
+                if (fit.Gap.IsValid)
+                {
+                    chart = ChartSync.Shift(community.Chart, fit.Gap.VideoGapMs);
+                    chartSource = community.SourceId;
+                    models = new Dictionary<string, string> { ["chart"] = community.SourceId, ["separation"] = "htdemucs_ft" };
+                    notes.Add($"Community chart{(string.IsNullOrWhiteSpace(chart.Creator) ? "" : " by " + chart.Creator.Trim())} from USDB, placed on this recording ({fit.Gap.VideoGapMs:+0;-0} ms).");
+                }
+                else
+                {
+                    notes.Add("A community chart was found, but it doesn't fit this recording (another edit), so an AI chart was made.");
+                    _logger.LogInformation("Ingest: {Source} doesn't fit {Artist} - {Title}; making an AI chart", community.SourceId, source.Artist, source.Title);
+                }
+            }
+
+            if (chart is null)
+            {
+                // Lyrics: LRCLIB, or none (then the worker transcribes).
+                progress?.Report(new IngestProgress(IngestStage.FetchingLyrics, 0));
+                var lyrics = await _lyrics.FindAsync(source.Artist, source.Title, source.Album, durationMs, ct);
+                if (lyrics is null) notes.Add("No lyrics found online; the words were transcribed.");
+
+                // The chart: stems (reused when the community attempt made them), alignment and pitch from the worker.
+                progress?.Report(new IngestProgress(IngestStage.GeneratingChart, 0));
+                var analysis = await _analyzer.AnalyzeAsync(
+                    new ProcessTrackCommand($"ingest-{id}", audio, staging, lyrics?.Text, lyrics?.Kind ?? LyricsKind.Plain, source.Language, ReuseStems: true),
+                    workerProgress, ct);
+                var (bpm, gapMs, voice) = UltraStarChartBuilder.Build(analysis.TempoBpm, analysis.Lines);
+                if (voice.Notes.Count == 0) throw new InvalidOperationException("No singing was found in the recording.");
+                vocals = TakeInto(staging, analysis.VocalsPath, SongPackage.VocalsFileName);
+                instrumental = TakeInto(staging, analysis.InstrumentalPath, SongPackage.InstrumentalFileName);
+                chart = new UltraStarSong
+                {
+                    Title = source.Title, Artist = source.Artist, AudioFile = audioName, Bpm = bpm, GapMs = gapMs,
+                    Language = LanguageName(analysis.Language), Creator = Creator, Voices = new[] { voice },
+                };
+                languageCode = analysis.Language;
+                var syllables = analysis.Lines.SelectMany(l => l.Syllables).ToList();
+                lyricScore = QualityScoring.LyricSubScore(syllables.Where(s => s.StartsWord).Select(s => s.AlignmentConfidence));
+                pitchScore = QualityScoring.PitchSubScore(syllables.Where(s => s.MidiTone is not null).Select(s => s.PitchConfidence));
+                hasTempo = analysis.TempoBpm > 0;
+                models = analysis.Models;
+            }
 
             string? cover = null;
             if (source.CoverUrl is { Length: > 0 } coverUrl)
@@ -206,32 +278,31 @@ public sealed class KaraokePackager
             }
 
             progress?.Report(new IngestProgress(IngestStage.Finishing, 0));
-            var song = new UltraStarSong
+            // The chart's own notes, timing and credits; our recording, stems, cover and video. A community
+            // chart keeps its #CREATOR, which is also how the library tells it from an AI chart.
+            var song = chart with
             {
                 Title = source.Title,
                 Artist = source.Artist,
                 AudioFile = audioName,
-                Bpm = bpm,
-                GapMs = gapMs,
                 VocalsFile = vocals,
                 InstrumentalFile = instrumental,
                 CoverFile = cover,
+                BackgroundFile = null,
                 VideoFile = video,
                 VideoGapMs = videoGap.VideoGapMs,
-                Language = LanguageName(analysis.Language),
-                Year = source.Year,
-                Creator = Creator,
-                Voices = new[] { voice },
+                Year = chart.Year ?? source.Year,
+                Creator = string.IsNullOrWhiteSpace(chart.Creator) ? (chartSource is null ? Creator : "USDB community") : chart.Creator,
             };
             await File.WriteAllTextAsync(Path.Combine(staging, SongPackage.UltraStarFileName), UltraStarSerializer.Write(song), new UTF8Encoding(false), ct);
 
-            var syllables = analysis.Lines.SelectMany(l => l.Syllables).ToList();
+            // A person's chart counts as fully confident lyrics and pitch.
             var quality = QualityScoring.Assess(new QualityMetrics(
                 QualityScoring.AudioMatchScore(audioMatch),
-                QualityScoring.LyricSubScore(syllables.Where(s => s.StartsWord).Select(s => s.AlignmentConfidence)),
-                QualityScoring.PitchSubScore(syllables.Where(s => s.MidiTone is not null).Select(s => s.PitchConfidence)),
+                lyricScore,
+                pitchScore,
                 videoGap.Score,
-                QualityScoring.MetadataScore(source.Isrc is { Length: > 0 }, analysis.TempoBpm > 0, cover is not null)));
+                QualityScoring.MetadataScore(source.Isrc is { Length: > 0 }, hasTempo, cover is not null)));
             var trackId = source.TrackId ?? LocalTrackId(source);
             await SongPackage.WriteMetadataAsync(staging, new SongPackageMetadata
             {
@@ -241,12 +312,12 @@ public sealed class KaraokePackager
                 Artist = source.Artist,
                 Album = source.Album,
                 ReleaseYear = source.Year,
-                Language = analysis.Language,
+                Language = languageCode ?? song.Language,
                 DurationMs = durationMs,
-                Timing = new TimingDescriptor(bpm, gapMs, videoGap.VideoGapMs, videoGap.IsValid),
+                Timing = new TimingDescriptor(song.Bpm, song.GapMs, videoGap.VideoGapMs, videoGap.IsValid),
                 Quality = quality,
                 Provenance = new PipelineProvenance(
-                    Generator, InferenceEngine: null, analysis.Models, DateTime.UtcNow, sw.ElapsedMilliseconds),
+                    Generator, InferenceEngine: null, models, DateTime.UtcNow, sw.ElapsedMilliseconds),
             }, ct);
 
             var files = new[] { audioName, SongPackage.UltraStarFileName, SongPackage.MetadataFileName, vocals, instrumental, cover, video }
@@ -254,7 +325,8 @@ public sealed class KaraokePackager
             var folder = Publish(staging, files, outputRoot, SongPackage.FolderName(source.Artist, source.Title), trackId, id);
             _logger.LogInformation("Ingest: {Folder} ready, quality {Score} ({Tier}), video {Video}, in {Seconds:0} s",
                 folder, quality.OverallScore, quality.Tier, video is not null, sw.Elapsed.TotalSeconds);
-            return new IngestResult(folder, quality, video is not null && videoGap.IsValid, notes, AmbientVideo: video is not null && !videoGap.IsValid);
+            return new IngestResult(folder, quality, video is not null && videoGap.IsValid, notes, AmbientVideo: video is not null && !videoGap.IsValid,
+                ChartSource: chartSource);
         }
         finally
         {
@@ -268,11 +340,26 @@ public sealed class KaraokePackager
         }
     }
 
-    /// <summary>A missing video never fails the song: it just gets the cover.</summary>
-    private async Task<string?> FindVideoAsync(IngestSource source, int durationMs, string staging, CancellationToken ct)
+    /// <summary>A community chart is a bonus: when the lookup fails, the song gets an AI chart.</summary>
+    private async Task<CommunityChart?> FindCommunityChartAsync(IngestSource source, CancellationToken ct)
     {
         try
         {
+            return await _community!.FindAsync(source.Artist, source.Title, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Ingest: community chart lookup failed for {Artist} - {Title}", source.Artist, source.Title);
+            return null;
+        }
+    }
+
+    /// <summary>A missing video never fails the song: it just gets the cover. The chart's own video is tried first.</summary>
+    private async Task<string?> FindVideoAsync(IngestSource source, int durationMs, string staging, string? preferredYoutubeId, CancellationToken ct)
+    {
+        try
+        {
+            if (preferredYoutubeId is not null && await _videos!.DownloadAsync(preferredYoutubeId, staging, ct) is { } named) return named;
             return await _videos!.FindAsync(source.Artist, source.Title, durationMs, staging, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

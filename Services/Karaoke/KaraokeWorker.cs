@@ -37,6 +37,9 @@ public sealed class KaraokeWorker : Ingest.ITrackAnalyzer, IAsyncDisposable
     Task<TrackAnalysisResult> Ingest.ITrackAnalyzer.AnalyzeAsync(ProcessTrackCommand command, IProgress<WorkerEvent>? progress, CancellationToken ct) =>
         ProcessTrackAsync(command, progress, ct);
 
+    Task Ingest.ITrackAnalyzer.SeparateAsync(SeparateStemsCommand command, IProgress<WorkerEvent>? progress, CancellationToken ct) =>
+        SeparateStemsAsync(command, progress, ct);
+
     /// <summary>
     /// Songs one worker process handles before it is replaced. Its resident memory creeps up by about
     /// 0.6 GB over 50 songs (measured), which an overnight batch of the whole collection would pile up;

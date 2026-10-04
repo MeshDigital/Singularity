@@ -16,6 +16,9 @@ public interface IVideoFinder
 {
     /// <summary>Downloads the video (with its sound, which the sync needs) into <paramref name="folder"/>; null when none was found.</summary>
     Task<string?> FindAsync(string artist, string title, int durationMs, string folder, CancellationToken ct);
+
+    /// <summary>Downloads one YouTube video by id (a chart's own); null when it's gone.</summary>
+    Task<string?> DownloadAsync(string youtubeId, string folder, CancellationToken ct);
 }
 
 /// <summary>
@@ -60,21 +63,35 @@ public sealed class YtDlpVideoFinder : IVideoFinder
     internal static IReadOnlyList<string> Arguments(string artist, string title, int durationMs, string folder, string? ffmpeg)
     {
         int seconds = durationMs / 1000;
+        return VideoArguments(folder, ffmpeg, $"ytsearch5:{artist} - {title} official music video",
+            $"!is_live & duration >= {Math.Max(1, seconds - MaxShorterSeconds)} & duration <= {seconds + MaxLongerSeconds}");
+    }
+
+    public Task<string?> FindAsync(string artist, string title, int durationMs, string folder, CancellationToken ct) =>
+        RunAsync(Arguments(artist, title, durationMs, folder, AudioIngestionPipeline.ResolveFfmpegPath()), $"{artist} - {title}", folder, ct);
+
+    public Task<string?> DownloadAsync(string youtubeId, string folder, CancellationToken ct) =>
+        System.Text.RegularExpressions.Regex.IsMatch(youtubeId, "^[A-Za-z0-9_-]{11}$")
+            ? RunAsync(VideoArguments(folder, AudioIngestionPipeline.ResolveFfmpegPath(), $"https://www.youtube.com/watch?v={youtubeId}", matchFilter: "!is_live"), youtubeId, folder, ct)
+            : Task.FromResult<string?>(null);
+
+    internal static IReadOnlyList<string> VideoArguments(string folder, string? ffmpeg, string target, string matchFilter)
+    {
         var args = new List<string>
         {
             "--no-playlist", "--no-progress", "--quiet", "--no-warnings", "--no-mtime",
             "-f", "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]/best[height<=1080]/best",
             "--merge-output-format", "mp4",
-            "--match-filter", $"!is_live & duration >= {Math.Max(1, seconds - MaxShorterSeconds)} & duration <= {seconds + MaxLongerSeconds}",
+            "--match-filter", matchFilter,
             "--max-downloads", "1",
             "-o", Path.Combine(folder, FileStem + ".%(ext)s"),
         };
         if (ffmpeg is { Length: > 0 } && File.Exists(ffmpeg)) args.AddRange(new[] { "--ffmpeg-location", ffmpeg });
-        args.Add($"ytsearch5:{artist} - {title} official music video");
+        args.Add(target);
         return args;
     }
 
-    public async Task<string?> FindAsync(string artist, string title, int durationMs, string folder, CancellationToken ct)
+    private async Task<string?> RunAsync(IReadOnlyList<string> arguments, string what, string folder, CancellationToken ct)
     {
         var exe = Locate();
         if (exe is null) return null;
@@ -86,7 +103,7 @@ public sealed class YtDlpVideoFinder : IVideoFinder
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var a in Arguments(artist, title, durationMs, folder, AudioIngestionPipeline.ResolveFfmpegPath())) psi.ArgumentList.Add(a);
+        foreach (var a in arguments) psi.ArgumentList.Add(a);
 
         var sw = Stopwatch.StartNew();
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Couldn't start yt-dlp.");
@@ -105,13 +122,13 @@ public sealed class YtDlpVideoFinder : IVideoFinder
         if (file is null)
         {
             if (process.ExitCode is not (0 or 101))
-                _logger.LogWarning("yt-dlp found no video for {Artist} - {Title} (exit {Code}): {Error}", artist, title, process.ExitCode, errorText);
+                _logger.LogWarning("yt-dlp found no video for {What} (exit {Code}): {Error}", what, process.ExitCode, errorText);
             else
-                _logger.LogInformation("No music video of a fitting length for {Artist} - {Title}", artist, title);
+                _logger.LogInformation("No music video of a fitting length for {What}", what);
             return null;
         }
-        _logger.LogInformation("Downloaded a music video for {Artist} - {Title} ({MB} MB) in {Seconds:0} s",
-            artist, title, (new FileInfo(file).Length / 1_048_576.0).ToString("0", CultureInfo.InvariantCulture), sw.Elapsed.TotalSeconds);
+        _logger.LogInformation("Downloaded a music video for {What} ({MB} MB) in {Seconds:0} s",
+            what, (new FileInfo(file).Length / 1_048_576.0).ToString("0", CultureInfo.InvariantCulture), sw.Elapsed.TotalSeconds);
         return file;
     }
 }

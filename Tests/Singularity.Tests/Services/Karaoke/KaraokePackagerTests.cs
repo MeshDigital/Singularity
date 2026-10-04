@@ -130,6 +130,62 @@ public sealed class KaraokePackagerTests : IDisposable
     }
 
     [Fact]
+    public async Task ACommunityChart_IsPlacedOnTheRecording_AndKeepsItsCreator()
+    {
+        var chart = ChartSyncTests.Chart() with { Creator = "Someone", Title = "Mr. Brightside", Artist = "The Killers", VideoFile = "v=abcdefghijk" };
+        _media.Sound["vocals"] = ChartSyncTests.Vocals(chart, shiftMs: 1730);
+        var community = new FakeCommunity { Chart = new CommunityChart(chart, "usdb:295", "abcdefghijk") };
+        var videos = new FakeVideos();
+        var packager = new KaraokePackager(_analyzer, _lyrics, _media, Staging, NullLogger.Instance, videos, community);
+
+        var result = await packager.BuildAsync(Source(Download()), Output);
+
+        Assert.Equal("usdb:295", result.ChartSource);
+        var song = UltraStarSerializer.ReadFile(Path.Combine(result.PackageFolder, SongPackage.UltraStarFileName));
+        Assert.InRange(song.GapMs, 5000 + 1710, 5000 + 1750);
+        Assert.Equal("Someone", song.Creator);
+        Assert.Equal("audio.flac", song.AudioFile);
+        Assert.Equal(SongPackage.VocalsFileName, song.VocalsFile);
+        Assert.Equal(chart.Voices[0].Notes.Count, song.Voices[0].Notes.Count);
+        Assert.Equal(0, _analyzer.Runs);              // no AI chart
+        Assert.Equal(1, _analyzer.Separations);       // only the stems
+        Assert.Equal(new[] { "abcdefghijk" }, videos.Downloaded); // the chart's own video first
+        Assert.Equal(1.0, result.Quality.Metrics.LyricAlignment);
+        Assert.Contains(result.Notes, n => n.Contains("Community chart by Someone"));
+        var metadata = await SongPackage.ReadMetadataAsync(result.PackageFolder);
+        Assert.Equal("usdb:295", metadata.Provenance.Models["chart"]);
+    }
+
+    [Fact]
+    public async Task ACommunityChartThatDoesNotFit_FallsBackToTheAi()
+    {
+        var chart = ChartSyncTests.Chart(seed: 1);
+        _media.Sound["vocals"] = ChartSyncTests.Vocals(ChartSyncTests.Chart(seed: 2), 0);
+        var community = new FakeCommunity { Chart = new CommunityChart(chart, "usdb:7", null) };
+        var packager = new KaraokePackager(_analyzer, _lyrics, _media, Staging, NullLogger.Instance, community: community);
+
+        var result = await packager.BuildAsync(Source(Download()), Output);
+
+        Assert.Null(result.ChartSource);
+        Assert.Equal(1, _analyzer.Runs);
+        Assert.True(_analyzer.Last!.ReuseStems); // the stems made for the attempt are used again
+        Assert.Equal(KaraokePackager.Creator, UltraStarSerializer.ReadFile(Path.Combine(result.PackageFolder, SongPackage.UltraStarFileName)).Creator);
+        Assert.Contains(result.Notes, n => n.Contains("doesn't fit"));
+    }
+
+    [Fact]
+    public async Task PreferAi_SkipsTheCommunityLookup()
+    {
+        var community = new FakeCommunity { Chart = new CommunityChart(ChartSyncTests.Chart(), "usdb:1", null) };
+        var packager = new KaraokePackager(_analyzer, _lyrics, _media, Staging, NullLogger.Instance, community: community);
+
+        var result = await packager.BuildAsync(Source(Download()) with { PreferAi = true }, Output);
+
+        Assert.Equal(0, community.Lookups);
+        Assert.Null(result.ChartSource);
+    }
+
+    [Fact]
     public async Task VideoOfAnotherArrangement_IsKeptAsADimmedBackdrop()
     {
         _media.Sound["audio"] = VideoSyncTests.Music(120, seed: 1);
@@ -232,6 +288,16 @@ internal sealed class FakeAnalyzer : ITrackAnalyzer
     public Func<CancellationToken, Task>? Gate { get; set; }
     public int Runs { get; private set; }
 
+    public int Separations { get; private set; }
+
+    public Task SeparateAsync(SeparateStemsCommand command, IProgress<WorkerEvent>? progress, CancellationToken ct)
+    {
+        Separations++;
+        File.WriteAllBytes(Path.Combine(command.OutputFolder, "vocals.wav"), new byte[] { 1 });
+        File.WriteAllBytes(Path.Combine(command.OutputFolder, "instrumental.wav"), new byte[] { 2 });
+        return Task.CompletedTask;
+    }
+
     public async Task<TrackAnalysisResult> AnalyzeAsync(ProcessTrackCommand command, IProgress<WorkerEvent>? progress, CancellationToken ct)
     {
         Last = command;
@@ -276,8 +342,30 @@ internal sealed class FakeMedia : IIngestMedia
     public Task<byte[]?> DownloadAsync(string url, CancellationToken ct) => Task.FromResult<byte[]?>(new byte[] { 0xFF, 0xD8 });
 }
 
+internal sealed class FakeCommunity : ICommunityCharts
+{
+    public CommunityChart? Chart { get; set; }
+    public int Lookups { get; private set; }
+
+    public Task<CommunityChart?> FindAsync(string artist, string title, CancellationToken ct)
+    {
+        Lookups++;
+        return Task.FromResult(Chart);
+    }
+}
+
 internal sealed class FakeVideos : IVideoFinder
 {
+    public List<string> Downloaded { get; } = new();
+
+    public async Task<string?> DownloadAsync(string youtubeId, string folder, CancellationToken ct)
+    {
+        Downloaded.Add(youtubeId);
+        var path = Path.Combine(folder, YtDlpVideoFinder.FileStem + ".mp4");
+        await File.WriteAllBytesAsync(path, new byte[] { 1 }, CancellationToken.None);
+        return path;
+    }
+
     public bool Found { get; set; } = true;
     public bool Hang { get; set; }
     public bool WasCancelled { get; private set; }
