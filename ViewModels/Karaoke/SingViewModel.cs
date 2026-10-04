@@ -40,10 +40,19 @@ public sealed record StageSnapshot(double Beat, IReadOnlyList<PlayerSnapshot> Pl
 
 /// <summary>A singer's line on the results screen.</summary>
 /// <param name="HighScoreText">"New high score!", "3rd best on this song", or empty.</param>
+/// <param name="Player">1 or 2: picks the singer's lane colour.</param>
 public sealed record PlayerResult(string Name, int Score, string Title, string Notes, string Golden, string LineBonus, string Lines,
-    string HighScoreText = "")
+    string HighScoreText = "", int Player = 1)
 {
     public bool HasHighScore => HighScoreText.Length > 0;
+
+    /// <summary>The singer's colour on the stage (blue, red), for the card's accent and score meter.</summary>
+    public Avalonia.Media.IBrush Accent => new Avalonia.Media.SolidColorBrush(Player == 2
+        ? Avalonia.Media.Color.FromRgb(255, 90, 100) : Avalonia.Media.Color.FromRgb(60, 170, 255));
+
+    /// <summary>The score meter's width: the score out of 10,000 on a 320 px track.</summary>
+    public double MeterWidth => Math.Clamp(Score / 10_000.0, 0, 1) * MeterTrack;
+    public const double MeterTrack = 320;
 }
 
 /// <summary>
@@ -498,7 +507,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
             shown.Total, ScoreTitles.For(shown.Total),
             $"{shown.Notes:N0}", $"{shown.Golden:N0}", $"{shown.LineBonus:N0}",
             p.Session is null ? "No microphone" : lines.Count == 0 ? "" : $"{perfect} perfect, {great} great of {lines.Count} lines",
-            RecordHighScore(p, shown.Total));
+            RecordHighScore(p, shown.Total), p.Mic.Player);
     }
 
     private void PublishResults(IReadOnlyList<PlayerResult> results)
