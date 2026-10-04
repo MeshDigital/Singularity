@@ -101,4 +101,41 @@ public class VideoGapConsensusTests
     [Fact]
     public void EvenWindowCount_AveragesMiddlePair() =>
         Assert.Equal(15, VideoGapConsensus.Evaluate(new int?[] { 10, 14, 16, 20 }).VideoGapMs);
+
+    private static (double, int?)[] At(params int?[] offsets) =>
+        offsets.Select((o, i) => (i * 60_000.0, o)).ToArray(); // one window per minute
+
+    [Fact]
+    public void Drift_SteadySlope_IsValidWithMidValue()
+    {
+        var r = VideoGapConsensus.EvaluateWithDrift(At(-2400, -2340, -2280, -2220, -2160));
+        Assert.True(r.IsValid);
+        Assert.Equal(-2280, r.VideoGapMs);
+        Assert.Equal(60, r.DriftMsPerMinute);
+    }
+
+    [Fact]
+    public void Drift_MissingWindowsAreSkipped_ButThreeAreNeeded()
+    {
+        var r = VideoGapConsensus.EvaluateWithDrift(At(6451, 6449, null, 6450, null));
+        Assert.True(r.IsValid);
+        Assert.Equal(6450, r.VideoGapMs);
+        Assert.False(VideoGapConsensus.EvaluateWithDrift(At(6451, null, null, 6450, null)).IsValid);
+    }
+
+    [Fact]
+    public void Drift_ArrangementJump_IsInvalid() =>
+        Assert.False(VideoGapConsensus.EvaluateWithDrift(At(1200, 1200, 9200, 9200, 9200)).IsValid);
+
+    [Fact]
+    public void Drift_OneStrayWindow_IsForgivenWhenFourRemain()
+    {
+        Assert.Equal(410, VideoGapConsensus.EvaluateWithDrift(At(410, 410, 410, 410, -19990)).VideoGapMs);
+        Assert.Equal(525, VideoGapConsensus.EvaluateWithDrift(At(528, 528, -12150, 522, 522)).VideoGapMs);
+        Assert.False(VideoGapConsensus.EvaluateWithDrift(At(410, 410, 410, -19990, null)).IsValid);
+    }
+
+    [Fact]
+    public void Drift_TooSteep_IsInvalid() =>
+        Assert.False(VideoGapConsensus.EvaluateWithDrift(At(0, 150, 300, 450, 600)).IsValid);
 }
