@@ -8,9 +8,22 @@
              Background="Black" Foreground="White">
     <!-- What the audience sees: shown in the main window, or full screen on the projector. -->
     <Grid>
-        <!-- Bottom layer: background or cover, dimmed. The music video is drawn by the stage itself
-             (Skia), never as a native window, which would paint over the notes. -->
-        <Image Source="{Binding Background}" Stretch="UniformToFill" Opacity="0.35"/>
+        <!-- Bottom layer, for songs without a synced video: the cover, blurred, in a glow of its own colour.
+             The music video is drawn over it by the stage itself (Skia), never as a native window, which
+             would paint over the notes. -->
+        <Grid>
+            <Grid.Background>
+                <RadialGradientBrush Center="50%,45%" GradientOrigin="50%,45%" RadiusX="75%" RadiusY="75%">
+                    <GradientStop Offset="0" Color="{Binding Glow}"/>
+                    <GradientStop Offset="1" Color="Black"/>
+                </RadialGradientBrush>
+            </Grid.Background>
+            <Image Source="{Binding Background}" Stretch="UniformToFill" Opacity="0.28">
+                <Image.Effect>
+                    <BlurEffect Radius="40"/>
+                </Image.Effect>
+            </Image>
+        </Grid>
 
         <k:SingStage/>
 

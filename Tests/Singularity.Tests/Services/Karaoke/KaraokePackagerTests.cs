@@ -130,7 +130,7 @@ public sealed class KaraokePackagerTests : IDisposable
     }
 
     [Fact]
-    public async Task VideoOfAnotherArrangement_IsDropped()
+    public async Task VideoOfAnotherArrangement_IsKeptAsADimmedBackdrop()
     {
         _media.Sound["audio"] = VideoSyncTests.Music(120, seed: 1);
         _media.Sound["clip"] = VideoSyncTests.Music(120, seed: 2);
@@ -138,9 +138,25 @@ public sealed class KaraokePackagerTests : IDisposable
         var result = await Packager().BuildAsync(Source(Download(), Download("clip.mp4")), Output);
 
         Assert.False(result.HasVideo);
-        Assert.Contains(result.Notes, n => n.Contains("different version"));
-        Assert.False(File.Exists(Path.Combine(result.PackageFolder, "video.mp4")));
+        Assert.True(result.AmbientVideo);
+        Assert.Contains(result.Notes, n => n.Contains("different version") && n.Contains("dimmed"));
+        var song = UltraStarSerializer.ReadFile(Path.Combine(result.PackageFolder, SongPackage.UltraStarFileName));
+        Assert.Equal("video.mp4", song.VideoFile);
+        Assert.Equal(0, song.VideoGapMs);
+        Assert.False((await SongPackage.ReadMetadataAsync(result.PackageFolder)).Timing.VideoStructureValid);
         Assert.Equal(0.0, result.Quality.Metrics.VideoMatch);
+    }
+
+    [Fact]
+    public async Task VideoWithoutSound_IsKeptAsADimmedBackdrop()
+    {
+        _media.Sound["audio"] = VideoSyncTests.Music(120);
+
+        var result = await Packager().BuildAsync(Source(Download(), Download("clip.mp4")), Output);
+
+        Assert.True(result.AmbientVideo);
+        Assert.Contains(result.Notes, n => n.Contains("no sound"));
+        Assert.True(File.Exists(Path.Combine(result.PackageFolder, "video.mp4")));
     }
 
     [Fact]

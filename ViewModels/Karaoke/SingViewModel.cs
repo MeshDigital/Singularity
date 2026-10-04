@@ -32,7 +32,8 @@ public sealed record PlayerSnapshot(
     double LastLineAgeBeats);
 
 /// <summary>Everything the stage draws for one frame, taken under the lock in <see cref="SingViewModel.Tick"/>.</summary>
-public sealed record StageSnapshot(double Beat, IReadOnlyList<PlayerSnapshot> Players, bool Finished, WriteableBitmap? Video, double TextScale);
+/// <param name="VideoAmbient">The video isn't synced to the song: draw it dimmed, as scenery.</param>
+public sealed record StageSnapshot(double Beat, IReadOnlyList<PlayerSnapshot> Players, bool Finished, WriteableBitmap? Video, double TextScale, bool VideoAmbient = false);
 
 /// <summary>A singer's line on the results screen.</summary>
 public sealed record PlayerResult(string Name, int Score, string Title, string Notes, string Golden, string LineBonus, string Lines);
@@ -70,6 +71,9 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     private bool _finished;
     private bool _resultsShown;
     private VideoFrameSource? _video;
+    private bool _videoAmbient;
+    private Avalonia.Media.Color _glow = Avalonia.Media.Color.FromRgb(0x1A, 0x14, 0x30);
+    private int _glowLoad;
     private WriteableBitmap? _videoBitmap;
     private bool _hasVideoFrame;
     private long _lastDiagnosticTicks;
@@ -166,6 +170,9 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     public string Status { get => _status; private set => this.RaiseAndSetIfChanged(ref _status, value); }
 
     public Bitmap? Background { get => _background; private set => this.RaiseAndSetIfChanged(ref _background, value); }
+
+    /// <summary>The cover's colour, darkened, glowing behind a song without a synced video.</summary>
+    public Avalonia.Media.Color Glow { get => _glow; private set => this.RaiseAndSetIfChanged(ref _glow, value); }
     public bool IsPaused { get => _isPaused; private set => this.RaiseAndSetIfChanged(ref _isPaused, value); }
     public bool IsActive => _song is not null;
 
@@ -187,6 +194,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         Title = song.Title;
         Artist = song.Artist;
         Background = LoadBackground(entry.BackgroundPath ?? entry.CoverPath);
+        LoadGlow(entry.CoverPath ?? entry.BackgroundPath);
 
         // Background vocal removal and song import give the GPU to the singers until the song ends.
         _batch.Hold();
@@ -228,6 +236,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         {
             _video = VideoFrameSource.Open(videoPath, (startMs ?? song.StartMs ?? 0) + song.VideoGapMs, _logger);
             _hasVideoFrame = false;
+            _videoAmbient = IsUnsyncedVideo(entry.Folder);
         }
 
         ApplyVocals();
@@ -330,7 +339,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                 _lastLiveScoreTicks = Environment.TickCount64;
                 LiveScores = string.Join("     ", players.Select(p => (_players.Count > 1 ? $"P{p.Player} " : "Score ") + p.Score.ToString("N0")));
             }
-            return new StageSnapshot(beat, players, _finished, _hasVideoFrame ? _videoBitmap : null, TextScale);
+            return new StageSnapshot(beat, players, _finished, _hasVideoFrame ? _videoBitmap : null, TextScale, _videoAmbient);
         }
     }
 
@@ -437,6 +446,40 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
             _song = null;
         }
         this.RaisePropertyChanged(nameof(IsActive));
+    }
+
+    /// <summary>
+    /// A song Singularity made whose video didn't sync (its metadata.json says so): the video plays from
+    /// the start, dimmed. Community songs have no metadata.json and their #VIDEOGAP is trusted.
+    /// </summary>
+    private static bool IsUnsyncedVideo(string folder)
+    {
+        var path = Path.Combine(folder, Singularity.Contracts.Song.SongPackage.MetadataFileName);
+        if (!File.Exists(path)) return false;
+        try
+        {
+            return !Singularity.Contracts.Song.SongPackage.Deserialize(File.ReadAllText(path)).Timing.VideoStructureValid;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private void LoadGlow(string? coverPath)
+    {
+        int load = ++_glowLoad;
+        if (coverPath is null) return;
+        _ = Task.Run(() =>
+        {
+            var c = StageBrowseViewModel.DominantColor(coverPath);
+            // Darkened: it sits behind the notes and lyrics, which must stay readable.
+            var dim = Avalonia.Media.Color.FromRgb((byte)(c.R * 0.45), (byte)(c.G * 0.45), (byte)(c.B * 0.45));
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (load == _glowLoad) Glow = dim;
+            });
+        });
     }
 
     private Bitmap? LoadBackground(string? path)

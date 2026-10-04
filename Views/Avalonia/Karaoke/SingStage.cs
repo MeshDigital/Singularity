@@ -76,7 +76,7 @@ public sealed class SingStage : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 100 || h < 100) return;
 
-        if (s.Video is { } video) DrawVideo(ctx, video, w, h);
+        if (s.Video is { } video) DrawVideo(ctx, video, w, h, s.VideoAmbient);
 
         // Everything scales with the stage height (so a 1080p or 4K projector gets proportionally large,
         // sharp text) and with the user's text size; minimums keep it readable in a small window.
@@ -113,15 +113,32 @@ public sealed class SingStage : Control
         DrawMicLevel(ctx, p, new Point(lane.Right - 160, lane.Bottom + 6));
     }
 
-    /// <summary>The music video as the bottom layer, filling the stage, dimmed so notes and lyrics stay readable.</summary>
-    private static void DrawVideo(DrawingContext ctx, IImage video, double w, double h)
+    /// <summary>
+    /// The music video as the bottom layer, filling the stage, dimmed so notes and lyrics stay readable.
+    /// A video that isn't synced to the song is only scenery: much dimmer, with a dark vignette, so
+    /// lips that don't match the words don't catch the eye.
+    /// </summary>
+    private static void DrawVideo(DrawingContext ctx, IImage video, double w, double h, bool ambient)
     {
         var size = video.Size;
         double scale = Math.Max(w / size.Width, h / size.Height);
         var dest = new Rect((w - size.Width * scale) / 2, (h - size.Height * scale) / 2, size.Width * scale, size.Height * scale);
+        if (ambient)
+        {
+            using (ctx.PushOpacity(AmbientVideoOpacity)) ctx.DrawImage(video, new Rect(size), dest);
+            ctx.DrawRectangle(Vignette, null, new Rect(0, 0, w, h));
+            return;
+        }
         ctx.DrawImage(video, new Rect(size), dest);
         ctx.DrawRectangle(VideoShade, null, new Rect(0, 0, w, h));
     }
+
+    private const double AmbientVideoOpacity = 0.38;
+
+    private static readonly IBrush Vignette = new RadialGradientBrush
+    {
+        GradientStops = { new GradientStop(Color.FromArgb(0, 0, 0, 0), 0.45), new GradientStop(Color.FromArgb(215, 0, 0, 0), 1.0) },
+    };
 
     private static void DrawLane(DrawingContext ctx, Rect lane, NoteLaneLayout layout, double beat, PlayerSnapshot p, IBrush colour, double k)
     {

@@ -40,8 +40,10 @@ public enum IngestStage { Preparing, FetchingLyrics, GeneratingChart, Downloadin
 /// <param name="Fraction">Progress within the stage, 0..1.</param>
 public sealed record IngestProgress(IngestStage Stage, double Fraction);
 
-/// <param name="Notes">What was left out and why (no lyrics found, video dropped, …), for the queue's detail line.</param>
-public sealed record IngestResult(string PackageFolder, QualityAssessment Quality, bool HasVideo, IReadOnlyList<string> Notes);
+/// <param name="HasVideo">The music video is synced to the song.</param>
+/// <param name="Notes">What was left out and why (no lyrics found, video not synced, …), for the queue's detail line.</param>
+/// <param name="AmbientVideo">A video is there but not synced; it plays dimmed as a backdrop.</param>
+public sealed record IngestResult(string PackageFolder, QualityAssessment Quality, bool HasVideo, IReadOnlyList<string> Notes, bool AmbientVideo = false);
 
 /// <summary>Finds lyrics for a recording; the LRCLIB client in the app.</summary>
 public interface ILyricsLookup
@@ -185,25 +187,22 @@ public sealed class KaraokePackager
             {
                 progress?.Report(new IngestProgress(IngestStage.SyncingVideo, 0));
                 var videoSound = await _media.DecodeMonoAsync(videoSource, SyncSampleRate, ct);
-                if (videoSound.Length == 0)
+                var master = videoSound.Length == 0 ? null : await _media.DecodeMonoAsync(audio, SyncSampleRate, ct);
+                var sync = master is null ? null : VideoSync.Measure(master, videoSound, SyncSampleRate);
+                if (sync is { Gap.IsValid: true })
                 {
-                    notes.Add("The video has no sound to sync by, so the cover is shown instead.");
+                    videoGap = sync.Gap;
                 }
                 else
                 {
-                    var master = await _media.DecodeMonoAsync(audio, SyncSampleRate, ct);
-                    var sync = VideoSync.Measure(master, videoSound, SyncSampleRate);
-                    if (sync.Gap.IsValid)
-                    {
-                        videoGap = sync.Gap;
-                        video = "video" + Path.GetExtension(videoSource).ToLowerInvariant();
-                        await _media.StripAudioAsync(videoSource, Path.Combine(staging, video), ct);
-                    }
-                    else
-                    {
-                        notes.Add("The video is a different version of the song, so the cover is shown instead.");
-                    }
+                    // Not synced (another edit, a long intro, no sound): the video is still worth showing as moving
+                    // scenery. It starts with the song and the player shows it dimmed, so nobody reads its lips.
+                    notes.Add(videoSound.Length == 0
+                        ? "The video has no sound to sync by, so it plays dimmed in the background."
+                        : "The video is a different version of the song, so it plays dimmed in the background.");
                 }
+                video = "video" + Path.GetExtension(videoSource).ToLowerInvariant();
+                await _media.StripAudioAsync(videoSource, Path.Combine(staging, video), ct);
             }
 
             progress?.Report(new IngestProgress(IngestStage.Finishing, 0));
@@ -255,7 +254,7 @@ public sealed class KaraokePackager
             var folder = Publish(staging, files, outputRoot, SongPackage.FolderName(source.Artist, source.Title), trackId, id);
             _logger.LogInformation("Ingest: {Folder} ready, quality {Score} ({Tier}), video {Video}, in {Seconds:0} s",
                 folder, quality.OverallScore, quality.Tier, video is not null, sw.Elapsed.TotalSeconds);
-            return new IngestResult(folder, quality, video is not null, notes);
+            return new IngestResult(folder, quality, video is not null && videoGap.IsValid, notes, AmbientVideo: video is not null && !videoGap.IsValid);
         }
         finally
         {
