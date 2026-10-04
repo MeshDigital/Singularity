@@ -38,6 +38,9 @@ public static class RuntimeOptions
     /// </summary>
     public static string? StageScreen { get; private set; }
 
+    /// <summary>Development shortcut: <c>--import "&lt;spotify link&gt;"</c> opens Add songs and imports the link, as pasting it would.</summary>
+    public static string? ImportLink { get; private set; }
+
     public static void Initialize(IEnumerable<string> args)
     {
         var list = args.ToList();
@@ -52,6 +55,7 @@ public static class RuntimeOptions
         OpenPage = ValueAfter("--open-page");
         SingFolder = ValueAfter("--sing");
         StageScreen = ValueAfter("--stage");
+        ImportLink = ValueAfter("--import");
         Players = int.TryParse(ValueAfter("--players"), out var players) ? players : null;
         SingStartSeconds = double.TryParse(ValueAfter("--sing-start"), System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var start) ? start : null;

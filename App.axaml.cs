@@ -476,11 +476,19 @@ public partial class App : Application
     /// <summary>
     /// Shared service configuration used by both WPF and Avalonia
     /// </summary>
-    /// <summary>--open-page / --sing: jump straight to a page or a song, for development runs.</summary>
+    /// <summary>--open-page / --sing / --import: jump straight to a page, a song or an import, for development runs.</summary>
     private void OpenDevelopmentShortcuts()
     {
         var navigation = Services.GetRequiredService<INavigationService>();
-        if (Singularity.Configuration.RuntimeOptions.SingFolder is { } folder)
+        if (Singularity.Configuration.RuntimeOptions.ImportLink is { } link)
+        {
+            var addSongs = Services.GetRequiredService<ViewModels.Karaoke.AddSongsViewModel>();
+            navigation.NavigateTo("AddSongs");
+            addSongs.Link = link;
+            if (addSongs.ImportCommand.CanExecute(null)) addSongs.ImportCommand.Execute(null);
+            else Serilog.Log.Warning("--import: not a Spotify link: {Link}", link);
+        }
+        else if (Singularity.Configuration.RuntimeOptions.SingFolder is { } folder)
         {
             var entry = Singularity.Karaoke.Library.SongScanner.Scan(new[] { folder }).Songs.FirstOrDefault(s => s.IsPlayable);
             if (entry is null)
