@@ -14,7 +14,9 @@ using Microsoft.Extensions.Logging;
 namespace Singularity.Services.Karaoke.Usdb;
 
 /// <summary>A chart in the USDB song list.</summary>
-public sealed record UsdbSong(int Id, string Artist, string Title, IReadOnlyList<string> Languages);
+/// <param name="Rating">Stars, 0-5 (0 also when nobody rated it yet).</param>
+/// <param name="Views">How often the chart's page was viewed: a rough measure of use.</param>
+public sealed record UsdbSong(int Id, string Artist, string Title, IReadOnlyList<string> Languages, int Rating = 0, int Views = 0);
 
 /// <summary>
 /// The user's USDB login, encrypted for the current Windows user (like the Soulseek login), in
@@ -169,10 +171,14 @@ public sealed class UsdbClient
             if (!int.TryParse(DetailId.Match(body).Groups[1].Value, out int id)) continue;
             var cells = Cell.Matches(body).Select(m => WebUtility.HtmlDecode(StripTags(m.Groups[1].Value)).Trim()).ToList();
             if (cells.Count < 2 || cells[0].Length == 0 || cells[1].Length == 0) continue;
+            // Columns: artist, title, genre, year, edition, golden notes, language, creator, rating (star
+            // images: star.png filled, star2.png empty), views.
             var languages = cells.Count > 6
                 ? cells[6].ToLowerInvariant().Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
                 : Array.Empty<string>();
-            songs.Add(new UsdbSong(id, cells[0], cells[1], languages));
+            int rating = Regex.Matches(body, @"images/star\.png").Count;
+            int views = cells.Count > 9 && int.TryParse(cells[9], out var v) ? v : 0;
+            songs.Add(new UsdbSong(id, cells[0], cells[1], languages, rating, views));
         }
         return songs;
     }

@@ -11,13 +11,20 @@ using Singularity.Services.Karaoke.Ingest;
 namespace Singularity.Services.Karaoke.Usdb;
 
 /// <summary>
-/// Community charts from USDB for the song import. Search results are ordered by rating; a hit is used
-/// only when its artist and title reduce to the same song as the request (the rules that group versions
-/// in the library), and its chart parses with a real number of notes. Whether it fits our recording is
+/// Community charts from USDB for the song import. A hit is used only when its artist and title reduce to
+/// the same song as the request (the rules that group versions in the library) with the same version note
+/// (an "Alternate Version" is another arrangement), it has at least <see cref="MinimumRating"/> stars, and
+/// its chart parses with a real number of notes. Better rated and more used charts are tried first. Whether it fits our recording is
 /// decided afterwards, by placing it on the vocals.
 /// </summary>
 public sealed class UsdbCommunityCharts : ICommunityCharts
 {
+    /// <summary>
+    /// Stars a chart needs. Anyone can upload to USDB; an unrated or poorly rated chart is left to the AI,
+    /// which at least knows it isn't sure.
+    /// </summary>
+    public const int MinimumRating = 3;
+
     /// <summary>Charts with fewer sung notes are stubs or broken uploads.</summary>
     public const int MinimumNotes = 30;
 
@@ -42,7 +49,12 @@ public sealed class UsdbCommunityCharts : ICommunityCharts
         var searchArtist = Featuring.Replace(artist, "").Trim();
         var hits = await _usdb.SearchAsync(searchArtist.Length > 0 ? searchArtist : artist, SongClusters.BaseTitle(title), ct);
 
-        foreach (var hit in hits.Where(h => SongClusters.KeyOf(h.Artist, h.Title) == key).Take(MaxCandidates))
+        var variant = SongClusters.VariantOf(title);
+        var candidates = hits
+            .Where(h => SongClusters.KeyOf(h.Artist, h.Title) == key && SongClusters.VariantOf(h.Title) == variant && h.Rating >= MinimumRating)
+            .OrderByDescending(h => h.Rating).ThenByDescending(h => h.Views)
+            .Take(MaxCandidates);
+        foreach (var hit in candidates)
         {
             var text = await _usdb.GetChartAsync(hit.Id, ct);
             if (text is null) continue;

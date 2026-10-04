@@ -15,7 +15,13 @@ public class UsdbClientTests
         LoggedIn + "<br>There are 2 results on 1 page<table>" + string.Concat(songs.Select((s, i) =>
             $"<tr class=\"list_tr{i % 2 + 1}\">\n" +
             $"<td onclick=\"show_detail({s.Id})\">{s.Artist}</td>\n<td onclick=\"show_detail({s.Id})\"><a href=\"#\">{s.Title}</a></td>\n<td class=\"c\">2010</td>\n<td class=\"c\">x</td>\n" +
-            $"<td class=\"c\">4.5</td>\n<td class=\"c\">99</td>\n<td class=\"c\">{s.Languages}</td>\n</tr>")) + "</table>";
+            $"<td class=\"c\">4.5</td>\n<td class=\"c\">99</td>\n<td class=\"c\">{s.Languages}</td>\n" +
+            $"<td onclick=\"show_detail({s.Id})\">Someone</td>\n<td onclick=\"show_detail({s.Id})\">{Stars(5 - i * 5)}</td>\n" +
+            $"<td onclick=\"show_detail({s.Id})\">{4418 - i * 3990}</td>\n</tr>")) + "</table>";
+
+    /// <summary>The rating cell: filled stars are star.png, empty ones star2.png.</summary>
+    private static string Stars(int filled) =>
+        string.Concat(Enumerable.Range(0, 5).Select(i => i < filled ? "<img src=\"images/star.png\"> " : "<img src=\"images/star2.png\"> "));
 
     [Fact]
     public void Search_ParsesRows()
@@ -25,6 +31,8 @@ public class UsdbClientTests
         Assert.Equal(new[] { 295, 29484 }, songs.Select(s => s.Id));
         Assert.Equal("Killers & Co", songs[1].Artist);
         Assert.Equal(new[] { "english", "german" }, songs[1].Languages);
+        Assert.Equal((5, 4418), (songs[0].Rating, songs[0].Views));
+        Assert.Equal((0, 428), (songs[1].Rating, songs[1].Views));
     }
 
     [Fact]
