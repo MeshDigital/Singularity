@@ -40,7 +40,14 @@
         </Grid>
 
         <StackPanel Grid.Row="1" Margin="0,16,0,12" Spacing="10">
-            <TextBox Watermark="Search artist or title" Text="{Binding SearchText}"/>
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <TextBox Watermark="Search artist or title" Text="{Binding SearchText}"/>
+                <ComboBox Grid.Column="1" ItemsSource="{Binding ShowOptions}" SelectedItem="{Binding Show}" MinWidth="170" Margin="10,0,0,0"
+                          ToolTip.Tip="Which songs to show"/>
+                <ComboBox Grid.Column="2" ItemsSource="{Binding Languages}" SelectedItem="{Binding Language}" MinWidth="150" Margin="10,0,0,0"/>
+                <ComboBox Grid.Column="3" ItemsSource="{Binding SortOptions}" SelectedItem="{Binding Sort}" MinWidth="150" Margin="10,0,0,0"
+                          ToolTip.Tip="Sort by"/>
+            </Grid>
             <StackPanel Orientation="Horizontal" Spacing="10">
                 <Button Content="Jukebox" Command="{Binding JukeboxCommand}"
                         ToolTip.Tip="Play random songs from the list with lyrics and video, no singing. N skips to the next."/>

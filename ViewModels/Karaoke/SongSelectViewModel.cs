@@ -83,6 +83,15 @@ public sealed class SongCardViewModel : ReactiveObject
         }
     }
 
+    private DateTime? _addedUtc;
+
+    /// <summary>When the song's folder appeared (newest of its versions), for "Recently added".</summary>
+    public DateTime AddedUtc => _addedUtc ??= Cluster.Versions.Select(v =>
+    {
+        try { return Directory.GetCreationTimeUtc(v.Entry.Folder); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return DateTime.MinValue; }
+    }).Max();
+
     /// <summary>The song's best score at any difficulty; null when it was never sung.</summary>
     public int? BestScore { get; init; }
 
@@ -495,6 +504,7 @@ public sealed class SongSelectViewModel : ReactiveObject
             {
                 BestScore = _highScores?.Best(Singularity.Karaoke.Scoring.HighScoreTable.SongKey(c.Artist, c.Title))?.Score,
             }).ToList();
+            RefreshLanguages();
             ApplyFilter();
             int extra = result.Songs.Count - clusters.Count;
             StatusText = (clusters.Count == 1 ? "1 song" : $"{clusters.Count} songs") + (extra > 0 ? $" · {extra} more {(extra == 1 ? "version" : "versions")}" : "")
@@ -511,12 +521,61 @@ public sealed class SongSelectViewModel : ReactiveObject
         }
     }
 
+    // ── Sort and filter ────────────────────────────────────────────────────
+    public string[] SortOptions { get; } = { "Artist", "Title", "Recently added", "Year", "Best score" };
+    public string[] ShowOptions { get; } = { "All songs", "New", "With video", "Duets", "Community charts", "AI charts", "Not sung yet" };
+    public const string AnyLanguage = "Any language";
+
+    private string _sort = "Artist";
+    private string _show = "All songs";
+    private string _language = AnyLanguage;
+
+    public string Sort { get => _sort; set { this.RaiseAndSetIfChanged(ref _sort, value ?? "Artist"); ApplyFilter(); } }
+    public string Show { get => _show; set { this.RaiseAndSetIfChanged(ref _show, value ?? "All songs"); ApplyFilter(); } }
+    public string Language { get => _language; set { this.RaiseAndSetIfChanged(ref _language, value ?? AnyLanguage); ApplyFilter(); } }
+
+    /// <summary>"Any language" plus the languages in the collection, most songs first.</summary>
+    public IReadOnlyList<string> Languages { get; private set; } = new[] { AnyLanguage };
+
+    private bool Shows(SongCardViewModel c) => _show switch
+    {
+        "New" => c.Cluster.Versions.Any(v => _library.IsNew(v.Entry)),
+        "With video" => c.Cluster.Versions.Any(v => v.Entry.VideoPath is not null),
+        "Duets" => c.Cluster.Versions.Any(v => v.IsDuet),
+        "Community charts" => c.Cluster.Versions.Any(v => !v.IsAi),
+        "AI charts" => c.Cluster.Versions.Any(v => v.IsAi),
+        "Not sung yet" => c.BestScore is null,
+        _ => true,
+    };
+
+    private IEnumerable<SongCardViewModel> Sorted(IEnumerable<SongCardViewModel> cards) => _sort switch
+    {
+        "Title" => cards.OrderBy(c => c.Title, StringComparer.CurrentCultureIgnoreCase),
+        "Recently added" => cards.OrderByDescending(c => c.AddedUtc),
+        "Year" => cards.OrderByDescending(c => c.Entry.Song.Year ?? 0).ThenBy(c => c.Artist, StringComparer.CurrentCultureIgnoreCase),
+        "Best score" => cards.OrderByDescending(c => c.BestScore ?? -1),
+        _ => cards, // the scan's own order: artist, then title
+    };
+
     private void ApplyFilter()
     {
         var words = SearchText.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         Songs.Clear();
-        foreach (var card in _all.Where(c => words.All(c.SearchKey.Contains)))
+        foreach (var card in Sorted(_all.Where(c => words.All(c.SearchKey.Contains) && Shows(c)
+                     && (_language == AnyLanguage || string.Equals(c.Entry.Song.Language?.Trim(), _language, StringComparison.OrdinalIgnoreCase)))))
             Songs.Add(card);
+    }
+
+    private void RefreshLanguages()
+    {
+        Languages = new[] { AnyLanguage }.Concat(_all
+            .Select(c => c.Entry.Song.Language?.Trim())
+            .Where(l => !string.IsNullOrEmpty(l))
+            .GroupBy(l => l!, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key)).ToList();
+        this.RaisePropertyChanged(nameof(Languages));
+        if (!Languages.Contains(_language)) Language = AnyLanguage;
     }
 
     private void Sing(SongCardViewModel? card)
