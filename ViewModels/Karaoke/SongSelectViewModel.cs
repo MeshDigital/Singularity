@@ -208,6 +208,8 @@ public sealed class SongSelectViewModel : ReactiveObject
         Singularity.Configuration.AppConfig config)
     {
         _config = config;
+        PreviewClock = () => _preview.PositionMs;
+        preview.Changed += () => Dispatcher.UIThread.Post(RaisePreview);
         NextVersionCommand = new RelayCommand<SongCardViewModel>(card => StepVersion(card, +1), card => card?.HasVersions == true);
         PreviousVersionCommand = new RelayCommand<SongCardViewModel>(card => StepVersion(card, -1), card => card?.HasVersions == true);
         _batch = batch;
@@ -267,6 +269,25 @@ public sealed class SongSelectViewModel : ReactiveObject
             this.RaiseAndSetIfChanged(ref _selectedSong, value);
             _preview.Preview(value?.Entry);
         }
+    }
+
+    // ── Preview video ──────────────────────────────────────────────────────
+    /// <summary>The highlighted song's music video while its preview plays; null otherwise (the cover shows).</summary>
+    public string? PreviewVideoPath => _preview.Playing is { } e && e == SelectedSong?.Entry ? e.VideoPath : null;
+
+    /// <summary>#VIDEOGAP of the previewed song (0 for a backdrop video, which isn't synced).</summary>
+    public double PreviewVideoGapMs => _preview.Playing?.Song.VideoGapMs ?? 0;
+
+    public bool HasPreviewVideo => PreviewVideoPath is not null;
+
+    /// <summary>Where the preview is in its song, for the video surface.</summary>
+    public Func<double?> PreviewClock { get; }
+
+    private void RaisePreview()
+    {
+        this.RaisePropertyChanged(nameof(PreviewVideoPath));
+        this.RaisePropertyChanged(nameof(PreviewVideoGapMs));
+        this.RaisePropertyChanged(nameof(HasPreviewVideo));
     }
 
     public ICommand NextVersionCommand { get; }

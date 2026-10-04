@@ -293,8 +293,29 @@ namespace Singularity.ViewModels
                 {
                     AttachCurrentTrackObservers(previousTrack, value);
                     RaiseCurrentTrackSummaryProperties();
+                    UpdateCurrentVideo();
                 }
             }
+        }
+
+        // ── Music video ────────────────────────────────────────────────────────
+        private readonly Singularity.Services.Karaoke.KaraokeLibrary? _karaokeLibrary;
+        private Singularity.Services.Karaoke.KaraokeVideo? _currentVideo;
+
+        /// <summary>The playing track's music video, when it is (or was made into) a karaoke song with one.</summary>
+        public string? CurrentVideoPath => _currentVideo?.Path;
+        public double CurrentVideoGapMs => _currentVideo?.GapMs ?? 0;
+        public bool HasCurrentVideo => _currentVideo is not null;
+
+        /// <summary>Where the music is, for the video surface.</summary>
+        public Func<double?> VideoClock { get; }
+
+        private void UpdateCurrentVideo()
+        {
+            _currentVideo = _karaokeLibrary?.FindVideo(_currentTrack?.Model.ResolvedFilePath);
+            OnPropertyChanged(nameof(CurrentVideoPath));
+            OnPropertyChanged(nameof(CurrentVideoGapMs));
+            OnPropertyChanged(nameof(HasCurrentVideo));
         }
 
         /// <summary>
@@ -521,8 +542,11 @@ namespace Singularity.ViewModels
         // Phase 5C: UI Throttling
         private DateTime _lastTimeUpdate = DateTime.MinValue;
 
-        public PlayerViewModel(IAudioPlayerService playerService, DatabaseService databaseService, IEventBus eventBus, ArtworkCacheService artworkCacheService, INavigationService navigationService, IRightPanelService rightPanelService, AppConfig? config = null, ConfigManager? configManager = null, IDialogService? dialogService = null, Singularity.Services.Audio.ILibraryPreviewPlayer? libraryPreviewPlayer = null)
+        public PlayerViewModel(IAudioPlayerService playerService, DatabaseService databaseService, IEventBus eventBus, ArtworkCacheService artworkCacheService, INavigationService navigationService, IRightPanelService rightPanelService, AppConfig? config = null, ConfigManager? configManager = null, IDialogService? dialogService = null, Singularity.Services.Audio.ILibraryPreviewPlayer? libraryPreviewPlayer = null,
+            Singularity.Services.Karaoke.KaraokeLibrary? karaokeLibrary = null)
         {
+            _karaokeLibrary = karaokeLibrary;
+            VideoClock = () => _currentVideo is null ? null : _playerService.Time;
             _playerService = playerService;
             _databaseService = databaseService;
             _artworkCacheService = artworkCacheService;

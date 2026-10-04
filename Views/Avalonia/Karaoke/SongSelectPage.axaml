@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Singularity.ViewModels.Karaoke"
+             xmlns:controls="clr-namespace:Singularity.Views.Avalonia.Controls"
              x:Class="Singularity.Views.Avalonia.Karaoke.SongSelectPage"
              x:DataType="vm:SongSelectViewModel"
              x:CompileBindings="True"
@@ -47,7 +48,25 @@
         </StackPanel>
 
         <!-- ListBox virtualises its items, so thousands of songs scroll smoothly; covers decode on demand. -->
-        <ListBox Grid.Row="2" x:Name="SongList" ItemsSource="{Binding Songs}" SelectedItem="{Binding SelectedSong}" Background="Transparent">
+        <!-- The highlighted song, with its music video while the preview plays. -->
+        <Border Grid.Row="2" Width="400" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#0DFFFFFF" CornerRadius="14" Padding="14"
+                IsVisible="{Binding SelectedSong, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Spacing="10">
+                <Border Height="208" CornerRadius="10" ClipToBounds="True" Background="#111">
+                    <Panel>
+                        <Image Source="{Binding SelectedSong.Cover}" Stretch="UniformToFill" Opacity="0.85"/>
+                        <controls:VideoSurface IsVisible="{Binding HasPreviewVideo}" VideoPath="{Binding PreviewVideoPath}"
+                                               VideoGapMs="{Binding PreviewVideoGapMs}" Clock="{Binding PreviewClock}"/>
+                    </Panel>
+                </Border>
+                <TextBlock Text="{Binding SelectedSong.Title}" FontSize="20" FontWeight="Bold" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding SelectedSong.Artist}" Foreground="#BBB" FontSize="15"/>
+                <TextBlock Text="{Binding SelectedSong.VersionText}" Foreground="#9BD" FontSize="12" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding SelectedSong.Details}" Foreground="#778" FontSize="12"/>
+            </StackPanel>
+        </Border>
+
+        <ListBox Grid.Row="2" x:Name="SongList" Margin="0,0,416,0" ItemsSource="{Binding Songs}" SelectedItem="{Binding SelectedSong}" Background="Transparent">
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:SongCardViewModel">
                     <Grid ColumnDefinitions="64,*,Auto" Height="72" Background="Transparent">

@@ -11,6 +11,10 @@ using Singularity.Karaoke.Library;
 
 namespace Singularity.Services.Karaoke;
 
+/// <summary>A music video for a recording: video position = audio position + <paramref name="GapMs"/>.</summary>
+/// <param name="Synced">False for a backdrop video that isn't synced to the song.</param>
+public sealed record KaraokeVideo(string Path, int GapMs, bool Synced);
+
 /// <summary>The karaoke song collection: the configured UltraStar folders, scanned on demand (never written to).</summary>
 public sealed class KaraokeLibrary
 {
@@ -91,6 +95,51 @@ public sealed class KaraokeLibrary
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// The music video that goes with an audio file, for players outside the sing screen: a karaoke song
+    /// whose audio is that very file, or a song Singularity made from it (its audio is a copy: same size).
+    /// Only then does the song's #VIDEOGAP fit this file exactly. Null when there is none, or before the
+    /// first scan (which this starts).
+    /// </summary>
+    public KaraokeVideo? FindVideo(string? audioPath)
+    {
+        if (string.IsNullOrEmpty(audioPath)) return null;
+        if (Last is not { } scan)
+        {
+            _ = ScanAsync();
+            return null;
+        }
+        var withVideo = scan.Songs.Where(s => s.VideoPath is not null && s.AudioPath is not null).ToList();
+        var song = withVideo.FirstOrDefault(s => string.Equals(Path.GetFullPath(s.AudioPath!), Path.GetFullPath(audioPath), StringComparison.OrdinalIgnoreCase));
+        if (song is null)
+        {
+            long length;
+            try { length = new FileInfo(audioPath).Length; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { return null; }
+            var ingest = Path.GetFullPath(IngestFolder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            song = withVideo.FirstOrDefault(s => s.Folder.StartsWith(ingest, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(Path.GetExtension(s.AudioPath), Path.GetExtension(audioPath), StringComparison.OrdinalIgnoreCase)
+                && SafeLength(s.AudioPath!) == length);
+        }
+        if (song is null) return null;
+        bool synced = !IsUnsyncedPackage(song.Folder);
+        return new KaraokeVideo(song.VideoPath!, synced ? song.Song.VideoGapMs : 0, synced);
+    }
+
+    private static long SafeLength(string path)
+    {
+        try { return new FileInfo(path).Length; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return -1; }
+    }
+
+    private static bool IsUnsyncedPackage(string folder)
+    {
+        var path = Path.Combine(folder, SongPackage.MetadataFileName);
+        if (!File.Exists(path)) return false;
+        try { return !SongPackage.Deserialize(File.ReadAllText(path)).Timing.VideoStructureValid; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or NotSupportedException) { return false; }
     }
 
     /// <summary>

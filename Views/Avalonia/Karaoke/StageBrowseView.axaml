@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Singularity.ViewModels.Karaoke"
+             xmlns:controls="clr-namespace:Singularity.Views.Avalonia.Controls"
              x:Class="Singularity.Views.Avalonia.Karaoke.StageBrowseView"
              x:DataType="vm:StageBrowseViewModel"
              x:CompileBindings="True"
@@ -48,6 +49,9 @@
                             <Grid>
                                 <TextBlock Text="♪" FontSize="200" Foreground="#445" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 <Image Source="{Binding LargeCover}" Stretch="UniformToFill"/>
+                                <!-- While the preview plays, its music video takes the cover's place. -->
+                                <controls:VideoSurface IsVisible="{Binding HasPreviewVideo}" VideoPath="{Binding PreviewVideoPath}"
+                                                       VideoGapMs="{Binding PreviewVideoGapMs}" Clock="{Binding PreviewClock}"/>
                             </Grid>
                         </Border>
                 </Grid>

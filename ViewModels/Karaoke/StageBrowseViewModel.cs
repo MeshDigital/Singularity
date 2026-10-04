@@ -39,12 +39,21 @@ public sealed class StageBrowseViewModel : ReactiveObject
         _songs.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(SongSelectViewModel.SelectedSong)) Follow();
+            else if (e.PropertyName == nameof(SongSelectViewModel.PreviewVideoPath)) this.RaisePropertyChanged(nameof(PreviewVideoPath));
+            else if (e.PropertyName == nameof(SongSelectViewModel.PreviewVideoGapMs)) this.RaisePropertyChanged(nameof(PreviewVideoGapMs));
+            else if (e.PropertyName == nameof(SongSelectViewModel.HasPreviewVideo)) this.RaisePropertyChanged(nameof(HasPreviewVideo));
         };
         _songs.Songs.CollectionChanged += (_, _) => Follow();
         Follow();
     }
 
     public SongCardViewModel? Current => _current;
+
+    /// <summary>The highlighted song's music video while its preview plays (shown in place of the big cover).</summary>
+    public string? PreviewVideoPath => _songs.PreviewVideoPath;
+    public double PreviewVideoGapMs => _songs.PreviewVideoGapMs;
+    public bool HasPreviewVideo => _songs.HasPreviewVideo;
+    public Func<double?> PreviewClock => _songs.PreviewClock;
     public bool HasSong => _current is not null;
     public IReadOnlyList<SongCardViewModel> Before { get; private set; } = Array.Empty<SongCardViewModel>();
     public IReadOnlyList<SongCardViewModel> After { get; private set; } = Array.Empty<SongCardViewModel>();

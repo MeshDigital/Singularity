@@ -77,8 +77,14 @@
                     <Grid Grid.Row="1" ColumnDefinitions="1.5*,0.9*">
                         <Border Grid.Column="0" Margin="0,0,20,0" CornerRadius="18" Background="#0C1218" Padding="12" BorderBrush="#273646" BorderThickness="1">
                             <Grid>
+                                <!-- The song's music video, when it has one as a karaoke song; otherwise the cover. -->
+                                <Border CornerRadius="12" ClipToBounds="True" Background="Black" IsVisible="{Binding HasCurrentVideo}">
+                                    <controls:VideoSurface VideoPath="{Binding CurrentVideoPath}" VideoGapMs="{Binding CurrentVideoGapMs}"
+                                                           Clock="{Binding VideoClock}" Stretch="Uniform"/>
+                                </Border>
 
                                 <Border Width="220" Height="220"
+                                        IsVisible="{Binding !HasCurrentVideo}"
                                         CornerRadius="110"
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Center"

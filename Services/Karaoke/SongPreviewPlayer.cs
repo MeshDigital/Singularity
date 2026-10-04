@@ -26,9 +26,32 @@ public sealed class SongPreviewPlayer : IDisposable
     private readonly ILogger<SongPreviewPlayer> _logger;
     private readonly object _sync = new();
     private CancellationTokenSource? _pending;
-    private (WasapiOut Output, AudioFileReader Reader, FadeInOutSampleProvider Fade)? _current;
+    private (WasapiOut Output, AudioFileReader Reader, FadeInOutSampleProvider Fade, SongEntry Entry)? _current;
 
     public SongPreviewPlayer(ILogger<SongPreviewPlayer> logger) => _logger = logger;
+
+    /// <summary>Raised (on any thread) when a preview starts or stops playing.</summary>
+    public event Action? Changed;
+
+    /// <summary>The song being previewed now; null when nothing plays.</summary>
+    public SongEntry? Playing
+    {
+        get { lock (_sync) return _current?.Entry; }
+    }
+
+    /// <summary>Where the preview is in its song, in ms (for a video playing along); null when nothing plays.</summary>
+    public double? PositionMs
+    {
+        get
+        {
+            lock (_sync)
+            {
+                if (_current is not { } c) return null;
+                // The reader runs ahead of what's heard by the output's buffer (100 ms).
+                return c.Reader.CurrentTime.TotalMilliseconds - 100;
+            }
+        }
+    }
 
     /// <summary>Highlights <paramref name="entry"/>: stops what's playing and starts this preview after the delay.</summary>
     public void Preview(SongEntry? entry)
@@ -79,8 +102,9 @@ public sealed class SongPreviewPlayer : IDisposable
                     reader.Dispose();
                     return;
                 }
-                _current = (output, reader, fade);
+                _current = (output, reader, fade, entry);
             }
+            Changed?.Invoke();
             fade.BeginFadeIn(FadeInMs);
             output.Play();
 
@@ -98,13 +122,14 @@ public sealed class SongPreviewPlayer : IDisposable
 
     private void FadeOutCurrent()
     {
-        (WasapiOut Output, AudioFileReader Reader, FadeInOutSampleProvider Fade)? current;
+        (WasapiOut Output, AudioFileReader Reader, FadeInOutSampleProvider Fade, SongEntry Entry)? current;
         lock (_sync)
         {
             current = _current;
             _current = null;
         }
         if (current is not { } c) return;
+        Changed?.Invoke();
         c.Fade.BeginFadeOut(FadeOutMs);
         _ = Task.Delay(FadeOutMs + 50).ContinueWith(_ =>
         {
