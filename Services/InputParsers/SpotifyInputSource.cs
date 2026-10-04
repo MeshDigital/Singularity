@@ -47,6 +47,10 @@ public class SpotifyInputSource : IInputSource
 		{
 			queries = await FetchLikedSongsAsync(client);
 		}
+        else if (ExtractTrackId(url) is { } trackId)
+        {
+            queries = new List<SearchQuery> { await FetchTrackAsync(client, trackId) };
+        }
         else if (IsAlbumUrl(url))
         {
             var albumId = ExtractAlbumId(url);
@@ -97,6 +101,10 @@ public class SpotifyInputSource : IInputSource
                 }
             }
             if (batch.Any()) yield return batch;
+        }
+        else if (ExtractTrackId(url) is { } trackId)
+        {
+            yield return new List<SearchQuery> { await FetchTrackAsync(client, trackId) };
         }
         else if (IsAlbumUrl(url))
         {
@@ -295,6 +303,39 @@ public class SpotifyInputSource : IInputSource
 		var response = await new OAuthClient(config).RequestToken(request);
 		return new SpotifyClient(config.WithToken(response.AccessToken));
 	}
+
+    /// <summary>A single song (e.g. one shared from the Spotify app); its "playlist" is just that song.</summary>
+    private async Task<SearchQuery> FetchTrackAsync(SpotifyClient client, string trackId)
+    {
+        var track = await client.Tracks.Get(trackId);
+        var artist = track.Artists?.FirstOrDefault()?.Name ?? "Unknown Artist";
+        return MapToSearchQuery(track, $"{artist} - {track.Name}", 1);
+    }
+
+    /// <summary>The track id of an "open.spotify.com/track/{id}" link or a "spotify:track:{id}" URI; null for anything else.</summary>
+    public static string? ExtractTrackId(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return null;
+        url = url.Trim();
+
+        if (url.StartsWith("spotify:track:", StringComparison.OrdinalIgnoreCase))
+        {
+            var id = url["spotify:track:".Length..];
+            return id.Length >= 20 ? id : null;
+        }
+
+        if (url.Contains("spotify.com") && url.Contains("/track/"))
+        {
+            var parts = url.Split('/');
+            var idx = Array.IndexOf(parts, "track");
+            if (idx >= 0 && idx + 1 < parts.Length)
+            {
+                var id = parts[idx + 1].Split('?', '#')[0];
+                return id.Length >= 20 ? id : null;
+            }
+        }
+        return null;
+    }
 
     private bool IsAlbumUrl(string url)
     {

@@ -35,7 +35,23 @@ public sealed class KaraokeLibrary
                 .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToList();
             if (Environment.GetEnvironmentVariable(SongsDirEnvironmentVariable) is { Length: > 0 } dev) folders.Add(dev);
+            folders.Add(IngestFolder);
             return folders.Distinct(StringComparer.OrdinalIgnoreCase).Where(Directory.Exists).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Where imported songs go: the configured folder, else "Singularity" next to an existing
+    /// D:\KARAOKE collection, else Music\Singularity. Kept apart from the song folders the user
+    /// collected, which Singularity never writes to.
+    /// </summary>
+    public string IngestFolder
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(_config.KaraokeIngestFolder)) return _config.KaraokeIngestFolder.Trim();
+            if (OperatingSystem.IsWindows() && Directory.Exists(@"D:\KARAOKE")) return @"D:\KARAOKE\Singularity";
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "Singularity");
         }
     }
 

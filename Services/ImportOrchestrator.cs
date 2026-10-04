@@ -182,7 +182,17 @@ public class ImportOrchestrator
     /// Import directly to library/downloader without preview UI.
     /// Useful for background syncing or "Import All" scenarios.
     /// </summary>
-    public async Task SilentImportAsync(IImportProvider provider, string input)
+    public async Task SilentImportAsync(IImportProvider provider, string input) =>
+        await SilentImportWithResultAsync(provider, input);
+
+    /// <summary>
+    /// <see cref="SilentImportAsync"/>, also telling the caller what happened: the job ids the tracks
+    /// are filed under (the new id, and an earlier job's when this was a re-sync), the tracks handed
+    /// to the download manager, and those skipped because they were already downloaded (no
+    /// download event comes for them). Null when the import failed (the user was already notified)
+    /// or yielded nothing.
+    /// </summary>
+    public async Task<SilentImportResult?> SilentImportWithResultAsync(IImportProvider provider, string input)
     {
         try
         {
@@ -246,8 +256,9 @@ public class ImportOrchestrator
                 if (incomingTracks.Count == 0)
                 {
                     _logger.LogWarning("Silent import for {Input} yielded 0 tracks. Skipping.", input);
-                    return;
+                    return null;
                 }
+                var alreadyDownloaded = new System.Collections.Generic.List<PlaylistTrack>();
 
                 System.Collections.Generic.List<PlaylistTrack> tracksToQueue;
                 int newCount = 0;
@@ -297,6 +308,7 @@ public class ImportOrchestrator
                             {
                                 // ✅ Already downloaded — skip entirely, preserve progress
                                 skippedCount++;
+                                alreadyDownloaded.Add(existing);
                             }
                             else if (existing.Status == TrackStatus.Failed || existing.Status == TrackStatus.OnHold)
                             {
@@ -374,7 +386,12 @@ public class ImportOrchestrator
                     ? $"Synced '{sourceTitle}': {newCount} new, {retriedCount} retried, {skippedCount} already downloaded"
                     : $"Imported {tracksToQueue.Count} tracks from '{sourceTitle}'";
                 _notificationService.Show("Sync Complete", message, Views.NotificationType.Success);
+
+                var jobIds = new HashSet<Guid> { newJobId };
+                if (existingJob != null) jobIds.Add(existingJob.Id);
+                return new SilentImportResult(jobIds, tracksToQueue, alreadyDownloaded);
             }
+            return null;
         }
         catch (APIException apiEx) when (apiEx.Response?.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -387,11 +404,13 @@ public class ImportOrchestrator
                 "Sync Failed",
                 "This Spotify playlist could not be found — it may have been deleted or made private since it was last synced.",
                 Views.NotificationType.Error);
+            return null;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to perform silent import for {Input}", input);
             _notificationService.Show("Import Error", $"Silent import failed: {ex.Message}", Views.NotificationType.Error);
+            return null;
         }
     }
 
@@ -612,3 +631,10 @@ public class ImportOrchestrator
         _previewViewModel.Cancelled -= OnPreviewCancelled;
     }
 }
+
+/// <summary>What <see cref="ImportOrchestrator.SilentImportWithResultAsync"/> did.</summary>
+/// <param name="JobIds">Ids the tracks' download events carry as their project id.</param>
+public sealed record SilentImportResult(
+    IReadOnlyCollection<Guid> JobIds,
+    IReadOnlyList<PlaylistTrack> Queued,
+    IReadOnlyList<PlaylistTrack> AlreadyDownloaded);

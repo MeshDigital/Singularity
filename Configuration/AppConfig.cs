@@ -44,6 +44,12 @@ public class AppConfig
 
     /// <summary>Seconds of rest between songs when removing vocals for the whole collection (lets a laptop GPU cool).</summary>
     public int KaraokeBatchRestSeconds { get; set; } = 3;
+
+    /// <summary>
+    /// Where songs made from Spotify links are written (one folder per song). Empty: the default,
+    /// see <see cref="Services.Karaoke.KaraokeLibrary.IngestFolder"/>. It is also scanned as a song folder.
+    /// </summary>
+    public string KaraokeIngestFolder { get; set; } = "";
     public int ListenPort { get; set; } = 49998;
     public bool UseUPnP { get; set; } = false;
     public int ConnectTimeout { get; set; } = 60000; // ms

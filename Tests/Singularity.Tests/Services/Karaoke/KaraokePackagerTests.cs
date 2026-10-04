@@ -153,59 +153,65 @@ public sealed class KaraokePackagerTests : IDisposable
     [InlineData("qqq", null)]
     [InlineData(null, null)]
     public void LanguageName_IsTheEnglishName(string? code, string? name) => Assert.Equal(name, KaraokePackager.LanguageName(code));
+}
 
-    private sealed class FakeLyrics : ILyricsLookup
+internal sealed class FakeLyrics : ILyricsLookup
+{
+    public (string Text, LyricsKind Kind)? Result { get; set; } = ("la la\nla la", LyricsKind.Plain);
+
+    public Task<(string Text, LyricsKind Kind)?> FindAsync(string artist, string title, string? album, int durationMs, CancellationToken ct) =>
+        Task.FromResult(Result);
+}
+
+internal sealed class FakeAnalyzer : ITrackAnalyzer
+{
+    public bool Fail { get; set; }
+    public ProcessTrackCommand? Last { get; private set; }
+
+    /// <summary>Awaited before the analysis finishes, so a test can keep it running.</summary>
+    public Func<CancellationToken, Task>? Gate { get; set; }
+    public int Runs { get; private set; }
+
+    public async Task<TrackAnalysisResult> AnalyzeAsync(ProcessTrackCommand command, IProgress<WorkerEvent>? progress, CancellationToken ct)
     {
-        public (string Text, LyricsKind Kind)? Result { get; set; } = ("la la\nla la", LyricsKind.Plain);
+        Last = command;
+        Runs++;
+        // Like the worker: stems in the output folder, then a failure or the result.
+        File.WriteAllBytes(Path.Combine(command.OutputFolder, "vocals.wav"), new byte[] { 1 });
+        File.WriteAllBytes(Path.Combine(command.OutputFolder, "instrumental.wav"), new byte[] { 2 });
+        progress?.Report(new ProgressUpdateEvent(command.TaskId, PipelineStage.Separation, 0.5));
+        if (Fail) throw new InvalidOperationException("worker failed");
+        if (Gate is { } gate) await gate(ct);
 
-        public Task<(string Text, LyricsKind Kind)?> FindAsync(string artist, string title, string? album, int durationMs, CancellationToken ct) =>
-            Task.FromResult(Result);
-    }
-
-    private sealed class FakeAnalyzer : ITrackAnalyzer
-    {
-        public bool Fail { get; set; }
-        public ProcessTrackCommand? Last { get; private set; }
-
-        public Task<TrackAnalysisResult> AnalyzeAsync(ProcessTrackCommand command, IProgress<WorkerEvent>? progress, CancellationToken ct)
+        TimedSyllable Syl(string text, int start, int tone) => new(text, start, start + 400, true, tone, 0.9, 0.8);
+        var lines = new[]
         {
-            Last = command;
-            // Like the worker: stems in the output folder, then a failure or the result.
-            File.WriteAllBytes(Path.Combine(command.OutputFolder, "vocals.wav"), new byte[] { 1 });
-            File.WriteAllBytes(Path.Combine(command.OutputFolder, "instrumental.wav"), new byte[] { 2 });
-            progress?.Report(new ProgressUpdateEvent(command.TaskId, PipelineStage.Separation, 0.5));
-            if (Fail) throw new InvalidOperationException("worker failed");
-
-            TimedSyllable Syl(string text, int start, int tone) => new(text, start, start + 400, true, tone, 0.9, 0.8);
-            var lines = new[]
-            {
-                new LyricLine(new[] { Syl("la", 10_000, 60), Syl("la", 10_500, 62) }),
-                new LyricLine(new[] { Syl("la", 12_000, 64), Syl("la", 12_500, 65) }),
-            };
-            return Task.FromResult(new TrackAnalysisResult(
-                Path.Combine(command.OutputFolder, "vocals.wav"), Path.Combine(command.OutputFolder, "instrumental.wav"),
-                120, "en", lines, new Dictionary<string, string> { ["separation"] = "fake" }));
-        }
+            new LyricLine(new[] { Syl("la", 10_000, 60), Syl("la", 10_500, 62) }),
+            new LyricLine(new[] { Syl("la", 12_000, 64), Syl("la", 12_500, 65) }),
+        };
+        return new TrackAnalysisResult(
+            Path.Combine(command.OutputFolder, "vocals.wav"), Path.Combine(command.OutputFolder, "instrumental.wav"),
+            120, "en", lines, new Dictionary<string, string> { ["separation"] = "fake" });
     }
+}
 
-    private sealed class FakeMedia : IIngestMedia
+internal sealed class FakeMedia : IIngestMedia
+{
+    /// <summary>Decoded sound by file name (without extension); anything else has none.</summary>
+    public Dictionary<string, float[]> Sound { get; } = new();
+    public List<(string In, string Out)> Stripped { get; } = new();
+
+    public Task<int> ProbeDurationMsAsync(string path, CancellationToken ct) => Task.FromResult(222_000);
+
+    public Task<float[]> DecodeMonoAsync(string path, int sampleRate, CancellationToken ct) =>
+        Task.FromResult(Sound.GetValueOrDefault(Path.GetFileNameWithoutExtension(path)) ?? Array.Empty<float>());
+
+    public Task StripAudioAsync(string videoIn, string videoOut, CancellationToken ct)
     {
-        /// <summary>Decoded sound by file name (without extension); anything else has none.</summary>
-        public Dictionary<string, float[]> Sound { get; } = new();
-        public List<(string In, string Out)> Stripped { get; } = new();
-
-        public Task<int> ProbeDurationMsAsync(string path, CancellationToken ct) => Task.FromResult(222_000);
-
-        public Task<float[]> DecodeMonoAsync(string path, int sampleRate, CancellationToken ct) =>
-            Task.FromResult(Sound.GetValueOrDefault(Path.GetFileNameWithoutExtension(path)) ?? Array.Empty<float>());
-
-        public Task StripAudioAsync(string videoIn, string videoOut, CancellationToken ct)
-        {
-            Stripped.Add((videoIn, videoOut));
-            File.Copy(videoIn, videoOut);
-            return Task.CompletedTask;
-        }
-
-        public Task<byte[]?> DownloadAsync(string url, CancellationToken ct) => Task.FromResult<byte[]?>(new byte[] { 0xFF, 0xD8 });
+        Stripped.Add((videoIn, videoOut));
+        File.Copy(videoIn, videoOut);
+        return Task.CompletedTask;
     }
+
+    public Task<byte[]?> DownloadAsync(string url, CancellationToken ct) => Task.FromResult<byte[]?>(new byte[] { 0xFF, 0xD8 });
 }
