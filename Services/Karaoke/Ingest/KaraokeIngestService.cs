@@ -220,6 +220,36 @@ public sealed class KaraokeIngestService : IDisposable
     }
 
     /// <summary>Makes a song from an audio file on disk (no download).</summary>
+    /// <summary>
+    /// Makes a new chart for a song already in the library: an AI chart (<paramref name="preferAi"/>), or a
+    /// community chart when USDB has one. A song Singularity made keeps its track id and details, so the
+    /// new chart replaces the old one; a song from the user's own folders gets an extra version.
+    /// </summary>
+    public void Rechart(Singularity.Karaoke.Library.SongEntry entry, bool preferAi)
+    {
+        if (entry.AudioPath is null) return;
+        Singularity.Contracts.Song.SongPackageMetadata? metadata = null;
+        var metadataPath = Path.Combine(entry.Folder, Singularity.Contracts.Song.SongPackage.MetadataFileName);
+        try
+        {
+            if (File.Exists(metadataPath)) metadata = Singularity.Contracts.Song.SongPackage.Deserialize(File.ReadAllText(metadataPath));
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or NotSupportedException)
+        {
+            _logger.LogDebug(ex, "Karaoke rechart: unreadable metadata in {Folder}", entry.Folder);
+        }
+        var song = entry.Song;
+        var source = new IngestSource(
+            entry.AudioPath, metadata?.Artist ?? song.Artist, metadata?.Title ?? song.Title, metadata?.Album,
+            TrackId: metadata?.TrackId, Isrc: metadata?.Isrc, ExpectedDurationMs: metadata?.DurationMs,
+            CoverUrl: entry.CoverPath,
+            // A package's own video has no sound left to sync by; a song from the user's folders still has it.
+            VideoPath: metadata is null ? entry.VideoPath : null,
+            Year: song.Year, PreferAi: preferAi);
+        Queue.Enqueue($"rechart:{entry.TxtPath}", source);
+        _logger.LogInformation("Karaoke: new {Kind} chart for {Artist} - {Title}", preferAi ? "AI" : "community", source.Artist, source.Title);
+    }
+
     public void ImportFile(string audioPath, string artist, string title) =>
         Queue.Enqueue("file:" + Path.GetFullPath(audioPath), new IngestSource(audioPath, artist, title));
 

@@ -251,6 +251,17 @@ public sealed class KaraokePackagerTests : IDisposable
     }
 
     [Fact]
+    public async Task ACoverOnDisk_IsCopied()
+    {
+        var coverFile = Path.Combine(_root.FullName, "old-cover.jpg");
+        File.WriteAllBytes(coverFile, new byte[] { 0xFF, 0xD8, 0x42 });
+
+        var result = await Packager().BuildAsync(Source(Download()) with { CoverUrl = coverFile }, Output);
+
+        Assert.Equal(new byte[] { 0xFF, 0xD8, 0x42 }, File.ReadAllBytes(Path.Combine(result.PackageFolder, SongPackage.CoverFileName)));
+    }
+
+    [Fact]
     public async Task LyricsSiteDown_TheSongIsStillMade()
     {
         _lyrics.Throw = new HttpRequestException("503 (Service Unavailable)");

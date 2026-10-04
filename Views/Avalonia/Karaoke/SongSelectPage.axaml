@@ -82,6 +82,12 @@
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:SongCardViewModel">
                     <Grid ColumnDefinitions="64,*,Auto" Height="72" Background="Transparent">
+                        <Grid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Make an AI chart" Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).MakeAiChartCommand}" CommandParameter="{Binding}"/>
+                                <MenuItem Header="Look for a community chart" Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).FindCommunityChartCommand}" CommandParameter="{Binding}"/>
+                            </ContextMenu>
+                        </Grid.ContextMenu>
                         <Border Width="64" Height="64" CornerRadius="6" ClipToBounds="True" Background="#222">
                             <Image Source="{Binding Cover}" Stretch="UniformToFill"/>
                         </Border>

@@ -211,6 +211,7 @@ public sealed class SongSelectViewModel : ReactiveObject
     private readonly ILogger<SongSelectViewModel> _logger;
     private readonly Singularity.Configuration.AppConfig _config;
     private readonly HighScoreStore? _highScores;
+    private readonly Services.Karaoke.Ingest.KaraokeIngestService? _ingest;
     private List<SongCardViewModel> _all = new();
     private string _searchText = "";
     private string _statusText = "";
@@ -219,8 +220,10 @@ public sealed class SongSelectViewModel : ReactiveObject
 
     public SongSelectViewModel(KaraokeLibrary library, SingViewModel sing, SongPreviewPlayer preview, StageScreenService stage,
         StemStore stems, StemSeparationService separation, StemBatchQueue batch, INavigationService navigation, ILogger<SongSelectViewModel> logger,
-        Singularity.Configuration.AppConfig config, HighScoreStore? highScores = null)
+        Singularity.Configuration.AppConfig config, HighScoreStore? highScores = null,
+        Services.Karaoke.Ingest.KaraokeIngestService? ingest = null)
     {
+        _ingest = ingest;
         _config = config;
         _highScores = highScores;
         // A new high score shows on the song's card the next time the list is loaded.
@@ -250,6 +253,8 @@ public sealed class SongSelectViewModel : ReactiveObject
             if (_loaded && !IsLoading) _ = LoadAsync();
         });
         SingCommand = new RelayCommand<SongCardViewModel>(Sing, card => card?.Entry.IsPlayable == true);
+        MakeAiChartCommand = new RelayCommand<SongCardViewModel>(card => Rechart(card, preferAi: true), card => card?.Entry.IsPlayable == true);
+        FindCommunityChartCommand = new RelayCommand<SongCardViewModel>(card => Rechart(card, preferAi: false), card => card?.Version.IsAi == true);
         PlayCommand = new RelayCommand<SongCardViewModel>(card => { if (card?.Entry.IsPlayable == true) Jukebox(card.Entry); });
         JukeboxCommand = new RelayCommand(() => { if (RandomSong() is { } first) Jukebox(first); });
         _sing.NextJukeboxSong = RandomSong;
@@ -461,6 +466,18 @@ public sealed class SongSelectViewModel : ReactiveObject
 
     public ICommand RefreshCommand { get; }
     public ICommand SingCommand { get; }
+
+    public ICommand MakeAiChartCommand { get; }
+    public ICommand FindCommunityChartCommand { get; }
+
+    private void Rechart(SongCardViewModel? card, bool preferAi)
+    {
+        if (card?.Entry is not { IsPlayable: true } entry || _ingest is null) return;
+        _ingest.Rechart(entry, preferAi);
+        StatusText = preferAi
+            ? $"Making an AI chart for {card.Title}; follow it on Add songs."
+            : $"Looking for a community chart for {card.Title}; follow it on Add songs.";
+    }
 
     /// <summary>Plays a song in the jukebox (no singing), then carries on with random songs from the list.</summary>
     public ICommand PlayCommand { get; }

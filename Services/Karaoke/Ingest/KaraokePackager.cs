@@ -243,7 +243,9 @@ public sealed class KaraokePackager
             {
                 try
                 {
-                    if (await _media.DownloadAsync(coverUrl, ct) is { Length: > 0 } bytes)
+                    // A cover on disk (re-charting a song that has one) is copied; a link is downloaded.
+                    var bytes = File.Exists(coverUrl) ? await File.ReadAllBytesAsync(coverUrl, ct) : await _media.DownloadAsync(coverUrl, ct);
+                    if (bytes is { Length: > 0 })
                     {
                         cover = SongPackage.CoverFileName;
                         await File.WriteAllBytesAsync(Path.Combine(staging, cover), bytes, ct);
