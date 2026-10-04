@@ -35,7 +35,7 @@ public sealed record IngestSource(
     string? Language = null,
     int? Year = null);
 
-public enum IngestStage { Preparing, FetchingLyrics, GeneratingChart, SyncingVideo, Finishing }
+public enum IngestStage { Preparing, FetchingLyrics, GeneratingChart, DownloadingVideo, SyncingVideo, Finishing }
 
 /// <param name="Fraction">Progress within the stage, 0..1.</param>
 public sealed record IngestProgress(IngestStage Stage, double Fraction);
@@ -90,9 +90,12 @@ public sealed class KaraokePackager
     private readonly IIngestMedia _media;
     private readonly string _stagingRoot;
     private readonly ILogger _logger;
+    private readonly IVideoFinder? _videos;
 
-    public KaraokePackager(ITrackAnalyzer analyzer, ILyricsLookup lyrics, IIngestMedia media, string stagingRoot, ILogger logger)
+    /// <param name="videos">Finds a music video when the source brings none; null: songs without one get the cover.</param>
+    public KaraokePackager(ITrackAnalyzer analyzer, ILyricsLookup lyrics, IIngestMedia media, string stagingRoot, ILogger logger, IVideoFinder? videos = null)
     {
+        _videos = videos;
         _analyzer = analyzer;
         _lyrics = lyrics;
         _media = media;
@@ -111,6 +114,8 @@ public sealed class KaraokePackager
         var id = Guid.NewGuid().ToString("N");
         var staging = Directory.CreateDirectory(Path.Combine(_stagingRoot, id)).FullName;
         var notes = new List<string>();
+        Task<string?>? videoDownload = null;
+        using var videoCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         try
         {
             // Preparing: our own copy of the master, checked against the catalogue length.
@@ -129,6 +134,10 @@ public sealed class KaraokePackager
             progress?.Report(new IngestProgress(IngestStage.FetchingLyrics, 0));
             var lyrics = await _lyrics.FindAsync(source.Artist, source.Title, source.Album, durationMs, ct);
             if (lyrics is null) notes.Add("No lyrics found online; the words were transcribed.");
+
+            // The music video downloads while the AI works on the chart (network and GPU don't compete).
+            if (source.VideoPath is null && _videos is not null)
+                videoDownload = FindVideoAsync(source, durationMs, staging, videoCts.Token);
 
             // The chart: stems, alignment and pitch from the worker.
             progress?.Report(new IngestProgress(IngestStage.GeneratingChart, 0));
@@ -165,7 +174,14 @@ public sealed class KaraokePackager
             // The video, if it follows the album arrangement.
             string? video = null;
             VideoGapResult videoGap = new(false, 0);
-            if (source.VideoPath is { } videoSource)
+            var videoSource = source.VideoPath;
+            if (videoDownload is not null)
+            {
+                if (!videoDownload.IsCompleted) progress?.Report(new IngestProgress(IngestStage.DownloadingVideo, 0));
+                videoSource = await videoDownload;
+                if (videoSource is null) notes.Add("No music video was found, so the cover is shown instead.");
+            }
+            if (videoSource is not null)
             {
                 progress?.Report(new IngestProgress(IngestStage.SyncingVideo, 0));
                 var videoSound = await _media.DecodeMonoAsync(videoSource, SyncSampleRate, ct);
@@ -243,7 +259,27 @@ public sealed class KaraokePackager
         }
         finally
         {
+            // A failed chart leaves the video download running: stop it before clearing its folder.
+            if (videoDownload is { IsCompleted: false })
+            {
+                videoCts.Cancel();
+                try { await videoDownload; } catch (Exception) { /* cancelled */ }
+            }
             TryDelete(staging);
+        }
+    }
+
+    /// <summary>A missing video never fails the song: it just gets the cover.</summary>
+    private async Task<string?> FindVideoAsync(IngestSource source, int durationMs, string staging, CancellationToken ct)
+    {
+        try
+        {
+            return await _videos!.FindAsync(source.Artist, source.Title, durationMs, staging, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Ingest: video download failed for {Artist} - {Title}", source.Artist, source.Title);
+            return null;
         }
     }
 

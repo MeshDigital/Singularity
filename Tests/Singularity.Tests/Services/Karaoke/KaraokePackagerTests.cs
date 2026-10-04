@@ -86,6 +86,50 @@ public sealed class KaraokePackagerTests : IDisposable
     }
 
     [Fact]
+    public async Task AFoundVideo_IsSynced_AndNoneFoundGetsTheCover()
+    {
+        var master = VideoSyncTests.Music(120);
+        _media.Sound["audio"] = master;
+        _media.Sound[YtDlpVideoFinder.FileStem] = VideoSyncTests.Video(master, 1500);
+        var videos = new FakeVideos();
+        var packager = new KaraokePackager(_analyzer, _lyrics, _media, Staging, NullLogger.Instance, videos);
+
+        var found = await packager.BuildAsync(Source(Download()), Output);
+        videos.Found = false;
+        var none = await packager.BuildAsync(Source(Download(), trackId: "spotify:track:other"), Output);
+
+        Assert.True(found.HasVideo);
+        Assert.Equal(("The Killers", "Mr. Brightside", 222_000), videos.Asked[0]);
+        Assert.InRange(UltraStarSerializer.ReadFile(Path.Combine(found.PackageFolder, SongPackage.UltraStarFileName)).VideoGapMs, 1490, 1510);
+        Assert.False(none.HasVideo);
+        Assert.Contains(none.Notes, n => n.Contains("No music video"));
+    }
+
+    [Fact]
+    public async Task AFailedChart_StopsTheVideoDownload_AndCleansUp()
+    {
+        var videos = new FakeVideos { Hang = true };
+        _analyzer.Fail = true;
+        var packager = new KaraokePackager(_analyzer, _lyrics, _media, Staging, NullLogger.Instance, videos);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => packager.BuildAsync(Source(Download()), Output));
+
+        Assert.True(videos.WasCancelled);
+        Assert.Empty(Directory.GetFileSystemEntries(Staging));
+    }
+
+    [Fact]
+    public void YtDlp_SearchesFiveResults_ForOneOfAFittingLength()
+    {
+        var args = YtDlpVideoFinder.Arguments("Shakira", "Waka Waka", 202_657, @"C:\staging\x", ffmpeg: null);
+
+        Assert.Equal("ytsearch5:Shakira - Waka Waka official music video", args[^1]);
+        Assert.Equal("!is_live & duration >= 187 & duration <= 322", args[args.ToList().IndexOf("--match-filter") + 1]);
+        Assert.Equal("1", args[args.ToList().IndexOf("--max-downloads") + 1]);
+        Assert.DoesNotContain("--ffmpeg-location", args);
+    }
+
+    [Fact]
     public async Task VideoOfAnotherArrangement_IsDropped()
     {
         _media.Sound["audio"] = VideoSyncTests.Music(120, seed: 1);
@@ -214,4 +258,25 @@ internal sealed class FakeMedia : IIngestMedia
     }
 
     public Task<byte[]?> DownloadAsync(string url, CancellationToken ct) => Task.FromResult<byte[]?>(new byte[] { 0xFF, 0xD8 });
+}
+
+internal sealed class FakeVideos : IVideoFinder
+{
+    public bool Found { get; set; } = true;
+    public bool Hang { get; set; }
+    public bool WasCancelled { get; private set; }
+    public List<(string, string, int)> Asked { get; } = new();
+
+    public async Task<string?> FindAsync(string artist, string title, int durationMs, string folder, CancellationToken ct)
+    {
+        Asked.Add((artist, title, durationMs));
+        var path = Path.Combine(folder, YtDlpVideoFinder.FileStem + ".mp4");
+        await File.WriteAllBytesAsync(path, new byte[] { 1 }, CancellationToken.None);
+        if (Hang)
+        {
+            try { await Task.Delay(Timeout.Infinite, ct); }
+            catch (OperationCanceledException) { WasCancelled = true; throw; }
+        }
+        return Found ? path : null;
+    }
 }

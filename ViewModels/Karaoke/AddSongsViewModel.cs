@@ -60,6 +60,7 @@ public sealed class IngestRowViewModel : ReactiveObject
             IngestStage.Preparing => "Preparing",
             IngestStage.FetchingLyrics => "Finding lyrics",
             IngestStage.GeneratingChart => "Generating AI chart",
+            IngestStage.DownloadingVideo => "Downloading video",
             IngestStage.SyncingVideo => "Syncing video",
             _ => "Finishing",
         },
@@ -79,7 +80,8 @@ public sealed class IngestRowViewModel : ReactiveObject
     {
         IngestStage.Preparing => 0.02 * fraction,
         IngestStage.FetchingLyrics => 0.02 + 0.03 * fraction,
-        IngestStage.GeneratingChart => 0.05 + 0.85 * fraction,
+        IngestStage.GeneratingChart => 0.05 + 0.80 * fraction,
+        IngestStage.DownloadingVideo => 0.85 + 0.05 * fraction,
         IngestStage.SyncingVideo => 0.90 + 0.07 * fraction,
         _ => 0.97 + 0.03 * fraction,
     };

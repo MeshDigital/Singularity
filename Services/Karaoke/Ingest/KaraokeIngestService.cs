@@ -54,7 +54,8 @@ public sealed class KaraokeIngestService : IDisposable
             new LrclibLyricsLookup(new LrclibClient(new HttpClient(), loggers.CreateLogger<LrclibClient>())),
             new FfmpegIngestMedia(Http),
             KaraokePackager.DefaultStagingRoot,
-            loggers.CreateLogger<KaraokePackager>());
+            loggers.CreateLogger<KaraokePackager>(),
+            new YtDlpVideoFinder(loggers.CreateLogger<YtDlpVideoFinder>()));
         Queue = new IngestQueue(packager, () => songs.IngestFolder, _logger);
         Queue.Changed += ForgetFinished;
         Queue.PackageReady += _ => songs.NotifySongsAdded();

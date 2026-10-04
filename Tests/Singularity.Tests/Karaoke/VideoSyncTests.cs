@@ -75,6 +75,21 @@ public class VideoSyncTests
     }
 
     [Fact]
+    public void RepeatingChorus_DoesNotFoolTheWindows()
+    {
+        // A 25 s chorus that comes back five times with only a little variation: every window also
+        // matches the chorus 25 s away almost as well as the right spot.
+        var chorus = Music(25, seed: 5);
+        var rng = new Random(11);
+        var master = Enumerable.Range(0, 6).SelectMany(_ => chorus.Select(x => x + (float)((rng.NextDouble() - 0.5) * 0.15))).ToArray();
+
+        var result = VideoSync.Measure(master, Video(master, 2300), Rate);
+
+        Assert.True(result.Gap.IsValid, string.Join(", ", result.Windows.Select(w => $"{w.OffsetMs}@{w.Correlation:0.00}")));
+        Assert.InRange(result.Gap.VideoGapMs, 2290, 2310);
+    }
+
+    [Fact]
     public void ExtendedIntro_InTheMiddle_FailsConsensus()
     {
         // The video inserts 9 s of something else after the first third: later windows land 9 s further on.

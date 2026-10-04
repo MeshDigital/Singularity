@@ -18,6 +18,11 @@ public sealed record VideoSyncResult(VideoGapResult Gap, IReadOnlyList<SyncWindo
 /// they don't lie on one (gently sloped) line, the video has another arrangement (intro skit, radio
 /// edit) and can't be synced with one offset. Five windows rather than three, so one quiet passage
 /// without a clear match doesn't sink the measurement.
+///
+/// Repetitive songs fool a window's best match: a chorus that comes back 40 s later correlates as
+/// well as the real spot. So each window keeps its few strongest peaks, the offset most windows have
+/// a peak near wins, and each window then takes its peak nearest that offset. A window with no peak
+/// near it keeps its own best, so a real structural change still shows up as disagreement.
 /// </summary>
 public static class VideoSync
 {
@@ -30,6 +35,15 @@ public static class VideoSync
 
     public static readonly double[] WindowPositions = { 0.1, 0.3, 0.5, 0.7, 0.9 };
 
+    /// <summary>A window's other peaks must reach this share of its best to count as candidates.</summary>
+    public const double PeakShare = 0.7;
+
+    /// <summary>Peaks of one window closer than this are the same peak.</summary>
+    public const int PeakSeparationMs = 1000;
+
+    /// <summary>Windows support the same offset when their peaks lie this close (allows for drift).</summary>
+    public const int SupportToleranceMs = 300;
+
     /// <param name="master">Master audio, mono, at <paramref name="sampleRate"/>.</param>
     /// <param name="video">The video's soundtrack, mono, same rate.</param>
     public static VideoSyncResult Measure(ReadOnlySpan<float> master, ReadOnlySpan<float> video, int sampleRate)
@@ -38,17 +52,30 @@ public static class VideoSync
         var v = OnsetEnvelope(video, sampleRate);
         int window = WindowMs / FrameMs, maxLag = MaxOffsetMs / FrameMs;
 
+        var starts = WindowPositions.Select(p => (int)(m.Length * p) - window / 2).ToArray();
+        var peaks = starts.Select(start => start < 0 || start + window > m.Length
+            ? new List<(double OffsetMs, double Correlation)>()
+            : Peaks(m, start, window, v, maxLag)).ToArray();
+
+        // The offset most windows have a peak near; ties go to the stronger peaks.
+        var all = peaks.SelectMany(p => p).ToList();
+        double? consensus = all.Count == 0
+            ? null
+            : all.Select(c => (c.OffsetMs, Support: peaks.Count(p => p.Any(q => Math.Abs(q.OffsetMs - c.OffsetMs) <= SupportToleranceMs)),
+                               Strength: peaks.Sum(p => p.Where(q => Math.Abs(q.OffsetMs - c.OffsetMs) <= SupportToleranceMs).Select(q => q.Correlation).DefaultIfEmpty(0).Max())))
+                 .OrderByDescending(c => c.Support).ThenByDescending(c => c.Strength).First().OffsetMs;
+
         var windows = new List<SyncWindow>();
-        foreach (var position in WindowPositions)
+        for (int i = 0; i < starts.Length; i++)
         {
-            int start = (int)(m.Length * position) - window / 2;
-            if (start < 0 || start + window > m.Length)
+            if (peaks[i].Count == 0)
             {
-                windows.Add(new SyncWindow(start * FrameMs, null, 0));
+                windows.Add(new SyncWindow(starts[i] * (double)FrameMs, null, 0));
                 continue;
             }
-            var (lag, corr) = BestLag(m, start, window, v, maxLag);
-            windows.Add(new SyncWindow(start * (double)FrameMs, corr >= MinCorrelation ? (int)Math.Round(lag * FrameMs) : null, corr));
+            var near = consensus is { } c ? peaks[i].Where(q => Math.Abs(q.OffsetMs - c) <= SupportToleranceMs).ToList() : new();
+            var pick = near.Count > 0 ? near.MaxBy(q => q.Correlation) : peaks[i][0];
+            windows.Add(new SyncWindow(starts[i] * (double)FrameMs, (int)Math.Round(pick.OffsetMs), pick.Correlation));
         }
 
         return new VideoSyncResult(VideoGapConsensus.EvaluateWithDrift(windows.Select(w => (w.MasterMs, w.OffsetMs)).ToArray()), windows);
@@ -76,8 +103,48 @@ public static class VideoSync
         return env;
     }
 
-    /// <summary>Lag (frames, fractional) of the master segment within the video, and its correlation.</summary>
-    private static (double Lag, double Correlation) BestLag(float[] master, int start, int length, float[] video, int maxLag)
+    /// <summary>
+    /// Where the master segment may sit in the video: the strongest correlation peaks (best first) that
+    /// reach <see cref="MinCorrelation"/> and <see cref="PeakShare"/> of the best, as offsets in ms.
+    /// Empty when nothing correlates reliably.
+    /// </summary>
+    private static List<(double OffsetMs, double Correlation)> Peaks(float[] master, int start, int length, float[] video, int maxLag)
+    {
+        var (lo, scores) = Correlate(master, start, length, video, maxLag);
+        var result = new List<(double, double)>();
+        if (scores.Length == 0) return result;
+        double best = scores.Max();
+        if (best < MinCorrelation) return result;
+        double floor = Math.Max(MinCorrelation, best * PeakShare);
+        int separation = PeakSeparationMs / FrameMs;
+
+        var candidates = new List<int>();
+        for (int i = 0; i < scores.Length; i++)
+        {
+            if (scores[i] < floor) continue;
+            if (i > 0 && scores[i - 1] > scores[i]) continue;
+            if (i < scores.Length - 1 && scores[i + 1] >= scores[i]) continue;
+            candidates.Add(i);
+        }
+        foreach (int i in candidates.OrderByDescending(i => scores[i]))
+        {
+            if (result.Count >= 4) break;
+            double refined = i;
+            if (i > 0 && i < scores.Length - 1)
+            {
+                double a = scores[i - 1], b = scores[i], c = scores[i + 1];
+                double denom = a - 2 * b + c;
+                if (Math.Abs(denom) > 1e-12) refined += Math.Clamp(0.5 * (a - c) / denom, -0.5, 0.5);
+            }
+            double offset = (refined + lo) * FrameMs;
+            if (result.Any(r => Math.Abs(r.Item1 - offset) < separation * FrameMs)) continue;
+            result.Add((offset, scores[i]));
+        }
+        return result;
+    }
+
+    /// <summary>Normalised cross-correlation of the master segment at every lag within ±maxLag frames.</summary>
+    private static (int Lo, double[] Scores) Correlate(float[] master, int start, int length, float[] video, int maxLag)
     {
         // Normalise the master segment once.
         var seg = new double[length];
@@ -89,9 +156,8 @@ public static class VideoSync
         norm = Math.Sqrt(norm) + 1e-9;
 
         int lo = Math.Max(-maxLag, -start), hi = Math.Min(maxLag, video.Length - length - start);
-        if (hi < lo) return (0, 0);
+        if (hi < lo) return (0, Array.Empty<double>());
         var scores = new double[hi - lo + 1];
-        int best = 0;
         for (int lag = lo; lag <= hi; lag++)
         {
             int vs = start + lag;
@@ -105,19 +171,8 @@ public static class VideoSync
                 dot += seg[i] * x;
                 vNorm += x * x;
             }
-            double score = dot / (norm * (Math.Sqrt(vNorm) + 1e-9));
-            scores[lag - lo] = score;
-            if (score > scores[best]) best = lag - lo;
+            scores[lag - lo] = dot / (norm * (Math.Sqrt(vNorm) + 1e-9));
         }
-
-        // Parabolic refinement around the peak.
-        double refined = best;
-        if (best > 0 && best < scores.Length - 1)
-        {
-            double a = scores[best - 1], b = scores[best], c = scores[best + 1];
-            double denom = a - 2 * b + c;
-            if (Math.Abs(denom) > 1e-12) refined += Math.Clamp(0.5 * (a - c) / denom, -0.5, 0.5);
-        }
-        return (refined + lo, scores[best]);
+        return (lo, scores);
     }
 }
