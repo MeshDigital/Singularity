@@ -233,7 +233,7 @@
     <!-- System Tray Icon -->
     <TrayIcon.Icons>
         <TrayIcons>
-            <TrayIcon ToolTipText="Singularity - Soulseek Music Downloader" Icon="avares://Singularity/tray_icon.png">
+            <TrayIcon ToolTipText="Singularity - Soulseek Karaoke" Icon="avares://Singularity/tray_icon.png">
                 <TrayIcon.Menu>
                     <NativeMenu>
                         <NativeMenuItem Header="Show Window" Click="ShowWindow_Click"/>
