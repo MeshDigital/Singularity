@@ -40,6 +40,7 @@
             <StackPanel Orientation="Horizontal" Spacing="12">
                 <Button Content="← Back" Command="{Binding BackCommand}"/>
                 <Button Content="Pause" Command="{Binding PauseCommand}"/>
+                <Button Content="Skip intro (S)" Command="{Binding SkipIntroCommand}" IsVisible="{Binding CanSkipIntro}"/>
                 <Button Content="{Binding VocalsText}" Command="{Binding CycleVocalsCommand}" ToolTip.Tip="Original vocals: off, quiet guide, or full (V)"/>
                 <StackPanel VerticalAlignment="Center" IsVisible="{Binding !IsOnProjector}">
                     <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold"/>

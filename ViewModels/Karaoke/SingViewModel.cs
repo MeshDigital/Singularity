@@ -110,6 +110,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         BackCommand = new RelayCommand(Back);
         PauseCommand = new RelayCommand(TogglePause);
         RestartCommand = new RelayCommand(() => { if (_entry is { } e) Start(e); });
+        SkipIntroCommand = new RelayCommand(SkipIntro);
         CycleVocalsCommand = new RelayCommand(CycleVocals);
         BiggerTextCommand = new RelayCommand(() => TextScale += 0.1);
         SmallerTextCommand = new RelayCommand(() => TextScale -= 0.1);
@@ -201,6 +202,42 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     public ICommand BackCommand { get; }
     public ICommand PauseCommand { get; }
     public ICommand RestartCommand { get; }
+
+    /// <summary>Jumps to <see cref="IntroLeadMs"/> before the first note (S); nothing is scored in an intro.</summary>
+    public ICommand SkipIntroCommand { get; }
+
+    private const double IntroLeadMs = 3000;
+
+    private bool _canSkipIntro;
+
+    /// <summary>True while more than a few seconds of intro are left.</summary>
+    public bool CanSkipIntro { get => _canSkipIntro; private set => this.RaiseAndSetIfChanged(ref _canSkipIntro, value); }
+
+    /// <summary>When the first note starts, in song ms; null without notes.</summary>
+    private double? FirstNoteMs
+    {
+        get
+        {
+            if (!ReferenceEquals(_firstNoteSong, _song))
+            {
+                _firstNoteSong = _song;
+                _firstNoteMs = _song?.Voices.SelectMany(v => v.Notes).Where(n => n.Type != NoteType.LineBreak)
+                    .Select(n => (double?)_song.BeatToMs(n.StartBeat)).Min();
+            }
+            return _firstNoteMs;
+        }
+    }
+
+    private UltraStarSong? _firstNoteSong;
+    private double? _firstNoteMs;
+
+    private void SkipIntro()
+    {
+        if (_entry is not { } entry || ShowResults || FirstNoteMs is not { } first) return;
+        double target = first - IntroLeadMs;
+        if (target - _audio.PositionMs < 2000) return; // nothing worth skipping
+        Start(entry, target);
+    }
 
     public bool ShowResults { get => _showResults; private set => this.RaiseAndSetIfChanged(ref _showResults, value); }
     public ObservableCollection<PlayerResult> Results { get; } = new();
@@ -361,6 +398,8 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                 _lastLiveScoreTicks = Environment.TickCount64;
                 LiveScores = string.Join("     ", players.Select(p => (_players.Count > 1 ? $"P{p.Player} " : "Score ") + p.Score.ToString("N0")));
             }
+            bool skippable = !ShowResults && FirstNoteMs is { } firstNote && firstNote - IntroLeadMs - _audio.PositionMs >= 2000;
+            if (skippable != _canSkipIntro) Avalonia.Threading.Dispatcher.UIThread.Post(() => CanSkipIntro = skippable);
             double end = _song?.EndMs is { } e && e > 0 ? e : _audio.DurationMs;
             double progress = end > 0 ? Math.Clamp(_audio.PositionMs / end, 0, 1) : 0;
             return new StageSnapshot(beat, players, _finished, _hasVideoFrame ? _videoBitmap : null, TextScale, _videoAmbient, progress);
