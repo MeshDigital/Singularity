@@ -1,0 +1,222 @@
+using System;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Input;
+using Avalonia.Threading;
+using Singularity.Views;
+using Microsoft.Extensions.Logging;
+using ReactiveUI;
+using Singularity.Configuration;
+using Singularity.Contracts.Song;
+using Singularity.Services.Karaoke.Ingest;
+
+namespace Singularity.ViewModels.Karaoke;
+
+/// <summary>One song in the import table.</summary>
+public sealed class IngestRowViewModel : ReactiveObject
+{
+    private string _stateText = "";
+    private double _progress;
+    private bool _showProgress;
+    private string? _detail;
+    private bool _isFailed;
+    private bool _isReady;
+
+    public IngestRowViewModel(string key, string song)
+    {
+        Key = key;
+        Song = song;
+    }
+
+    public string Key { get; }
+    public string Song { get; }
+    public string StateText { get => _stateText; private set => this.RaiseAndSetIfChanged(ref _stateText, value); }
+    public double Progress { get => _progress; private set => this.RaiseAndSetIfChanged(ref _progress, value); }
+    public bool ShowProgress { get => _showProgress; private set => this.RaiseAndSetIfChanged(ref _showProgress, value); }
+    public string? Detail { get => _detail; private set => this.RaiseAndSetIfChanged(ref _detail, value); }
+    public bool IsFailed { get => _isFailed; private set => this.RaiseAndSetIfChanged(ref _isFailed, value); }
+    public bool IsReady { get => _isReady; private set => this.RaiseAndSetIfChanged(ref _isReady, value); }
+
+    public void Update(IngestItem item)
+    {
+        StateText = StateTextFor(item);
+        ShowProgress = item.State == IngestState.Building;
+        Progress = item.Stage is { } stage ? OverallProgress(stage, item.Progress) : 0;
+        Detail = item.Detail;
+        IsFailed = item.State == IngestState.Failed;
+        IsReady = item.State == IngestState.Ready;
+    }
+
+    internal static string StateTextFor(IngestItem item) => item.State switch
+    {
+        IngestState.Waiting => "Queued",
+        IngestState.Searching => "Searching Soulseek",
+        IngestState.Downloading => "Downloading audio",
+        IngestState.InQueue => "Waiting for the AI",
+        IngestState.Building => item.Stage switch
+        {
+            IngestStage.Preparing => "Preparing",
+            IngestStage.FetchingLyrics => "Finding lyrics",
+            IngestStage.GeneratingChart => "Generating AI chart",
+            IngestStage.SyncingVideo => "Syncing video",
+            _ => "Finishing",
+        },
+        IngestState.Ready => item.Tier switch
+        {
+            QualityTier.APlus => "Ready · quality A+",
+            QualityTier.A => "Ready · quality A",
+            QualityTier.B => "Ready · quality B",
+            QualityTier.ReviewRequired => "Ready · needs checking",
+            _ => "Ready",
+        },
+        _ => "Failed",
+    };
+
+    /// <summary>The chart is nearly all of the time; the other stages are a sliver each.</summary>
+    private static double OverallProgress(IngestStage stage, double fraction) => stage switch
+    {
+        IngestStage.Preparing => 0.02 * fraction,
+        IngestStage.FetchingLyrics => 0.02 + 0.03 * fraction,
+        IngestStage.GeneratingChart => 0.05 + 0.85 * fraction,
+        IngestStage.SyncingVideo => 0.90 + 0.07 * fraction,
+        _ => 0.97 + 0.03 * fraction,
+    };
+}
+
+/// <summary>
+/// The "Add songs" page: paste a Spotify link (a song, album or playlist) and follow each song from
+/// the Soulseek download through the AI chart to the library. An audio file already on disk can be
+/// added too.
+/// </summary>
+public sealed class AddSongsViewModel : ReactiveObject
+{
+    private readonly KaraokeIngestService _ingest;
+    private readonly ILogger<AddSongsViewModel> _logger;
+    private string _link = "";
+    private string _message = "";
+    private bool _isImporting;
+    private bool _refreshPosted;
+
+    public AddSongsViewModel(KaraokeIngestService ingest, ILogger<AddSongsViewModel> logger)
+    {
+        _ingest = ingest;
+        _logger = logger;
+        ImportCommand = new AsyncRelayCommand(ImportAsync, () => !IsImporting && _ingest.CanImport(Link));
+        _ingest.Queue.Changed += PostRefresh;
+        Refresh();
+    }
+
+    public ObservableCollection<IngestRowViewModel> Rows { get; } = new();
+
+    public string Link
+    {
+        get => _link;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _link, value);
+            ((AsyncRelayCommand)ImportCommand).RaiseCanExecuteChanged();
+        }
+    }
+
+    public string Message { get => _message; private set => this.RaiseAndSetIfChanged(ref _message, value); }
+
+    public bool IsImporting
+    {
+        get => _isImporting;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _isImporting, value);
+            ((AsyncRelayCommand)ImportCommand).RaiseCanExecuteChanged();
+        }
+    }
+
+    public ICommand ImportCommand { get; }
+
+    public string FolderText => $"New songs are saved to {_ingest.IngestFolder()}";
+
+    public string? OfflineText => RuntimeOptions.Offline
+        ? "Offline mode (--offline): Soulseek is not connected, so Spotify songs will wait in the list until you start Singularity normally. Audio files work."
+        : null;
+
+    public bool IsOffline => RuntimeOptions.Offline;
+
+    public bool HasRows => Rows.Count > 0;
+
+    public string HeldText => _ingest.Queue.IsHeld ? "Paused while someone sings." : "";
+
+    private async Task ImportAsync()
+    {
+        IsImporting = true;
+        Message = "Reading the link…";
+        try
+        {
+            var error = await _ingest.ImportAsync(Link);
+            Message = error ?? "Added. Songs appear below as they're found.";
+            if (error is null) Link = "";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Karaoke import of {Link} failed", Link);
+            Message = "The import failed: " + ex.Message;
+        }
+        finally
+        {
+            IsImporting = false;
+        }
+    }
+
+    /// <summary>An audio file chosen in the file picker. "Artist - Title" comes from its tags, else its name.</summary>
+    public void AddFile(string path)
+    {
+        var (artist, title) = NameOf(path);
+        _ingest.ImportFile(path, artist, title);
+        Message = $"Added {artist} - {title}.";
+    }
+
+    internal static (string Artist, string Title) NameOf(string path)
+    {
+        try
+        {
+            using var file = TagLib.File.Create(path);
+            var tagArtist = file.Tag.FirstPerformer ?? file.Tag.FirstAlbumArtist;
+            if (!string.IsNullOrWhiteSpace(tagArtist) && !string.IsNullOrWhiteSpace(file.Tag.Title))
+                return (tagArtist.Trim(), file.Tag.Title.Trim());
+        }
+        catch (Exception ex) when (ex is TagLib.CorruptFileException or TagLib.UnsupportedFormatException or IOException)
+        {
+            // Fall back to the file name.
+        }
+        var name = Path.GetFileNameWithoutExtension(path);
+        var parts = name.Split(" - ", 2, StringSplitOptions.TrimEntries);
+        return parts.Length == 2 ? (parts[0], parts[1]) : ("Unknown artist", name);
+    }
+
+    private void PostRefresh()
+    {
+        if (_refreshPosted) return;
+        _refreshPosted = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _refreshPosted = false;
+            Refresh();
+        });
+    }
+
+    private void Refresh()
+    {
+        foreach (var item in _ingest.Queue.Items)
+        {
+            var row = Rows.FirstOrDefault(r => r.Key == item.Key);
+            if (row is null)
+            {
+                row = new IngestRowViewModel(item.Key, $"{item.Artist} - {item.Title}");
+                Rows.Insert(0, row); // newest on top
+            }
+            row.Update(item);
+        }
+        this.RaisePropertyChanged(nameof(HasRows));
+        this.RaisePropertyChanged(nameof(HeldText));
+    }
+}

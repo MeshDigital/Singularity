@@ -14,5 +14,6 @@ public enum PageType
     Users,
     Karaoke,
     Sing,
-    MicSetup
+    MicSetup,
+    AddSongs
 }

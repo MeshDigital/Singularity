@@ -47,6 +47,9 @@ public sealed class SongCardViewModel : ReactiveObject
         }
     }
 
+    /// <summary>Imported in the last few days.</summary>
+    public bool IsNew { get; init; }
+
     public bool IsSeparating => _separating is not null;
     public bool CanSeparate => !_hasStems && _separating is null && Entry.IsPlayable;
     public string Title => Entry.Song.Title;
@@ -182,6 +185,11 @@ public sealed class SongSelectViewModel : ReactiveObject
         _navigation = navigation;
         _logger = logger;
         RefreshCommand = new AsyncRelayCommand(LoadAsync);
+        // An import finished: rescan, if the list was loaded already (otherwise the first visit scans).
+        _library.SongsAdded += () => Dispatcher.UIThread.Post(() =>
+        {
+            if (_loaded && !IsLoading) _ = LoadAsync();
+        });
         SingCommand = new RelayCommand<SongCardViewModel>(Sing, card => card?.Entry.IsPlayable == true);
     }
 
@@ -356,7 +364,7 @@ public sealed class SongSelectViewModel : ReactiveObject
         try
         {
             var result = await _library.ScanAsync();
-            _all = result.Songs.Select(s => new SongCardViewModel(s) { HasStems = _stems.Find(s) is not null }).ToList();
+            _all = result.Songs.Select(s => new SongCardViewModel(s) { HasStems = _stems.Find(s) is not null, IsNew = _library.IsNew(s) }).ToList();
             ApplyFilter();
             StatusText = $"{result.Songs.Count} songs" + (result.Failures.Count > 0 ? $" · {result.Failures.Count} unreadable" : "");
         }

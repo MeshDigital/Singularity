@@ -52,6 +52,10 @@
                             <TextBlock Text="{Binding Details}" Foreground="#778" FontSize="11"/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="8,0" VerticalAlignment="Center">
+                            <Border Background="#E8457A" CornerRadius="4" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding IsNew}"
+                                    ToolTip.Tip="Made from a Spotify link in the last few days">
+                                <TextBlock Text="NEW" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                            </Border>
                             <TextBlock Text="Vocals removable" Foreground="#6C8" FontSize="11" VerticalAlignment="Center" IsVisible="{Binding HasStems}"/>
                             <TextBlock Text="{Binding Separating}" Foreground="#FC6" FontSize="11" VerticalAlignment="Center" IsVisible="{Binding IsSeparating}"/>
                             <Button Content="Remove vocals" IsVisible="{Binding CanSeparate}"

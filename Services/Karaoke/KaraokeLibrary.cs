@@ -55,6 +55,23 @@ public sealed class KaraokeLibrary
         }
     }
 
+    /// <summary>How long an imported song wears its "NEW" badge.</summary>
+    public static readonly TimeSpan NewFor = TimeSpan.FromDays(3);
+
+    /// <summary>Raised (on any thread) when songs were added to a song folder, e.g. by an import.</summary>
+    public event Action? SongsAdded;
+
+    public void NotifySongsAdded() => SongsAdded?.Invoke();
+
+    /// <summary>An imported song made in the last few days (its metadata.json is that recent).</summary>
+    public bool IsNew(SongEntry entry)
+    {
+        var root = Path.GetFullPath(IngestFolder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!entry.Folder.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return false;
+        var metadata = new FileInfo(Path.Combine(entry.Folder, Singularity.Contracts.Song.SongPackage.MetadataFileName));
+        return metadata.Exists && DateTime.UtcNow - metadata.LastWriteTimeUtc < NewFor;
+    }
+
     public async Task<SongScanResult> ScanAsync(CancellationToken ct = default)
     {
         var folders = Folders;

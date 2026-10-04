@@ -57,12 +57,17 @@ public sealed class KaraokeIngestService : IDisposable
             loggers.CreateLogger<KaraokePackager>());
         Queue = new IngestQueue(packager, () => songs.IngestFolder, _logger);
         Queue.Changed += ForgetFinished;
+        Queue.PackageReady += _ => songs.NotifySongsAdded();
+        IngestFolder = () => songs.IngestFolder;
         _statePath = Path.Combine(Path.GetDirectoryName(KaraokePackager.DefaultStagingRoot)!, "ingest-pending.json");
         _subscription = events.GetEvent<TrackStateChangedEvent>().Subscribe(e => _ = OnTrackStateAsync(e));
         _ = ResumeAsync();
     }
 
     public IngestQueue Queue { get; }
+
+    /// <summary>Where finished songs go.</summary>
+    public Func<string> IngestFolder { get; }
 
     /// <summary>True for links ORBIT's Spotify import understands (a song, album or playlist).</summary>
     public bool CanImport(string link) => _spotify.CanHandle(link?.Trim() ?? "");

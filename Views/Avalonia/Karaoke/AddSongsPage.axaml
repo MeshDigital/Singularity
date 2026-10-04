@@ -1,0 +1,59 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Karaoke"
+             x:Class="Singularity.Views.Avalonia.Karaoke.AddSongsPage"
+             x:DataType="vm:AddSongsViewModel"
+             x:CompileBindings="True"
+             Background="{DynamicResource BrushBg1}" Foreground="White">
+    <Grid RowDefinitions="Auto,*" Margin="28,24">
+        <StackPanel Spacing="14" MaxWidth="980" HorizontalAlignment="Left">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Add songs" FontSize="30" FontWeight="Bold"/>
+                <TextBlock Foreground="#9AA" TextWrapping="Wrap"
+                           Text="Paste a Spotify link to a song, album or playlist. Each song is downloaded, gets an AI chart from its lyrics and melody, and lands in your library, with the music video when it matches."/>
+            </StackPanel>
+
+            <Grid ColumnDefinitions="*,Auto,Auto" Width="900" HorizontalAlignment="Left">
+                <TextBox Text="{Binding Link}" Watermark="https://open.spotify.com/track/…">
+                    <TextBox.KeyBindings>
+                        <KeyBinding Gesture="Enter" Command="{Binding ImportCommand}"/>
+                    </TextBox.KeyBindings>
+                </TextBox>
+                <Button Grid.Column="1" Content="Add" Command="{Binding ImportCommand}" Margin="8,0,0,0" MinWidth="80"/>
+                <Button Grid.Column="2" Content="Audio file…" Click="OnAddFile" Margin="8,0,0,0"
+                        ToolTip.Tip="Make a song from an audio file on this PC"/>
+            </Grid>
+
+            <TextBlock Text="{Binding Message}" Foreground="#CCD" IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+            <TextBlock Text="{Binding OfflineText}" Foreground="#FC6" TextWrapping="Wrap" IsVisible="{Binding IsOffline}"/>
+            <TextBlock Text="{Binding FolderText}" Foreground="#778" FontSize="12"/>
+            <TextBlock Text="{Binding HeldText}" Foreground="#FC6" FontSize="12"
+                       IsVisible="{Binding HeldText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        </StackPanel>
+
+        <ListBox Grid.Row="1" ItemsSource="{Binding Rows}" Margin="0,16,0,0" Background="Transparent" MaxWidth="980" HorizontalAlignment="Left"
+                 IsVisible="{Binding HasRows}">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:IngestRowViewModel">
+                    <Grid ColumnDefinitions="*,220" Margin="0,4">
+                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Song}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Detail}" Foreground="#889" FontSize="12" TextWrapping="Wrap"
+                                       IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center" Margin="12,0,0,0">
+                            <TextBlock Text="{Binding StateText}" FontSize="13"
+                                       Classes.failed="{Binding IsFailed}" Classes.ready="{Binding IsReady}">
+                                <TextBlock.Styles>
+                                    <Style Selector="TextBlock.failed"><Setter Property="Foreground" Value="#F77"/></Style>
+                                    <Style Selector="TextBlock.ready"><Setter Property="Foreground" Value="#6C8"/></Style>
+                                </TextBlock.Styles>
+                            </TextBlock>
+                            <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" Height="6" IsVisible="{Binding ShowProgress}"/>
+                        </StackPanel>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>
