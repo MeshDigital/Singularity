@@ -22,6 +22,10 @@ public partial class KaraokeSettingsView : UserControl
             vm.IngestFolder = folder;
     }
 
+    private void OnSetUpAi(object? sender, RoutedEventArgs e) => (DataContext as KaraokeSettingsViewModel)?.SetUpAi();
+
+    private void OnRecheckAi(object? sender, RoutedEventArgs e) => (DataContext as KaraokeSettingsViewModel)?.RecheckAi();
+
     private async void OnChooseInferenceFolder(object? sender, RoutedEventArgs e)
     {
         if (DataContext is KaraokeSettingsViewModel vm && await PickFolderAsync("The inference folder (with .venv inside)") is { } folder)

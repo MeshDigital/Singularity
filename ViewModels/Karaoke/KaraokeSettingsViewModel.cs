@@ -203,6 +203,46 @@ public sealed class KaraokeSettingsViewModel : ReactiveObject
 
     public bool AiInstalled => InferenceWorkerOptions.Discover() is not null;
 
+    /// <summary>inference\setup.ps1 next to the app (installed) or up the folder tree (a source checkout); null when missing.</summary>
+    public static string? SetupScript
+    {
+        get
+        {
+            for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+            {
+                var script = Path.Combine(dir.FullName, "inference", "setup.ps1");
+                if (File.Exists(script)) return script;
+            }
+            return null;
+        }
+    }
+
+    public bool CanSetUpAi => !AiInstalled && SetupScript is not null;
+
+    /// <summary>Runs the worker setup in its own console window: it downloads several GB and shows its progress.</summary>
+    public void SetUpAi()
+    {
+        if (SetupScript is not { } script) return;
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("powershell.exe")
+        {
+            ArgumentList = { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script },
+            UseShellExecute = true,
+            WorkingDirectory = Path.GetDirectoryName(script)!,
+        });
+        AiSetupStarted = true;
+        this.RaisePropertyChanged(nameof(AiSetupStarted));
+    }
+
+    /// <summary>The setup window was opened; "Check again" looks for the worker once it's done.</summary>
+    public bool AiSetupStarted { get; private set; }
+
+    public void RecheckAi()
+    {
+        this.RaisePropertyChanged(nameof(AiStatus));
+        this.RaisePropertyChanged(nameof(AiInstalled));
+        this.RaisePropertyChanged(nameof(CanSetUpAi));
+    }
+
     /// <summary>Points Singularity at an AI worker folder (one holding .venv); false when there's no worker in it.</summary>
     public bool ChooseInferenceFolder(string folder)
     {

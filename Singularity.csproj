@@ -190,4 +190,17 @@
     <ProjectReference Include="Singularity.Karaoke\Singularity.Karaoke.csproj" />
   </ItemGroup>
 
+  <!-- The AI worker's source and setup script ship with the app (not its .venv or caches): an installed copy sets
+       the worker up next to itself with inference\setup.ps1 (Settings > System > Set up AI worker). -->
+  <ItemGroup>
+    <None Include="inference\setup.ps1;inference\pyproject.toml;inference\README.md">
+      <Link>inference\%(Filename)%(Extension)</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="inference\singularity_inference\**\*.py" Exclude="inference\**\__pycache__\**">
+      <Link>inference\singularity_inference\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
