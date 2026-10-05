@@ -98,6 +98,17 @@ Still open:
    audio part of the quality grade and catches wrong files.
 5. **Now singing** to Discord (Rich Presence) or as an OBS overlay.
 
+### Singing feel (from play-testing, October 2026)
+
+- [x] One pitch scale per song with a gliding view, instead of every line stretched to fill the lane.
+- [x] A steady pitch dot: folded to the note being sung, median and EMA smoothing, drawn halfway onto a nearly-right note.
+- [x] Scoring by how close (full within 20 cents, quadratic falloff), tighter tolerances, 80 ms grace for the attack.
+- [x] Sharp and flat shown on the sung notes (amber and higher, cyan and lower).
+- [x] Community charts checked against the original singer's pitch; wrong timing or key corrected, or an AI chart made.
+- [ ] Score against the original singer's own pitch curve (saved at import), so AI chart errors don't cost points.
+- [ ] Timing credit: reward starting a note on time.
+- [ ] Check AI charts with the same pitch check and flag the lines where the singer and chart disagree.
+
 ### Larger work
 
 - **Better AI charts**, measured with ChartBench: recall is about 70% at 100 ms and pitch within a semitone about 85%.

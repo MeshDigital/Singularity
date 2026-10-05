@@ -98,6 +98,12 @@ one line.
 - Tested on 89 human charts against their own vocals: 63 placed within 50 ms. Most others sat 50–100 ms off,
   consistently: charters place notes on the vowel, while the vocal energy starts at the consonant.
 - None of 89 was accepted against another song's vocals.
+
+Loudness can't tell whether the notes are right, so **`ChartPitchCheck`** checks them next: the vocals go through the
+microphone pitch detector, and it counts how much of the singing lands on the chart's note at that moment (within half
+a semitone, any octave). Charts that fit put 48–70% there. It also searches ±10 s and all 12 transpositions; a chart
+that doesn't fit but clearly does after a correction is corrected, and otherwise an AI chart is made. It caught a
+placed chart that sat 3.6 s late (6% on its notes, 36% once moved).
 - Live, Mr. Brightside's USDB chart landed 36 ms from where the AI, working independently from the same file, put the
   first syllable.
 
@@ -153,7 +159,13 @@ accuracy against the human chart is 0.77 for A, 0.70 for B and 0.61 for "needs c
 - **Pitch.** `PitchDetector` uses MPM: 2048-sample frames at 48 kHz with a 10 ms hop, octave-independent, with a
   silence gate at −55 dBFS.
 - **Scoring.** `SingScorer`: 9,000 points over the scored beats (golden beats count double) plus a 1,000-point line
-  bonus. The difficulty is the pitch tolerance (Easy 2, Medium 1, Hard 0 semitones).
+  bonus. A beat earns credit by how close it was sung: full within 20 cents, falling off quadratically to nothing at
+  the difficulty's tolerance (Easy 1.75, Medium 1.0, Hard 0.65 semitones); gaps up to half a beat are forgiven, and
+  the first 80 ms of a note forgive the attack. Each judged beat reports its offset, which the stage shows as sharp
+  or flat.
+- **Note lane.** `NoteLaneLayout` keeps one pitch scale per song (its widest line plus a margin) and gives each line
+  a centre the stage glides to. The singer's pitch is folded to the octave of the note being sung and steadied by
+  `PitchSmoother` (3-reading median, EMA) for display only.
 - **Drawing.** `SingStage` draws each frame from a `StageSnapshot`, which is taken in the animation-frame callback
   before the render pass. Bound properties must not change during rendering.
 - **Stems.** `StemStore` caches stems for the user's own songs, and `StemBatchQueue` separates a whole collection in

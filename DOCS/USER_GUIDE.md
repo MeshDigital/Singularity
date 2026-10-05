@@ -113,7 +113,9 @@ original vocals, no singing or scores: music between singers. When a song ends a
 
 At the top of the page:
 
-- **Difficulty**: Easy (within 2 semitones counts), Medium (within 1) or Hard (the exact note). Octaves never matter.
+- **Difficulty**: how far off still earns points: Easy up to 1¾ semitones, Medium up to 1, Hard up to ⅔. Within 20
+  cents of the note is always full marks, and the closer you sing, the more you earn. Octaves never matter, and the
+  first moment of a note (a scoop onto it) isn't held against you.
 - **Sing on**: this window, or a projector or TV (see below).
 - **Text size**: the size of lyrics, notes and scores on the stage.
 
@@ -128,7 +130,9 @@ At the top of the page:
 | Esc | Back to song select |
 
 The stage shows the notes in a lane, your voice as a dot with a trail (on the note is good), the lyrics with the sung
-part coloured, and a rating after each line. Golden notes score double. After the song, the results show each
+part coloured, and a rating after each line. The lane keeps one scale for the whole song, so a step of a semitone is
+always the same height, and it glides up or down to each new line. What you sing fills the notes in your colour:
+amber and a little higher when you were sharp, cyan and a little lower when flat. Golden notes score double. After the song, the results show each
 singer's score, notes, golden notes and line bonus, and the song's best scores at this difficulty: a place in the
 top 10 shows as "New high score!" or "3rd best on this song". Singer names come from Settings → Singing. **R** sings
 again, **Enter** returns to song select.
