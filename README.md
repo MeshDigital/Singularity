@@ -5,7 +5,7 @@
 <h1 align="center">Singularity</h1>
 
 <p align="center"><b>A karaoke system that finds the songs, makes the charts and puts them on the big screen.</b><br>
-Windows · .NET 9 · Avalonia · UltraStar-compatible · <code>0.1.0-alpha</code></p>
+Windows · .NET 9 · Avalonia · UltraStar-compatible · <code>0.2.0-alpha</code></p>
 
 ---
 
@@ -18,6 +18,10 @@ Singularity is a karaoke game in the spirit of UltraStar, with three things Ultr
    aligns the lyrics word by word and tracks the melody.
 3. **It brings the music video.** It finds the official video and syncs it to the song by sound alone. A video that
    doesn't match plays dimmed in the background instead.
+
+<p align="center">
+  <img src="DOCS/images/singing.jpg" width="820" alt="Two singers on the stage: notes in a lane over the music video, sung parts filled in, lyrics below">
+</p>
 
 Your existing UltraStar song folders work as they are, and songs Singularity makes are standard UltraStar folders
 that UltraStar Deluxe, Vocaluxe or Performous can open too.
@@ -56,6 +60,16 @@ ORBIT's search, download, library and playlist engine and builds the karaoke gam
 - Library and Now Playing from ORBIT; a track that is a karaoke song plays its music video.
 - Settings for the accounts, folders, adding songs and singing on one page; ORBIT's full settings and download
   center stay available behind an "Advanced" switch.
+
+## Screenshots
+
+| Song select | Results |
+|---|---|
+| <img src="DOCS/images/song-select.jpg" alt="Song select: covers, versions, sort and filter"> | <img src="DOCS/images/results.jpg" alt="Results: a card per singer with score, rating and line stats"> |
+| **Add songs** | **Singing** |
+| <img src="DOCS/images/add-songs.jpg" alt="Add songs: one box for Spotify links or Artist - Title lines"> | <img src="DOCS/images/singing.jpg" alt="The stage while singing"> |
+
+The singing shots were taken with `--demo-singer`: the song's separated original vocals sing into the scorer.
 
 ## How a song is made
 
