@@ -314,6 +314,11 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                 .Select(n => n.StartBeat + n.DurationBeats).DefaultIfEmpty(0).Max();
         }
 
+        // Only a whole song counts for the high scores: started before the first note (skip intro still does),
+        // and sung by people, not by --demo-singer.
+        _countsForHighScores = !Singularity.Configuration.RuntimeOptions.DemoSinger
+            && (startMs is not { } from || FirstNoteMs is not { } firstNote || from <= firstNote);
+
         try
         {
             // With separated stems the original vocals can be turned down (V); otherwise the original mix plays.
@@ -350,6 +355,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     /// <summary>Opens each distinct capture device once and gives every player a scoring session on it.</summary>
     private void StartMicrophones(UltraStarSong song)
     {
+        if (Singularity.Configuration.RuntimeOptions.DemoSinger && StartDemoSinger(song)) return;
         var notes = new List<string>();
         foreach (var group in _players.GroupBy(p => p.Mic.DeviceKey))
         {
@@ -465,9 +471,11 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     private string SingerName(int player) => player == 2 ? _config.KaraokePlayer2Name : _config.KaraokePlayer1Name;
 
     /// <summary>Keeps the score when it makes the song's top ten; says how it placed.</summary>
+    private bool _countsForHighScores;
+
     private string RecordHighScore(Player p, int total)
     {
-        if (_highScores is null || _song is null || p.Session is null || total <= 0) return "";
+        if (_highScores is null || _song is null || p.Session is null || total <= 0 || !_countsForHighScores) return "";
         int place = _highScores.Add(new Singularity.Karaoke.Scoring.HighScore(
             Singularity.Karaoke.Scoring.HighScoreTable.SongKey(_song.Artist, _song.Title), Difficulty.ToString(), SingerName(p.Mic.Player), total, DateTime.UtcNow));
         return place switch
@@ -578,6 +586,67 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     {
         foreach (var capture in _captures.Values) capture.Dispose();
         _captures.Clear();
+        _demoTimer?.Dispose();
+        _demoTimer = null;
+    }
+
+    private System.Threading.Timer? _demoTimer;
+
+    /// <summary>
+    /// --demo-singer: every singer "sings" the song's separated original vocals, pushed into their sessions as the
+    /// playback clock passes them, the way a microphone delivers blocks. False when the song has no vocals stem.
+    /// </summary>
+    private bool StartDemoSinger(UltraStarSong song)
+    {
+        if (_entry is not { } entry || song.VocalsFile is not { } vocalsName) return false;
+        var path = Path.Combine(entry.Folder, vocalsName);
+        if (!File.Exists(path)) return false;
+
+        float[] mono;
+        int rate;
+        using (var reader = new NAudio.Wave.AudioFileReader(path))
+        {
+            rate = reader.WaveFormat.SampleRate;
+            int channels = reader.WaveFormat.Channels;
+            var all = new List<float>((int)(reader.Length / 4 / channels));
+            var buffer = new float[rate * channels];
+            int read;
+            while ((read = reader.Read(buffer, 0, buffer.Length)) > 0)
+                for (int i = 0; i + channels <= read; i += channels)
+                {
+                    float sum = 0;
+                    for (int c = 0; c < channels; c++) sum += buffer[i + c];
+                    all.Add(sum / channels);
+                }
+            mono = all.ToArray();
+        }
+
+        lock (_sync)
+        {
+            foreach (var p in _players)
+            {
+                var player = p;
+                p.Session = new SingerSession(song, p.Voice, rate, Difficulty);
+                p.Session.Scorer.BeatJudged += judged => { if (judged.Hit) player.Hits.Add(judged); };
+                p.Session.Scorer.LineCompleted += line => { player.LastLine = line; player.LastLineBeat = song.MsToBeat(_audio.PositionMs); };
+            }
+        }
+        long pushed = -1;
+        _demoTimer = new System.Threading.Timer(_ =>
+        {
+            lock (_sync)
+            {
+                if (IsPaused) return;
+                long now = Math.Min(mono.Length, (long)(_audio.PositionMs * rate / 1000));
+                if (pushed < 0 || now < pushed || now - pushed > rate) pushed = Math.Max(0, now - rate / 50); // start, seek or stall
+                if (now <= pushed) return;
+                var block = mono.AsSpan((int)pushed, (int)(now - pushed));
+                foreach (var p in _players) p.Session?.Push(block, pushed * 1000.0 / rate);
+                pushed = now;
+            }
+        }, null, 0, 20);
+        Status = "Demo: the original vocals are singing";
+        return true;
     }
 
     private void StopPlayback()

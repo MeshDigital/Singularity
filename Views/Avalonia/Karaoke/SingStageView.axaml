@@ -36,7 +36,7 @@
         <Border IsVisible="{Binding ShowResults}">
             <Border.Background>
                 <RadialGradientBrush Center="50%,45%" GradientOrigin="50%,45%" RadiusX="80%" RadiusY="80%">
-                    <GradientStop Offset="0" Color="#B0101420"/>
+                    <GradientStop Offset="0" Color="#E8101420"/>
                     <GradientStop Offset="1" Color="#F0000000"/>
                 </RadialGradientBrush>
             </Border.Background>

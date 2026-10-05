@@ -41,6 +41,12 @@ public static class RuntimeOptions
     /// <summary>Development shortcut: <c>--import "&lt;spotify link&gt;"</c> opens Add songs and imports the link, as pasting it would.</summary>
     public static string? ImportLink { get; private set; }
 
+    /// <summary>
+    /// Development shortcut: <c>--demo-singer</c> sings with the song's separated original vocals instead of the
+    /// microphones, to try the stage, scoring and results (and take screenshots) without singing.
+    /// </summary>
+    public static bool DemoSinger { get; private set; }
+
     public static void Initialize(IEnumerable<string> args)
     {
         var list = args.ToList();
@@ -56,6 +62,7 @@ public static class RuntimeOptions
         SingFolder = ValueAfter("--sing");
         StageScreen = ValueAfter("--stage");
         ImportLink = ValueAfter("--import");
+        DemoSinger = list.Any(a => a.Equals("--demo-singer", StringComparison.OrdinalIgnoreCase));
         Players = int.TryParse(ValueAfter("--players"), out var players) ? players : null;
         SingStartSeconds = double.TryParse(ValueAfter("--sing-start"), System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var start) ? start : null;

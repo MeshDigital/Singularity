@@ -335,8 +335,11 @@ public sealed class SingStage : Control
 
     private enum Intonation { InTune, Sharp, Flat }
 
-    /// <summary>Further off than this (18 cents) a sung beat shows as sharp or flat.</summary>
-    private const double InTuneSemitones = 0.18;
+    /// <summary>
+    /// Further off than this (30 cents) a sung beat shows as sharp or flat. Tried at 18 cents with the original
+    /// singers' own vocals: most of a good performance turned amber or cyan, which reads as wrong.
+    /// </summary>
+    private const double InTuneSemitones = 0.30;
 
     private static readonly Color SharpColour = Color.FromRgb(255, 170, 60);
     private static readonly Color FlatColour = Color.FromRgb(70, 225, 235);
