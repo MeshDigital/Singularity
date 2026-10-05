@@ -16,9 +16,10 @@ public class SingScorerTests
     });
 
     /// <summary>Sings along: <paramref name="sing"/> maps a beat to the sung MIDI pitch (null = silent), 4 samples per beat.</summary>
-    private static SingScorer Sing(Func<double, double?> sing, Difficulty difficulty = Difficulty.Medium, UltraStarVoice? voice = null, bool lineBonus = true)
+    private static SingScorer Sing(Func<double, double?> sing, Difficulty difficulty = Difficulty.Medium, UltraStarVoice? voice = null, bool lineBonus = true,
+        double beatMs = 0)
     {
-        var scorer = new SingScorer(voice ?? Voice, difficulty, lineBonus);
+        var scorer = new SingScorer(voice ?? Voice, difficulty, lineBonus, beatMs);
         for (double beat = 0; beat < 16; beat += 0.25) scorer.AddSample(beat, sing(beat));
         scorer.Finish();
         return scorer;
@@ -60,16 +61,42 @@ public class SingScorerTests
     }
 
     [Theory]
-    [InlineData(Difficulty.Easy, 2, true)]
-    [InlineData(Difficulty.Easy, 3, false)]
-    [InlineData(Difficulty.Medium, 1, true)]
-    [InlineData(Difficulty.Medium, 2, false)]
-    [InlineData(Difficulty.Hard, 0.4, true)]
-    [InlineData(Difficulty.Hard, 1, false)]
-    public void Tolerance_FollowsDifficulty(Difficulty difficulty, double semitonesOff, bool hits)
+    [InlineData(Difficulty.Easy, 1.75)]
+    [InlineData(Difficulty.Medium, 1.0)]
+    [InlineData(Difficulty.Hard, 0.65)]
+    public void BeyondTheTolerance_EarnsNothing(Difficulty difficulty, double semitonesOff)
     {
-        var s = Sing(b => Perfect(b) + semitonesOff, difficulty);
-        Assert.Equal(hits ? 10_000 : 0, s.Score.Total);
+        Assert.Equal(0, Sing(b => Perfect(b) + semitonesOff, difficulty).Score.Total);
+        Assert.Equal(0, Sing(b => Perfect(b) - semitonesOff - 0.1, difficulty).Score.Total);
+    }
+
+    [Theory]
+    [InlineData(Difficulty.Easy)]
+    [InlineData(Difficulty.Medium)]
+    [InlineData(Difficulty.Hard)]
+    public void Within20Cents_IsPerfectOnEveryDifficulty(Difficulty difficulty)
+    {
+        Assert.Equal(10_000, Sing(b => Perfect(b) + 0.15, difficulty).Score.Total);
+        Assert.Equal(10_000, Sing(b => Perfect(b) - 0.2, difficulty).Score.Total);
+    }
+
+    [Fact]
+    public void CloserIsBetter()
+    {
+        // Half a semitone sharp on Medium: 1 - (0.3 / 0.8)^2 = 0.859 of every beat and every line bonus.
+        Assert.Equal(8590, Sing(b => Perfect(b) + 0.5).Score.Total);
+        int quarter = Sing(b => Perfect(b) + 0.35).Score.Total, half = Sing(b => Perfect(b) + 0.5).Score.Total, most = Sing(b => Perfect(b) + 0.8).Score.Total;
+        Assert.True(quarter > half && half > most && most > 0);
+        Assert.True(Sing(b => Perfect(b) + 0.5, Difficulty.Easy).Score.Total > half);
+        Assert.True(Sing(b => Perfect(b) + 0.5, Difficulty.Hard).Score.Total < half);
+    }
+
+    [Fact]
+    public void Credit_FallsOffQuadratically()
+    {
+        Assert.Equal(1, SingScorer.CreditFor(0.2, Difficulty.Medium));
+        Assert.Equal(0.75, SingScorer.CreditFor(-0.6, Difficulty.Medium), 9); // halfway between 0.2 and 1.0
+        Assert.Equal(0, SingScorer.CreditFor(1.0, Difficulty.Medium));
     }
 
     [Fact]
@@ -107,11 +134,47 @@ public class SingScorerTests
     }
 
     [Fact]
-    public void ABeatNeedsHalfItsSamplesRight()
+    public void GapsUpToHalfABeat_AreForgiven()
     {
-        // 2 of 4 samples per beat right: still a hit. 1 of 4: a miss.
+        // Voice in 2 of 4 samples per beat (consonants, breaths): full credit. In 1 of 4: half.
         Assert.Equal(10_000, Sing(b => b % 1 < 0.5 ? Perfect(b) : null).Score.Total);
-        Assert.Equal(0, Sing(b => b % 1 < 0.25 ? Perfect(b) : null).Score.Total);
+        Assert.Equal(5_000, Sing(b => b % 1 < 0.25 ? Perfect(b) : null).Score.Total);
+    }
+
+    [Fact]
+    public void AScoopOntoTheNote_IsForgiven()
+    {
+        // Every note starts two semitones flat for half a beat, then lands. 100 ms beats: an 80 ms grace.
+        double? Scoop(double b) => Perfect(b) is { } m && (b % 1 < 0.5 && (b is < 0.5 or >= 4 and < 4.5 or >= 10 and < 10.5)) ? m - 2 : Perfect(b);
+        Assert.Equal(10_000, Sing(Scoop, beatMs: 100).Score.Total);
+        Assert.True(Sing(Scoop).Score.Total < 10_000); // without the grace the scoop costs points
+    }
+
+    [Fact]
+    public void ABeatThatIsAllAttack_IsJudgedLikeTheNextBeat()
+    {
+        // 50 ms beats: the grace covers the first 1.6 beats, so beat 0 is all scoop and takes beat 1's verdict.
+        double? Scoop(double b) => Perfect(b) is { } m && (b is < 1 or >= 4 and < 5 or >= 10 and < 11) ? m - 2 : Perfect(b);
+        Assert.Equal(10_000, Sing(Scoop, beatMs: 50).Score.Total);
+    }
+
+    [Fact]
+    public void TheGrace_DoesNotRewardSilence()
+    {
+        Assert.Equal(0, Sing(_ => null, beatMs: 50).Score.Total);
+    }
+
+    [Fact]
+    public void Judgements_ReportHowFarOff()
+    {
+        var judged = new List<BeatJudgement>();
+        var scorer = new SingScorer(Voice);
+        scorer.BeatJudged += judged.Add;
+        for (double beat = 0; beat < 16; beat += 0.25) scorer.AddSample(beat, Perfect(beat) + 12.3); // an octave and 30 cents up
+        scorer.Finish();
+
+        Assert.All(judged, j => Assert.Equal(0.3, j.Offset, 6));
+        Assert.All(judged, j => Assert.True(j.Hit && j.Credit < 1));
     }
 
     [Fact]
@@ -127,7 +190,7 @@ public class SingScorerTests
     {
         var judged = new List<(int Beat, bool Hit)>();
         var scorer = new SingScorer(Voice);
-        scorer.BeatJudged += (_, beat, hit) => judged.Add((beat, hit));
+        scorer.BeatJudged += j => judged.Add((j.Beat, j.Hit));
         for (double beat = 0; beat < 16; beat += 0.25) scorer.AddSample(beat, beat < 2 ? 60 : null);
         scorer.Finish();
 

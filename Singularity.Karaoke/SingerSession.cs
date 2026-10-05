@@ -29,7 +29,7 @@ public sealed class SingerSession
     {
         _song = song;
         LatencyMs = latencyMs;
-        Scorer = new SingScorer(song.Voices[voiceIndex], difficulty);
+        Scorer = new SingScorer(song.Voices[voiceIndex], difficulty, beatMs: song.MillisecondsPerBeat);
         _stream = new PitchStream(sampleRate, SilenceDb);
         _stream.Frame += OnFrame;
     }

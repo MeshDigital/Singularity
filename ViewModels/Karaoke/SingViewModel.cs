@@ -25,7 +25,7 @@ public sealed record PlayerSnapshot(
     int Player,
     LyricsFrame Lyrics,
     NoteLaneLayout? Lane,
-    IReadOnlyList<(UltraStarNote Note, int Beat)> HitBeats,
+    IReadOnlyList<BeatJudgement> HitBeats,
     PitchReading? Pitch,
     int Score,
     LineResult? LastLine,
@@ -369,7 +369,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                 {
                     var player = p;
                     p.Session = new SingerSession(song, p.Voice, capture.SampleRate, Difficulty, _config.KaraokeMicLatencyMs);
-                    p.Session.Scorer.BeatJudged += (note, beat, hit) => { if (hit) player.Hits.Add((note, beat)); };
+                    p.Session.Scorer.BeatJudged += judged => { if (judged.Hit) player.Hits.Add(judged); };
                     p.Session.Scorer.LineCompleted += line => { player.LastLine = line; player.LastLineBeat = song.MsToBeat(_audio.PositionMs); };
                 }
             }
@@ -659,7 +659,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         public SingerSession? Session { get; set; }
         public NoteLaneLayout? Lane { get; set; }
         public int LaneLine { get; set; } = -1;
-        public List<(UltraStarNote Note, int Beat)> Hits { get; } = new();
+        public List<BeatJudgement> Hits { get; } = new();
         public LineResult? LastLine { get; set; }
         public double LastLineBeat { get; set; }
         public float[] Mono { get; set; } = Array.Empty<float>();

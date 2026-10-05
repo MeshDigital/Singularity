@@ -2,12 +2,21 @@ using Singularity.Contracts.UltraStar;
 
 namespace Singularity.Karaoke.Scoring;
 
-/// <summary>How far off a sung note may be and still count, in semitones (octave ignored).</summary>
+/// <summary>How far off a sung note may be and still earn something; see <see cref="SingScorer.ToleranceFor"/>.</summary>
 public enum Difficulty
 {
     Easy = 2,
     Medium = 1,
     Hard = 0,
+}
+
+/// <summary>One judged beat of a scored note.</summary>
+/// <param name="Credit">How well it was sung, 0..1: the share of the beat's points earned.</param>
+/// <param name="Offset">The average distance from the note in semitones (positive = sharp) over the sung readings; 0 when silent.</param>
+public readonly record struct BeatJudgement(UltraStarNote Note, int Beat, double Credit, double Offset)
+{
+    /// <summary>Counts as sung (filled in on the stage).</summary>
+    public bool Hit => Credit >= 0.5;
 }
 
 /// <summary>Per-line verdict, shown when a lyric line has been sung.</summary>
@@ -35,10 +44,16 @@ public sealed record ScoreBreakdown(double Notes, double Golden, double LineBonu
 /// <summary>
 /// Scores one singer on one voice, UltraStar style. A song is worth <see cref="MaxScore"/> points:
 /// <see cref="LineBonusPool"/> for line bonuses (when enabled), the rest shared across every scored
-/// beat. Golden beats weigh double. A beat is hit when at least half the pitch samples taken during
-/// it match. A sample matches when it is the note's pitch class within the difficulty's tolerance,
-/// in any octave, so a bass can sing a soprano part. Rap notes only need voice; freestyle notes
-/// aren't scored.
+/// beat. Golden beats weigh double.
+///
+/// Unlike UltraStar's hit-or-miss, a beat earns credit by how close it was sung. Each pitch sample is
+/// compared with the note's pitch class in any octave (so a bass can sing a soprano part): within
+/// <see cref="FullCreditSemitones"/> it earns full credit (natural intonation and vibrato), then credit
+/// falls off quadratically to nothing at the difficulty's tolerance. A beat's credit is the average over
+/// its sung samples, and gaps (consonants, breaths) are forgiven while at least <see cref="HitShare"/> of
+/// the beat is voiced. The first <see cref="OnsetGraceMs"/> of a note forgive a scoop onto the pitch:
+/// misses there don't count, and a beat with nothing else is judged like the note's next beat.
+/// Rap notes only need voice; freestyle notes aren't scored.
 ///
 /// Feed samples in time order with <see cref="AddSample"/>, where the beat already includes mic
 /// latency compensation. Beats are judged once they are complete.
@@ -48,6 +63,29 @@ public sealed class SingScorer
     public const double MaxScore = 10_000;
     public const double LineBonusPool = 1_000;
     public const double HitShare = 0.5;
+
+    /// <summary>Within this many semitones (20 cents) a sample earns full credit.</summary>
+    public const double FullCreditSemitones = 0.2;
+
+    /// <summary>The start of a note where an off-pitch attack isn't held against the singer.</summary>
+    public const double OnsetGraceMs = 80;
+
+    /// <summary>The distance in semitones at which a sample stops earning anything.</summary>
+    public static double ToleranceFor(Difficulty difficulty) => difficulty switch
+    {
+        Difficulty.Easy => 1.75,
+        Difficulty.Hard => 0.65,
+        _ => 1.0,
+    };
+
+    /// <summary>A sample's credit for singing <paramref name="semitonesOff"/> away from the note.</summary>
+    public static double CreditFor(double semitonesOff, Difficulty difficulty)
+    {
+        double off = Math.Abs(semitonesOff) - FullCreditSemitones;
+        if (off <= 0) return 1;
+        double range = ToleranceFor(difficulty) - FullCreditSemitones;
+        return Math.Max(0, 1 - (off / range) * (off / range));
+    }
 
     private readonly Difficulty _difficulty;
     private readonly List<ScoredNote> _notes = new();
@@ -59,12 +97,17 @@ public sealed class SingScorer
     private int _noteCursor;
     private int _lineCursor;
     private int _currentBeat = int.MinValue;
-    private int _beatSamples, _beatHits;
+    private int _beatSamples, _beatVoiced, _beatSkipped;
+    private double _beatCredit, _beatOffset;
+    private readonly double _graceBeats;
+    private readonly List<int> _deferred = new(); // grace-only beats of the current note, judged with its next beat
     private double _notesScore, _goldenScore, _bonusScore;
 
-    public SingScorer(UltraStarVoice voice, Difficulty difficulty = Difficulty.Medium, bool lineBonus = true)
+    /// <param name="beatMs">How long a beat lasts, for the onset grace; 0 turns the grace off.</param>
+    public SingScorer(UltraStarVoice voice, Difficulty difficulty = Difficulty.Medium, bool lineBonus = true, double beatMs = 0)
     {
         _difficulty = difficulty;
+        _graceBeats = beatMs > 0 ? OnsetGraceMs / beatMs : 0;
 
         int line = 0;
         foreach (var n in voice.Notes)
@@ -102,7 +145,7 @@ public sealed class SingScorer
     public event Action<LineResult>? LineCompleted;
 
     /// <summary>Raised for every judged beat of a scored note; the UI paints hit beats over the note bar.</summary>
-    public event Action<UltraStarNote, int, bool>? BeatJudged;
+    public event Action<BeatJudgement>? BeatJudged;
 
     /// <param name="beat">Song position in (fractional) beats, latency-compensated.</param>
     /// <param name="midi">Sung pitch as a fractional MIDI note, or null for silence.</param>
@@ -119,25 +162,39 @@ public sealed class SingScorer
 
         var note = NoteAt(b);
         if (note is null) return;
+        var (credit, offset) = Judge(note.Note, midi);
+        // The attack: a miss here is a scoop onto the note, not counted (capped at half the note).
+        if (credit <= 0 && beat - note.Note.StartBeat < Math.Min(_graceBeats, note.Note.DurationBeats / 2.0))
+        {
+            _beatSkipped++;
+            return;
+        }
         _beatSamples++;
-        if (Matches(note.Note, midi)) _beatHits++;
+        if (midi is not null && !double.IsNaN(midi.Value))
+        {
+            _beatVoiced++;
+            _beatCredit += credit;
+            _beatOffset += offset;
+        }
     }
 
     /// <summary>Judges the last beat and any remaining lines (call when the song ends).</summary>
     public void Finish()
     {
         CloseBeat();
+        FlushDeferred(0, 0);
         CompleteLinesBefore(int.MaxValue);
     }
 
-    private bool Matches(UltraStarNote note, double? midi)
+    /// <summary>A sample's credit and its distance from the note's pitch class (positive = sharp).</summary>
+    private (double Credit, double Offset) Judge(UltraStarNote note, double? midi)
     {
-        if (midi is not { } sung || double.IsNaN(sung)) return false;
-        if (note.IsRap) return true;
+        if (midi is not { } sung || double.IsNaN(sung)) return (0, 0);
+        if (note.IsRap) return (1, 0);
         double diff = (sung - note.MidiTone) % 12;
         if (diff > 6) diff -= 12;
         if (diff < -6) diff += 12;
-        return Math.Abs(diff) <= (int)_difficulty + 0.5; // +0.5: within the semitone's own band
+        return (CreditFor(diff, _difficulty), diff);
     }
 
     private ScoredNote? NoteAt(int beat)
@@ -151,20 +208,54 @@ public sealed class SingScorer
 
     private void CloseBeat()
     {
-        if (_beatSamples == 0) return;
-        bool hit = _beatHits >= _beatSamples * HitShare;
-        var judged = NoteAt(_currentBeat)!;
-        BeatJudged?.Invoke(judged.Note, _currentBeat, hit);
-        if (hit)
+        var judged = _beatSamples + _beatSkipped > 0 ? NoteAt(_currentBeat) : null;
+        if (judged is null)
         {
-            var note = judged;
-            double points = note.Weight * _pointsPerWeight;
-            if (note.Note.IsGolden) _goldenScore += points;
-            else _notesScore += points;
-            _lines[note.Line].HitWeight += note.Weight;
+            ResetBeat();
+            return;
         }
-        _beatSamples = 0;
-        _beatHits = 0;
+        // Grace beats from an earlier note never got a follow-up beat: they were missed.
+        if (_deferred.Count > 0 && !ReferenceEquals(_deferredNote, judged)) FlushDeferred(0, 0);
+        if (_beatSamples == 0)
+        {
+            _deferredNote = judged;
+            _deferred.Add(_currentBeat); // only the attack so far: judged like the note's next beat
+            ResetBeat();
+            return;
+        }
+
+        double coverage = Math.Min(1, _beatVoiced / (_beatSamples * HitShare));
+        double credit = _beatVoiced == 0 ? 0 : _beatCredit / _beatVoiced * coverage;
+        double offset = _beatVoiced == 0 ? 0 : _beatOffset / _beatVoiced;
+        Award(judged, _currentBeat, credit, offset);
+        FlushDeferred(credit, offset);
+        ResetBeat();
+    }
+
+    private ScoredNote? _deferredNote;
+
+    private void FlushDeferred(double credit, double offset)
+    {
+        if (_deferredNote is { } note)
+            foreach (var beat in _deferred) Award(note, beat, credit, offset);
+        _deferred.Clear();
+        _deferredNote = null;
+    }
+
+    private void Award(ScoredNote note, int beat, double credit, double offset)
+    {
+        BeatJudged?.Invoke(new BeatJudgement(note.Note, beat, credit, offset));
+        if (credit <= 0) return;
+        double points = note.Weight * _pointsPerWeight * credit;
+        if (note.Note.IsGolden) _goldenScore += points;
+        else _notesScore += points;
+        _lines[note.Line].HitWeight += note.Weight * credit;
+    }
+
+    private void ResetBeat()
+    {
+        _beatSamples = _beatVoiced = _beatSkipped = 0;
+        _beatCredit = _beatOffset = 0;
     }
 
     private void CompleteLinesBefore(int beat)
