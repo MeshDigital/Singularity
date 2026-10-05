@@ -69,7 +69,7 @@ ORBIT's search, download, library and playlist engine and builds the karaoke gam
 | **Add songs** | **Singing** |
 | <img src="DOCS/images/add-songs.jpg" alt="Add songs: one box for Spotify links or Artist - Title lines"> | <img src="DOCS/images/singing.jpg" alt="The stage while singing"> |
 
-The singing shots were taken with `--demo-singer`: the song's separated original vocals sing into the scorer.
+The singing shots were taken with `--demo-singer`: the song's separated original vocals sing into the scorer (player 2 drops out now and then, so the scores differ).
 
 ## How a song is made
 

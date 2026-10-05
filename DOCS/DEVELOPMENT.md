@@ -32,7 +32,7 @@ cd inference
 | `--open-page <key>` | Opens a page at startup: `Karaoke` (Sing), `Sing`, `MicSetup`, `AddSongs`, `Projects` (Downloads), `Settings`, `Library`, `NowPlaying`, `Search`, `Home`, `Users` |
 | `--sing "<song folder>"` | Starts singing that song at startup |
 | `--sing-start <seconds>` | …that many seconds in |
-| `--demo-singer` | The song's separated original vocals sing instead of the microphones: try the stage, scoring and results without singing (no high scores are saved) |
+| `--demo-singer` | The song's separated original vocals sing instead of the microphones: player 1 whole, player 2 dropping out for 2.5 s of every 7, so the scores differ. Try the stage, scoring and results without singing (no high scores are saved) |
 | `--players 2` | Adds a second singer on player 1's microphone, for this run |
 | `--stage "x,y"` | Shows the stage on the display at that desktop position, for this run |
 | `--stage window` | Shows the stage in an ordinary window that doesn't take the focus (preview the projector on one screen) |

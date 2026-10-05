@@ -594,7 +594,9 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
     /// <summary>
     /// --demo-singer: every singer "sings" the song's separated original vocals, pushed into their sessions as the
-    /// playback clock passes them, the way a microphone delivers blocks. False when the song has no vocals stem.
+    /// playback clock passes them, the way a microphone delivers blocks. Player 1 sings them whole; the others drop
+    /// out for part of every few seconds, like a second singer who doesn't know the song as well, so their scores
+    /// differ. False when the song has no vocals stem.
     /// </summary>
     private bool StartDemoSinger(UltraStarSong song)
     {
@@ -631,6 +633,11 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                 p.Session.Scorer.LineCompleted += line => { player.LastLine = line; player.LastLineBeat = song.MsToBeat(_audio.PositionMs); };
             }
         }
+        // The other singers: silent for the last 2.5 s of every 7 s.
+        var weaker = (float[])mono.Clone();
+        for (int i = 0; i < weaker.Length; i++)
+            if (i % (rate * 7) >= rate * 4.5) weaker[i] = 0;
+
         long pushed = -1;
         _demoTimer = new System.Threading.Timer(_ =>
         {
@@ -640,8 +647,8 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                 long now = Math.Min(mono.Length, (long)(_audio.PositionMs * rate / 1000));
                 if (pushed < 0 || now < pushed || now - pushed > rate) pushed = Math.Max(0, now - rate / 50); // start, seek or stall
                 if (now <= pushed) return;
-                var block = mono.AsSpan((int)pushed, (int)(now - pushed));
-                foreach (var p in _players) p.Session?.Push(block, pushed * 1000.0 / rate);
+                for (int i = 0; i < _players.Count; i++)
+                    _players[i].Session?.Push((i == 0 ? mono : weaker).AsSpan((int)pushed, (int)(now - pushed)), pushed * 1000.0 / rate);
                 pushed = now;
             }
         }, null, 0, 20);
