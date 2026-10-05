@@ -20,6 +20,10 @@ namespace Singularity.Views.Avalonia.Karaoke;
 /// view model's snapshot. Every position derives from the audio device clock in that snapshot, so a
 /// late frame shows the right moment instead of drifting.
 ///
+/// Pitch uses one scale for the whole song (see <see cref="NoteLaneLayout"/>): between lines the view glides
+/// to the new line's centre instead of jumping. The singer's pitch is folded to the octave of the note being
+/// sung and steadied by a <see cref="PitchSmoother"/> before it is drawn.
+///
 /// The look: a glass lane with faint pitch guides; notes with a gradient and a lit top edge, golden
 /// notes glowing; sung parts filled in the singer's colour with a glow; the singer's pitch as a glowing
 /// dot trailing the last beats; lyrics outlined so they read over any video; line ratings that pop up
@@ -51,7 +55,6 @@ public sealed class SingStage : Control
         GradientStops = { new GradientStop(Color.FromArgb(200, 255, 222, 110), 0), new GradientStop(Color.FromArgb(150, 230, 160, 20), 1) },
     };
     private static readonly IPen NoteEdge = new Pen(new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)), 1);
-    private static readonly IBrush GoldenHitBrush = new SolidColorBrush(Color.FromRgb(255, 210, 60));
     private static readonly IPen FreestylePen = new Pen(new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)), 1.5, DashStyle.Dash);
     private static readonly IBrush Unsung = Brushes.White;
     private static readonly IBrush Outline = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0));
@@ -69,6 +72,41 @@ public sealed class SingStage : Control
     /// <summary>Per player: the recent pitch readings (beat, MIDI) for the trail, and the score as shown (counting up).</summary>
     private readonly Dictionary<int, List<(double Beat, double Midi)>> _trails = new();
     private readonly Dictionary<int, double> _shownScores = new();
+    private readonly Dictionary<int, PitchSmoother> _smoothers = new();
+    private readonly Dictionary<int, Glide> _glides = new();
+
+    /// <summary>How long the view takes to move to a new line's pitch centre.</summary>
+    private const double GlideMs = 400;
+
+    /// <summary>The lane's pitch centre moving smoothly from one line's centre to the next (ease in and out).</summary>
+    private sealed class Glide
+    {
+        private double _from, _to;
+        private long _start;
+
+        public Glide(double centre) => _from = _to = centre;
+
+        public double At(double target, long nowMs)
+        {
+            if (target != _to)
+            {
+                _from = At(_to, nowMs);
+                _to = target;
+                _start = nowMs;
+            }
+            double t = Math.Clamp((nowMs - _start) / GlideMs, 0, 1);
+            double eased = t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
+            return _from + (_to - _from) * eased;
+        }
+    }
+
+    /// <summary>The pitch centre to draw a player's lane at this frame.</summary>
+    private double CentreFor(int player, NoteLaneLayout layout)
+    {
+        long now = Environment.TickCount64;
+        if (!_glides.TryGetValue(player, out var glide)) _glides[player] = glide = new Glide(layout.Centre);
+        return glide.At(layout.Centre, now);
+    }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -105,8 +143,14 @@ public sealed class SingStage : Control
         {
             if (!_trails.TryGetValue(p.Player, out var trail)) _trails[p.Player] = trail = new();
             if (trail.Count > 0 && s.Beat < trail[^1].Beat - 1) trail.Clear(); // restarted or seeked back
-            if (p.Pitch is { Pitch.IsVoiced: true } r && Math.Abs(r.Beat - s.Beat) < 2 && (trail.Count == 0 || r.Beat > trail[^1].Beat))
-                trail.Add((r.Beat, r.Pitch.Midi));
+            if (!_smoothers.TryGetValue(p.Player, out var smoother)) _smoothers[p.Player] = smoother = new PitchSmoother();
+            if (p.Pitch is { } r && Math.Abs(r.Beat - s.Beat) < 2 && (trail.Count == 0 || r.Beat > trail[^1].Beat))
+            {
+                // Folded to the note being sung, then steadied: what the dot and trail show.
+                double? folded = r.Pitch.IsVoiced && p.Lane is { } lane ? lane.FoldToTarget(r.Pitch.Midi, r.Beat) : null;
+                if (smoother.Add(folded) is { } smooth) trail.Add((r.Beat, smooth));
+            }
+            else if (p.Pitch is null) smoother.Reset();
             trail.RemoveAll(t => t.Beat < s.Beat - TrailBeats);
 
             double shown = _shownScores.GetValueOrDefault(p.Player);
@@ -161,7 +205,7 @@ public sealed class SingStage : Control
         var colour = ColourOf(p.Player);
         var colourBrush = new SolidColorBrush(colour);
         ctx.DrawRectangle(LaneBrush, LaneBorder, new RoundedRect(lane, 14), new BoxShadows(new BoxShadow { Blur = 24, Color = Color.FromArgb(90, 0, 0, 0), OffsetY = 6 }));
-        if (p.Lane is { } layout) DrawLane(ctx, lane, layout, s.Beat, p, colour, k, _trails.GetValueOrDefault(p.Player));
+        if (p.Lane is { } layout) DrawLane(ctx, lane, layout, CentreFor(p.Player, layout), s.Beat, p, colour, k, _trails.GetValueOrDefault(p.Player));
 
         double scoreSize = Math.Max(18, h * 0.034 * k), ratingSize = Math.Max(18, h * 0.03 * k);
         int shownScore = (int)Math.Round(_shownScores.GetValueOrDefault(p.Player, p.Score));
@@ -202,19 +246,27 @@ public sealed class SingStage : Control
         GradientStops = { new GradientStop(Color.FromArgb(0, 0, 0, 0), 0.45), new GradientStop(Color.FromArgb(215, 0, 0, 0), 1.0) },
     };
 
-    private static void DrawLane(DrawingContext ctx, Rect lane, NoteLaneLayout layout, double beat, PlayerSnapshot p, Color colour, double k,
+    private static void DrawLane(DrawingContext ctx, Rect lane, NoteLaneLayout layout, double centre, double beat, PlayerSnapshot p, Color colour, double k,
         List<(double Beat, double Midi)>? trail)
     {
-        double barH = Math.Max(6, lane.Height / 16 * Math.Sqrt(k));
+        // One semitone is the same height on every line; a bar is about a semitone tall.
+        double semitone = (lane.Height - 32) / layout.Span;
+        double barH = Math.Max(6, Math.Min(semitone * 1.15 * Math.Sqrt(k), lane.Height / 8));
         double X(double laneX) => lane.Left + 24 + laneX * (lane.Width - 48);
         double Y(double laneY) => lane.Bottom - 16 - laneY * (lane.Height - 32);
+        double PitchY(double midi) => Y(layout.YFor(midi, centre));
         double beatWidth = (lane.Width - 48) * (layout.XFor(1) - layout.XFor(0));
 
-        // Faint guides, one per two semitones' height, so pitch differences read at a glance.
-        for (double gy = lane.Top + 16 + barH; gy < lane.Bottom - 16; gy += barH * 2)
-            ctx.DrawLine(GuidePen, new Point(lane.Left + 16, gy), new Point(lane.Right - 16, gy));
+        // Faint guides on every other semitone, moving with the view, so intervals read at a glance.
+        for (int m = (int)Math.Ceiling(centre - layout.Span / 2); m <= centre + layout.Span / 2; m++)
+        {
+            if (m % 2 != 0) continue;
+            double gy = PitchY(m);
+            if (gy > lane.Top + 8 && gy < lane.Bottom - 8)
+                ctx.DrawLine(GuidePen, new Point(lane.Left + 16, gy), new Point(lane.Right - 16, gy));
+        }
 
-        foreach (var n in layout.Layout())
+        foreach (var n in layout.Layout(centre))
         {
             var bar = new Rect(X(n.X), Y(n.Y) - barH / 2, Math.Max(3, n.Width * (lane.Width - 48)), barH);
             if (n.Note.Type == NoteType.Freestyle)
@@ -229,15 +281,22 @@ public sealed class SingStage : Control
                 ctx.DrawRectangle(NoteBrush, NoteEdge, shape);
         }
 
-        // What was sung on pitch, filled in and glowing; adjacent beats of one note join into one bar.
+        // What was sung, filled in and glowing; adjacent beats of one note join into one bar. In tune it is the
+        // singer's colour (gold on golden notes); sharp it turns amber and sits a little higher, flat it turns
+        // cyan and sits a little lower, by how far off it was.
         int firstStart = layout.Notes.FirstOrDefault()?.StartBeat ?? int.MinValue;
-        var glow = new BoxShadows(new BoxShadow { Blur = barH * 1.2, Color = Color.FromArgb(150, colour.R, colour.G, colour.B) });
-        var goldGlow = new BoxShadows(new BoxShadow { Blur = barH * 1.6, Color = Color.FromArgb(190, 255, 200, 50) });
-        var hitBrush = new SolidColorBrush(colour);
         foreach (var run in Runs(p.HitBeats.Where(h => h.Note.StartBeat >= firstStart)))
         {
-            var rect = new Rect(X(layout.XFor(run.From)), Y(layout.YFor(run.Note.MidiTone)) - barH / 2, beatWidth * (run.To - run.From + 1) + 0.5, barH);
-            ctx.DrawRectangle(run.Note.IsGolden ? GoldenHitBrush : hitBrush, null, new RoundedRect(rect, barH / 2), run.Note.IsGolden ? goldGlow : glow);
+            var tint = run.Tune switch
+            {
+                Intonation.Sharp => SharpColour,
+                Intonation.Flat => FlatColour,
+                _ => run.Note.IsGolden ? Color.FromRgb(255, 210, 60) : colour,
+            };
+            double lift = Math.Clamp(run.Offset, -0.5, 0.5) * semitone;
+            var rect = new Rect(X(layout.XFor(run.From)), PitchY(run.Note.MidiTone) - lift - barH / 2, beatWidth * (run.To - run.From + 1) + 0.5, barH);
+            var glow = new BoxShadows(new BoxShadow { Blur = barH * (run.Note.IsGolden ? 1.6 : 1.2), Color = Color.FromArgb(160, tint.R, tint.G, tint.B) });
+            ctx.DrawRectangle(new SolidColorBrush(tint), null, new RoundedRect(rect, barH / 2), glow);
         }
 
         double cursorX = X(Math.Clamp(layout.XFor(beat), 0, 1));
@@ -258,35 +317,53 @@ public sealed class SingStage : Control
                 var (b, midi) = trail[i];
                 double age = (beat - b) / TrailBeats;
                 if (age < 0 || age > 1) continue;
-                var at = new Point(X(Math.Clamp(layout.XFor(b), 0, 1)), Y(layout.SingerY(midi)));
+                var at = new Point(X(Math.Clamp(layout.XFor(b), 0, 1)), PitchY(midi));
                 ctx.DrawEllipse(new SolidColorBrush(Color.FromArgb((byte)(140 * (1 - age)), colour.R, colour.G, colour.B)), null, at, dot * (0.35 + 0.4 * (1 - age)), dot * (0.35 + 0.4 * (1 - age)));
             }
         }
-        if (p.Pitch is { Pitch.IsVoiced: true } r && Math.Abs(r.Beat - beat) < 2)
+        // The dot: the newest steadied reading, drawn halfway onto the note when it is nearly on it.
+        if (p.Pitch is { Pitch.IsVoiced: true } r && Math.Abs(r.Beat - beat) < 2 && trail is { Count: > 0 } && beat - trail[^1].Beat < 0.5)
         {
-            var at = new Point(cursorX, Y(layout.SingerY(r.Pitch.Midi)));
+            double midi = trail[^1].Midi;
+            if (layout.TargetAt(beat) is { } target) midi = PitchSmoother.Snap(midi, target.MidiTone);
+            var at = new Point(cursorX, PitchY(midi));
             double dot = barH * 0.6;
             ctx.DrawEllipse(new SolidColorBrush(Color.FromArgb(70, colour.R, colour.G, colour.B)), null, at, dot * 2.1, dot * 2.1);
             ctx.DrawEllipse(new SolidColorBrush(colour), new Pen(Brushes.White, 1.5), at, dot, dot);
         }
     }
 
-    /// <summary>Hit beats grouped into runs of consecutive beats of the same note.</summary>
-    private static IEnumerable<(UltraStarNote Note, int From, int To)> Runs(IEnumerable<(UltraStarNote Note, int Beat)> hits)
+    private enum Intonation { InTune, Sharp, Flat }
+
+    /// <summary>Further off than this (18 cents) a sung beat shows as sharp or flat.</summary>
+    private const double InTuneSemitones = 0.18;
+
+    private static readonly Color SharpColour = Color.FromRgb(255, 170, 60);
+    private static readonly Color FlatColour = Color.FromRgb(70, 225, 235);
+
+    private static Intonation TuneOf(double offset) =>
+        offset > InTuneSemitones ? Intonation.Sharp : offset < -InTuneSemitones ? Intonation.Flat : Intonation.InTune;
+
+    /// <summary>Hit beats grouped into runs of consecutive beats of the same note sung in the same way (in tune, sharp, flat).</summary>
+    private static IEnumerable<(UltraStarNote Note, int From, int To, Intonation Tune, double Offset)> Runs(IEnumerable<BeatJudgement> hits)
     {
         UltraStarNote? note = null;
         int from = 0, to = 0;
-        foreach (var (n, b) in hits.OrderBy(h => h.Note.StartBeat).ThenBy(h => h.Beat))
+        var tune = Intonation.InTune;
+        double offsetSum = 0;
+        foreach (var h in hits.OrderBy(h => h.Note.StartBeat).ThenBy(h => h.Beat))
         {
-            if (note is not null && ReferenceEquals(n, note) && b == to + 1)
+            var t = TuneOf(h.Offset);
+            if (note is not null && ReferenceEquals(h.Note, note) && h.Beat == to + 1 && t == tune)
             {
-                to = b;
+                to = h.Beat;
+                offsetSum += h.Offset;
                 continue;
             }
-            if (note is not null) yield return (note, from, to);
-            (note, from, to) = (n, b, b);
+            if (note is not null) yield return (note, from, to, tune, offsetSum / (to - from + 1));
+            (note, from, to, tune, offsetSum) = (h.Note, h.Beat, h.Beat, t, h.Offset);
         }
-        if (note is not null) yield return (note, from, to);
+        if (note is not null) yield return (note, from, to, tune, offsetSum / (to - from + 1));
     }
 
     private static void DrawLyrics(DrawingContext ctx, double w, LyricsFrame lyrics, double y, double? nextY, double size, Color colour)
