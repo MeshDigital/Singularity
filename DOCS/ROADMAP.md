@@ -64,7 +64,7 @@ Sources: UltraStar Deluxe and UltraStar Play.
 
 ## Next
 
-Released: **0.2.0-alpha** (installer on GitHub Releases). Ordered by value for the effort.
+Released: **0.2.1-alpha** (installer on GitHub Releases). Ordered by value for the effort.
 
 ### Quick wins (hours each)
 
