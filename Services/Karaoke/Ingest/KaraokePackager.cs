@@ -36,7 +36,9 @@ public sealed record IngestSource(
     int? Year = null,
     bool PreferAi = false);
 
-public enum IngestStage { Preparing, FindingChart, FetchingLyrics, GeneratingChart, DownloadingVideo, SyncingVideo, Finishing }
+/// <summary>Where a song is in the making. <see cref="SeparatingVocals"/> and <see cref="PlacingChart"/> are the community chart's path;
+/// <see cref="FetchingLyrics"/> and <see cref="GeneratingChart"/> the AI chart's.</summary>
+public enum IngestStage { Preparing, FindingChart, FetchingLyrics, GeneratingChart, DownloadingVideo, SyncingVideo, Finishing, SeparatingVocals, PlacingChart }
 
 /// <param name="Fraction">Progress within the stage, 0..1.</param>
 public sealed record IngestProgress(IngestStage Stage, double Fraction);
@@ -168,10 +170,13 @@ public sealed class KaraokePackager
             if (source.VideoPath is null && _videos is not null)
                 videoDownload = FindVideoAsync(source, durationMs, staging, community?.YoutubeId, videoCts.Token);
 
-            progress?.Report(new IngestProgress(IngestStage.GeneratingChart, 0));
+            // With a community chart the worker only separates the vocals (to place the chart); "Generating AI chart"
+            // is only said when an AI chart is really being made.
+            var chartStage = community is null ? IngestStage.GeneratingChart : IngestStage.SeparatingVocals;
+            progress?.Report(new IngestProgress(chartStage, 0));
             var workerProgress = new InlineProgress<WorkerEvent>(e =>
             {
-                if (e is ProgressUpdateEvent p) progress?.Report(new IngestProgress(IngestStage.GeneratingChart, StageShare(p)));
+                if (e is ProgressUpdateEvent p) progress?.Report(new IngestProgress(chartStage, StageShare(p)));
             });
 
             UltraStarSong? chart = null;
@@ -185,6 +190,7 @@ public sealed class KaraokePackager
             {
                 // Place the community chart on our recording by its vocals (which the song needs anyway).
                 await _analyzer.SeparateAsync(new SeparateStemsCommand($"ingest-{id}", audio, staging), workerProgress, ct);
+                progress?.Report(new IngestProgress(IngestStage.PlacingChart, 0));
                 var sung = await _media.DecodeMonoAsync(Path.Combine(staging, SongPackage.VocalsFileName), SyncSampleRate, ct);
                 var fit = ChartSync.Measure(community.Chart, sung, SyncSampleRate);
                 var placed = fit.Gap.IsValid ? ChartSync.Shift(community.Chart, fit.Gap.VideoGapMs) : null;
@@ -245,6 +251,7 @@ public sealed class KaraokePackager
                 }
 
                 // The chart: stems (reused when the community attempt made them), alignment and pitch from the worker.
+                chartStage = IngestStage.GeneratingChart;
                 progress?.Report(new IngestProgress(IngestStage.GeneratingChart, 0));
                 var analysis = await _analyzer.AnalyzeAsync(
                     new ProcessTrackCommand($"ingest-{id}", audio, staging, lyrics?.Text, lyrics?.Kind ?? LyricsKind.Plain, source.Language, ReuseStems: true),
