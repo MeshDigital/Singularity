@@ -132,7 +132,14 @@ At the top of the page:
 The stage shows the notes in a lane, your voice as a dot with a trail (on the note is good), the lyrics with the sung
 part coloured, and a rating after each line. The lane keeps one scale for the whole song, so a step of a semitone is
 always the same height, and it glides up or down to each new line. What you sing fills the notes in your colour:
-amber and a little higher when you were sharp, cyan and a little lower when flat. Golden notes score double. After the song, the results show each
+amber and a little higher when you were sharp, cyan and a little lower when flat.
+
+**When to sing.** The bar along the bottom is a map of the song: your parts in your colour (with two singers, P1 on
+the top half and P2 below), a duet partner's part in grey, and singing that isn't scored (backing vocals, ad-libs
+the chart has no notes for) in faint white. The gap before the next coloured stretch is how long you can rest.
+Before a line after a long wait, "in 8 s" counts down next to it, then three dots for the last moment. The lane
+says when the singing you hear isn't yours: "P2 sings this part", or "Backing vocals: not scored". Rap notes are
+striped and marked RAP: there only your voice counts, not the pitch; dashed notes are freestyle and not scored. Golden notes score double. After the song, the results show each
 singer's score, notes, golden notes and line bonus, and the song's best scores at this difficulty: a place in the
 top 10 shows as "New high score!" or "3rd best on this song". Singer names come from Settings → Singing. **R** sings
 again, **Enter** returns to song select.

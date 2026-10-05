@@ -180,7 +180,7 @@ public sealed class SingStage : Control
             if (s.Players.Count > 0)
                 DrawLyrics(ctx, w, s.Players[0].Lyrics, h * 0.66, h * 0.66 + h * 0.085 * k + 12, Math.Max(18, h * 0.065 * k), Color.FromRgb(120, 220, 200));
             DrawOutlinedText(ctx, "Jukebox", Math.Max(14, h * 0.022), Dim, new Point(w - 24, 18), alignRight: true, bold: true);
-            DrawSongProgress(ctx, s.SongProgress, w, h);
+            DrawSongProgress(ctx, s, w, h);
             return;
         }
         if (s.Players.Count == 1)
@@ -196,7 +196,7 @@ public sealed class SingStage : Control
             DrawPlayer(ctx, s, s.Players[1], new Rect(w * 0.05, h * 0.60, w * 0.90, h * 0.24), lyricsY: h * 0.845, nextY: null, lyricSize, w, h, k, showName: true);
         }
 
-        DrawSongProgress(ctx, s.SongProgress, w, h);
+        DrawSongProgress(ctx, s, w, h);
     }
 
     private void DrawPlayer(DrawingContext ctx, StageSnapshot s, PlayerSnapshot p, Rect lane, double lyricsY, double? nextY,
@@ -215,7 +215,10 @@ public sealed class SingStage : Control
         if (p.LastLine is { } line && p.LastLineAgeBeats is >= 0 and < RatingBeats)
             DrawRating(ctx, line.Rating, p.LastLineAgeBeats, ratingSize, new Point(lane.Right - 18, lane.Top + 16 + scoreSize * 1.25));
 
-        DrawLyrics(ctx, w, p.Lyrics, lyricsY, nextY, lyricSize, colour);
+        if (LaneNote(s, p) is { } note)
+            DrawOutlinedText(ctx, note, Math.Max(13, h * 0.02 * k), Dim, new Point(lane.Center.X, lane.Top + 10), center: true);
+
+        DrawLyrics(ctx, w, p.Lyrics, lyricsY, nextY, lyricSize, colour, s.MsPerBeat);
         DrawMicLevel(ctx, p, new Point(lane.Right - 160, lane.Bottom + 8));
     }
 
@@ -266,6 +269,7 @@ public sealed class SingStage : Control
                 ctx.DrawLine(GuidePen, new Point(lane.Left + 16, gy), new Point(lane.Right - 16, gy));
         }
 
+        UltraStarNote? previousRap = null; // the note that continues a rap run (no second label)
         foreach (var n in layout.Layout(centre))
         {
             var bar = new Rect(X(n.X), Y(n.Y) - barH / 2, Math.Max(3, n.Width * (lane.Width - 48)), barH);
@@ -275,6 +279,19 @@ public sealed class SingStage : Control
                 continue;
             }
             var shape = new RoundedRect(bar, barH / 2);
+            if (n.Note.IsRap)
+            {
+                // Rap: only the voice counts, not the pitch. Striped, and labelled over the first of a run.
+                ctx.DrawRectangle(RapBrush, NoteEdge, shape);
+                using (ctx.PushClip(shape))
+                    for (double sx = bar.Left - bar.Height; sx < bar.Right; sx += barH * 0.9)
+                        ctx.DrawLine(RapStripe, new Point(sx, bar.Bottom), new Point(sx + bar.Height, bar.Top));
+                if (!ReferenceEquals(n.Note, previousRap))
+                    DrawOutlinedText(ctx, "RAP", Math.Max(10, barH * 0.9), Dim, new Point(bar.Left, bar.Top - barH * 1.4), bold: true);
+                previousRap = NextIfRap(layout, n.Note);
+                continue;
+            }
+            previousRap = null;
             if (n.Note.IsGolden)
                 ctx.DrawRectangle(GoldenBrush, NoteEdge, shape, new BoxShadows(new BoxShadow { Blur = barH * 1.4, Color = Color.FromArgb(130, 255, 190, 40) }));
             else
@@ -369,8 +386,13 @@ public sealed class SingStage : Control
         if (note is not null) yield return (note, from, to, tune, offsetSum / (to - from + 1));
     }
 
-    private static void DrawLyrics(DrawingContext ctx, double w, LyricsFrame lyrics, double y, double? nextY, double size, Color colour)
+    /// <summary>From this long before a line, a "Next line in N" countdown in seconds shows above it.</summary>
+    private const double CountdownFromMs = 2500;
+
+    private static void DrawLyrics(DrawingContext ctx, double w, LyricsFrame lyrics, double y, double? nextY, double size, Color colour,
+        double msPerBeat = 0)
     {
+
         var sung = new SolidColorBrush(colour);
         if (lyrics.Current is { } line)
         {
@@ -389,6 +411,15 @@ public sealed class SingStage : Control
                         ctx.DrawText(Text(syllable.Text, size, sung), new Point(x, y));
                 }
                 x += text.WidthIncludingTrailingWhitespace;
+            }
+
+            // A long wait (an intro, a solo, the other singer's verse): counted down in seconds left of the line,
+            // where the lead-in dots take over for the last beats.
+            if (msPerBeat > 0 && lyrics.BeatsUntilStart * msPerBeat >= CountdownFromMs)
+            {
+                int seconds = (int)Math.Ceiling(lyrics.BeatsUntilStart * msPerBeat / 1000);
+                DrawOutlinedText(ctx, $"in {seconds} s", size * 0.6, new SolidColorBrush(colour),
+                    new Point((w - total) / 2 - size * 0.5, y + size * 0.2), alignRight: true, bold: true);
             }
 
             // Lead-in: up to three dots counting down the last beats before the line starts, the next one pulsing.
@@ -447,12 +478,82 @@ public sealed class SingStage : Control
     }
 
     /// <summary>A thin line along the bottom: how far through the song.</summary>
-    private static void DrawSongProgress(DrawingContext ctx, double progress, double w, double h)
+    /// <summary>
+    /// The song's progress along the bottom, as a map of the singing: each singer's stretches in their colour (two
+    /// singers: P1 on the top half, P2 on the bottom), a duet partner's part in grey when one singer sings a duet,
+    /// unscored vocals (backing vocals, ad-libs) as faint white, and the part already played dimmed behind a playhead.
+    /// The gap before the next coloured stretch is the time until there is something to sing.
+    /// </summary>
+    private static void DrawSongProgress(DrawingContext ctx, StageSnapshot s, double w, double h)
     {
-        if (progress <= 0) return;
-        var track = new Rect(0, h - 4, w, 4);
+        if (s.SongProgress <= 0) return;
+        double barH = Math.Max(8, h * 0.012);
+        var track = new Rect(0, h - barH, w, barH);
         ctx.DrawRectangle(TrackBrush, null, track);
-        ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)), null, track.WithWidth(w * progress));
+        if (s.Map is not { EndMs: > 0 } map)
+        {
+            ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)), null, track.WithWidth(w * s.SongProgress));
+            return;
+        }
+
+        double X(double ms) => Math.Clamp(ms / map.EndMs, 0, 1) * w;
+        void Spans(IReadOnlyList<TimeSpanMs> spans, IBrush brush, double top, double height)
+        {
+            foreach (var span in spans)
+                ctx.DrawRectangle(brush, null, new Rect(X(span.FromMs), top, Math.Max(2, X(span.ToMs) - X(span.FromMs)), height));
+        }
+
+        Spans(map.Unscored, UnscoredBrush, track.Top, barH);
+        if (s.Players.Count >= 2)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                var p = s.Players[i];
+                if (p.Voice < map.Voices.Count)
+                    Spans(map.Voices[p.Voice], new SolidColorBrush(ColourOf(p.Player)), track.Top + i * barH / 2, barH / 2);
+            }
+        }
+        else if (s.Players.Count == 1 && s.Players[0].Voice < map.Voices.Count)
+        {
+            var only = s.Players[0];
+            for (int v = 0; v < map.Voices.Count; v++)
+                if (v != only.Voice) Spans(map.Voices[v], PartnerBrush, track.Top + barH / 2, barH / 2);
+            Spans(map.Voices[only.Voice], new SolidColorBrush(ColourOf(only.Player)), track.Top, map.Voices.Count > 1 ? barH / 2 : barH);
+        }
+
+        double at = w * s.SongProgress;
+        ctx.DrawRectangle(PlayedShade, null, track.WithWidth(at));
+        ctx.DrawRectangle(Brushes.White, null, new Rect(at - 1.5, track.Top - barH * 0.6, 3, barH * 1.6));
+    }
+
+    private static readonly IBrush RapBrush = new SolidColorBrush(Color.FromArgb(70, 200, 210, 230));
+    private static readonly IPen RapStripe = new Pen(new SolidColorBrush(Color.FromArgb(110, 255, 255, 255)), 1.5);
+
+    /// <summary>The note after <paramref name="note"/> in the line when it is rap too (it continues the run).</summary>
+    private static UltraStarNote? NextIfRap(NoteLaneLayout layout, UltraStarNote note)
+    {
+        int i = -1;
+        for (int k = 0; k < layout.Notes.Count; k++) if (ReferenceEquals(layout.Notes[k], note)) { i = k; break; }
+        return i >= 0 && i + 1 < layout.Notes.Count && layout.Notes[i + 1].IsRap ? layout.Notes[i + 1] : null;
+    }
+
+    private static readonly IBrush UnscoredBrush = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255));
+    private static readonly IBrush PartnerBrush = new SolidColorBrush(Color.FromArgb(110, 170, 175, 190));
+    private static readonly IBrush PlayedShade = new SolidColorBrush(Color.FromArgb(140, 0, 0, 0));
+
+    /// <summary>
+    /// A note at the top of a singer's lane when there is singing they don't score: the duet partner's part, or
+    /// vocals the chart has no notes for. Null while the singer has their own notes, or nobody sings.
+    /// </summary>
+    private static string? LaneNote(StageSnapshot s, PlayerSnapshot p)
+    {
+        if (s.Map is not { } map || p.Voice >= map.Voices.Count) return null;
+        double ms = s.PositionMs;
+        if (SongMap.At(map.Voices[p.Voice], ms) is not null) return null;
+        for (int v = 0; v < map.Voices.Count; v++)
+            if (v != p.Voice && SongMap.At(map.Voices[v], ms) is not null)
+                return s.Players.FirstOrDefault(o => o.Voice == v) is { } partner ? $"P{partner.Player} sings this part" : "The other part of the duet";
+        return SongMap.At(map.Unscored, ms) is not null ? "\u266A Backing vocals: not scored" : null;
     }
 
     private static string RatingText(LineRating rating) => rating switch

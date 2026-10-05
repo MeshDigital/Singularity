@@ -166,6 +166,9 @@ accuracy against the human chart is 0.77 for A, 0.70 for B and 0.61 for "needs c
 - **Note lane.** `NoteLaneLayout` keeps one pitch scale per song (its widest line plus a margin) and gives each line
   a centre the stage glides to. The singer's pitch is folded to the octave of the note being sung and steadied by
   `PitchSmoother` (3-reading median, EMA) for display only.
+- **Song map.** `SongMap` holds each voice's stretches of notes and, found in the background from the separated
+  vocals (50 ms loudness, within 20 dB of their loud end, at least 1.2 s, clear of every voice's notes), the singing
+  the chart doesn't score. The stage draws it as the progress bar and uses it for the lane's labels.
 - **Drawing.** `SingStage` draws each frame from a `StageSnapshot`, which is taken in the animation-frame callback
   before the render pass. Bound properties must not change during rendering.
 - **Stems.** `StemStore` caches stems for the user's own songs, and `StemBatchQueue` separates a whole collection in

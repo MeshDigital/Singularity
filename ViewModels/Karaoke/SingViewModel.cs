@@ -21,8 +21,10 @@ using Singularity.Views;
 namespace Singularity.ViewModels.Karaoke;
 
 /// <summary>One singer's part of a frame.</summary>
+/// <param name="Voice">The chart voice this singer sings (0 = P1, 1 = P2).</param>
 public sealed record PlayerSnapshot(
     int Player,
+    int Voice,
     LyricsFrame Lyrics,
     NoteLaneLayout? Lane,
     IReadOnlyList<BeatJudgement> HitBeats,
@@ -35,8 +37,11 @@ public sealed record PlayerSnapshot(
 /// <param name="VideoAmbient">The video isn't synced to the song: draw it dimmed, as scenery.</param>
 /// <param name="SongProgress">How far through the song, 0..1.</param>
 /// <param name="Jukebox">Played for listening: draw the lyrics only, no lanes or scores.</param>
+/// <param name="Map">Where the singing is: for the progress bar and the lane's "not scored" and "other part" labels.</param>
+/// <param name="PositionMs">The song position, in ms.</param>
+/// <param name="MsPerBeat">How long a beat lasts, to turn the lyrics' countdown into seconds.</param>
 public sealed record StageSnapshot(double Beat, IReadOnlyList<PlayerSnapshot> Players, bool Finished, WriteableBitmap? Video, double TextScale,
-    bool VideoAmbient = false, double SongProgress = 0, bool Jukebox = false);
+    bool VideoAmbient = false, double SongProgress = 0, bool Jukebox = false, SongMap? Map = null, double PositionMs = 0, double MsPerBeat = 0);
 
 /// <summary>A singer's line on the results screen.</summary>
 /// <param name="HighScoreText">"New high score!", "3rd best on this song", or empty.</param>
@@ -342,6 +347,10 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
             _videoAmbient = IsUnsyncedVideo(entry.Folder);
         }
 
+        _map = null;
+        _unscored = null;
+        FindUnscoredVocals(entry, song);
+
         ApplyVocals();
         IsPaused = false;
         _audio.Play();
@@ -418,7 +427,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                     p.Lane = new NoteLaneLayout(line, song.Voices[p.Voice].Notes);
                     p.Hits.RemoveAll(h => h.Note.StartBeat < line.StartBeat);
                 }
-                players.Add(new PlayerSnapshot(p.Mic.Player, lyrics, p.Lane, p.Hits.ToArray(), p.Session?.LastReading,
+                players.Add(new PlayerSnapshot(p.Mic.Player, p.Voice, lyrics, p.Lane, p.Hits.ToArray(), p.Session?.LastReading,
                     p.Session?.Scorer.Score.Total ?? 0, p.LastLine, beat - p.LastLineBeat));
             }
 
@@ -455,7 +464,10 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
             if (skippable != _canSkipIntro) Avalonia.Threading.Dispatcher.UIThread.Post(() => CanSkipIntro = skippable);
             double end = _song?.EndMs is { } e && e > 0 ? e : _audio.DurationMs;
             double progress = end > 0 ? Math.Clamp(_audio.PositionMs / end, 0, 1) : 0;
-            return new StageSnapshot(beat, players, _finished, _hasVideoFrame ? _videoBitmap : null, TextScale, _videoAmbient, progress, _isJukebox);
+            if (_map is null || Math.Abs(_map.EndMs - end) > 1) _map = end > 0 ? SongMap.For(song, end) : null;
+            if (_map is not null && _unscored is { } unscored) _map.Unscored = unscored;
+            return new StageSnapshot(beat, players, _finished, _hasVideoFrame ? _videoBitmap : null, TextScale, _videoAmbient, progress, _isJukebox,
+                _map, _audio.PositionMs, song.MillisecondsPerBeat);
         }
     }
 
@@ -592,6 +604,53 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
     private System.Threading.Timer? _demoTimer;
 
+    private SongMap? _map;
+    private volatile IReadOnlyList<TimeSpanMs>? _unscored;
+
+    /// <summary>
+    /// In the background: where the separated original vocals sing with no notes in the chart (heard, never scored),
+    /// for the progress bar and the lane. Songs without separated vocals have none to find.
+    /// </summary>
+    private void FindUnscoredVocals(SongEntry entry, UltraStarSong song)
+    {
+        string? vocals = song.VocalsFile is { } name && File.Exists(Path.Combine(entry.Folder, name))
+            ? Path.Combine(entry.Folder, name)
+            : _stems.Find(entry)?.Vocals;
+        if (vocals is null) return;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var (mono, rate) = ReadMono(vocals);
+                var found = SongMap.FindUnscoredVocals(song, mono, rate);
+                if (ReferenceEquals(_song, song)) _unscored = found;
+                _logger.LogInformation("Sing: {Count} stretches of unscored vocals ({Seconds:0.0} s)", found.Count, found.Sum(f => f.ToMs - f.FromMs) / 1000);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or FormatException or UnauthorizedAccessException)
+            {
+                _logger.LogDebug(ex, "Sing: couldn't read {Vocals} for the vocal map", vocals);
+            }
+        });
+    }
+
+    /// <summary>A WAV (or other NAudio-readable file) as mono samples, with its sample rate.</summary>
+    private static (float[] Samples, int Rate) ReadMono(string path)
+    {
+        using var reader = new NAudio.Wave.AudioFileReader(path);
+        int rate = reader.WaveFormat.SampleRate, channels = reader.WaveFormat.Channels;
+        var all = new List<float>((int)(reader.Length / 4 / channels));
+        var buffer = new float[rate * channels];
+        int read;
+        while ((read = reader.Read(buffer, 0, buffer.Length)) > 0)
+            for (int i = 0; i + channels <= read; i += channels)
+            {
+                float sum = 0;
+                for (int c = 0; c < channels; c++) sum += buffer[i + c];
+                all.Add(sum / channels);
+            }
+        return (all.ToArray(), rate);
+    }
+
     /// <summary>
     /// --demo-singer: every singer "sings" the song's separated original vocals, pushed into their sessions as the
     /// playback clock passes them, the way a microphone delivers blocks. Player 1 sings them whole; the others drop
@@ -604,24 +663,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         var path = Path.Combine(entry.Folder, vocalsName);
         if (!File.Exists(path)) return false;
 
-        float[] mono;
-        int rate;
-        using (var reader = new NAudio.Wave.AudioFileReader(path))
-        {
-            rate = reader.WaveFormat.SampleRate;
-            int channels = reader.WaveFormat.Channels;
-            var all = new List<float>((int)(reader.Length / 4 / channels));
-            var buffer = new float[rate * channels];
-            int read;
-            while ((read = reader.Read(buffer, 0, buffer.Length)) > 0)
-                for (int i = 0; i + channels <= read; i += channels)
-                {
-                    float sum = 0;
-                    for (int c = 0; c < channels; c++) sum += buffer[i + c];
-                    all.Add(sum / channels);
-                }
-            mono = all.ToArray();
-        }
+        var (mono, rate) = ReadMono(path);
 
         lock (_sync)
         {
