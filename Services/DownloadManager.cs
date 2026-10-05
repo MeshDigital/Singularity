@@ -2800,6 +2800,12 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
 
                 if (nextContext == null)
                 {
+                    // The slot gate lets other queued tracks go first after a failure or stall. It only counts up when a
+                    // track is dispatched, so when every waiting track is gated by it (and none is ready), nothing is
+                    // dispatched and it never counts up: the queue sat still for two hours after one stalled download.
+                    // Open the gate to the nearest gated track instead.
+                    AdvanceSlotGateIfStarved();
+
                     // No tracks ready or all lanes saturated (Except VIPs which are handled proactively)
                     await Task.Delay(500, token);
                     continue;
@@ -4329,6 +4335,39 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             .ToDictionary(g => g.Key, g => g.Count());
 
         return activeDownloads;
+    }
+
+    /// <summary>
+    /// When no pending track is ready and some are held back only by the slot gate (their retry time has passed),
+    /// moves the slot counter to the nearest gated slot, so the gate can't hold the queue still forever. Nothing
+    /// changes while any pending track is ready: then that one goes first, as the gate intends.
+    /// </summary>
+    internal void AdvanceSlotGateIfStarved()
+    {
+        long? open;
+        lock (_collectionLock)
+            open = SlotToOpen(_downloads.Select(d => (d.State, d.NextRetryTime, d.RetryAfterSlot)), Interlocked.Read(ref _schedulerSlot), DateTime.UtcNow);
+        if (open is not { } slot) return;
+        long current = Interlocked.Read(ref _schedulerSlot);
+        if (slot > current && Interlocked.CompareExchange(ref _schedulerSlot, slot, current) == current)
+            _logger.LogInformation("Queue: every waiting track was held for its turn and none could start; moving on to slot {Slot}", slot);
+    }
+
+    /// <summary>
+    /// The slot to move the counter to when the slot gate starves the queue: the nearest gated slot among pending
+    /// tracks whose retry time has passed, or null when one is ready already (or none is waiting).
+    /// </summary>
+    internal static long? SlotToOpen(IEnumerable<(PlaylistTrackState State, DateTime? NextRetryTime, long? RetryAfterSlot)> tracks,
+        long currentSlot, DateTime now)
+    {
+        long? nearest = null;
+        foreach (var (state, nextRetry, afterSlot) in tracks)
+        {
+            if (state != PlaylistTrackState.Pending || (nextRetry.HasValue && nextRetry.Value > now)) continue;
+            if (!afterSlot.HasValue || afterSlot.Value <= currentSlot) return null; // one is ready: it goes first, as the gate intends
+            nearest = nearest is { } n ? Math.Min(n, afterSlot.Value) : afterSlot.Value;
+        }
+        return nearest;
     }
 
     /// <summary>
