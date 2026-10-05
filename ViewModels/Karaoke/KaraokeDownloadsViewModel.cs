@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using ReactiveUI;
 using Singularity.Services.Karaoke.Ingest;
 using Singularity.ViewModels.Downloads;
+using Singularity.Views;
 
 namespace Singularity.ViewModels.Karaoke;
 
@@ -57,6 +58,12 @@ public sealed class KaraokeDownloadRow : ReactiveObject, IDisposable
 
     public enum Stage { Coming, Making, Ready, Failed }
 
+    /// <summary>Raised when <see cref="Phase"/> or <see cref="IsReady"/> changes: the page re-counts and re-filters.</summary>
+    public event Action? PhaseChanged;
+
+    /// <summary>Lower-case "title artist", for the page's search.</summary>
+    public string SearchKey => $"{Title} {Artist}".ToLowerInvariant();
+
     public void SetIngest(IngestItem? item)
     {
         _ingest = item;
@@ -72,6 +79,13 @@ public sealed class KaraokeDownloadRow : ReactiveObject, IDisposable
     }
 
     private void Refresh()
+    {
+        var (phaseBefore, readyBefore) = (Phase, IsReady);
+        RefreshState();
+        if (Phase != phaseBefore || IsReady != readyBefore) PhaseChanged?.Invoke();
+    }
+
+    private void RefreshState()
     {
         if (_ingest is { } k && k.State is IngestState.InQueue or IngestState.Building or IngestState.Ready or IngestState.Failed)
         {
@@ -149,7 +163,96 @@ public sealed class KaraokeDownloadsViewModel : ReactiveObject
         Sync();
     }
 
+    /// <summary>Every song in the download center, newest first.</summary>
     public ObservableCollection<KaraokeDownloadRow> Rows { get; } = new();
+
+    /// <summary>
+    /// What the page lists: <see cref="Rows"/> narrowed to the chosen card (<see cref="Filter"/>) and the search,
+    /// with songs still moving first (becoming karaoke, then on their way), then failed, then done; newest first
+    /// within each.
+    /// </summary>
+    public ObservableCollection<KaraokeDownloadRow> Shown { get; } = new();
+
+    public enum Show { All, Coming, Making, Ready, Failed }
+
+    private Show _filter = Show.All;
+    private string _search = "";
+
+    /// <summary>The card picked above the list; picking it again shows everything.</summary>
+    public Show Filter
+    {
+        get => _filter;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _filter, value);
+            foreach (var name in new[] { nameof(IsAll), nameof(IsComing), nameof(IsMaking), nameof(IsReadyFilter), nameof(IsFailedFilter) })
+                this.RaisePropertyChanged(name);
+            ApplyFilter();
+        }
+    }
+
+    public bool IsAll => _filter == Show.All;
+    public bool IsComing => _filter == Show.Coming;
+    public bool IsMaking => _filter == Show.Making;
+    public bool IsReadyFilter => _filter == Show.Ready;
+    public bool IsFailedFilter => _filter == Show.Failed;
+
+    public string SearchText
+    {
+        get => _search;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _search, value ?? "");
+            ApplyFilter();
+        }
+    }
+
+    /// <summary>Picks a card ("Coming", "Making", "Ready", "Failed", "All"); the picked card again goes back to all.</summary>
+    public ICommand ShowCommand => _showCommand ??= new RelayCommand<string>(name =>
+    {
+        var picked = Enum.TryParse<Show>(name, out var f) ? f : Show.All;
+        Filter = picked == _filter ? Show.All : picked;
+    });
+    private ICommand? _showCommand;
+
+    public string ShownText => Shown.Count == Rows.Count ? $"{Rows.Count} songs" : $"Showing {Shown.Count} of {Rows.Count}";
+    public bool HasShown => Shown.Count > 0;
+
+    /// <summary>The filter or search hides everything (but there are songs).</summary>
+    public bool NothingMatches => Rows.Count > 0 && Shown.Count == 0;
+
+    private bool Matches(KaraokeDownloadRow r) => _filter switch
+    {
+        Show.Coming => r.Phase == KaraokeDownloadRow.Stage.Coming,
+        Show.Making => r.Phase == KaraokeDownloadRow.Stage.Making,
+        Show.Ready => r.IsReady,
+        Show.Failed => r.Phase == KaraokeDownloadRow.Stage.Failed,
+        _ => true,
+    };
+
+    private static int Order(KaraokeDownloadRow r) => r.Phase switch
+    {
+        KaraokeDownloadRow.Stage.Making => 0,
+        KaraokeDownloadRow.Stage.Coming => 1,
+        KaraokeDownloadRow.Stage.Failed => 2,
+        _ => 3,
+    };
+
+    private void ApplyFilter()
+    {
+        var words = _search.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var wanted = Rows.Select((r, i) => (Row: r, Index: i))
+            .Where(x => Matches(x.Row) && words.All(x.Row.SearchKey.Contains))
+            .OrderBy(x => Order(x.Row)).ThenBy(x => x.Index)
+            .Select(x => x.Row).ToList();
+        if (!wanted.SequenceEqual(Shown))
+        {
+            Shown.Clear();
+            foreach (var r in wanted) Shown.Add(r);
+        }
+        foreach (var name in new[] { nameof(ShownText), nameof(HasShown), nameof(NothingMatches) })
+            this.RaisePropertyChanged(name);
+    }
 
     public ICommand PauseAllCommand => _center.PauseAllCommand;
     public ICommand ResumeAllCommand => _center.ResumeAllCommand;
@@ -175,12 +278,14 @@ public sealed class KaraokeDownloadsViewModel : ReactiveObject
             var row = _byRow[gone];
             _byRow.Remove(gone);
             Rows.Remove(row);
+            row.PhaseChanged -= PostRefresh;
             row.Dispose();
         }
         // Newest first, as songs are added.
         foreach (var d in current.Where(d => !_byRow.ContainsKey(d)))
         {
             var row = new KaraokeDownloadRow(d, _songs.HasSongNow);
+            row.PhaseChanged += PostRefresh;
             _byRow[d] = row;
             Rows.Insert(0, row);
         }
@@ -204,5 +309,6 @@ public sealed class KaraokeDownloadsViewModel : ReactiveObject
         foreach (var row in Rows) row.SetIngest(items.GetValueOrDefault(row.Key));
         foreach (var name in new[] { nameof(ComingCount), nameof(MakingCount), nameof(ReadyCount), nameof(FailedCount), nameof(HasRows), nameof(HasFailed) })
             this.RaisePropertyChanged(name);
+        ApplyFilter();
     }
 }

@@ -11,11 +11,23 @@
             <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="12,6"/>
         </Style>
-        <Style Selector="Border.count">
+        <Style Selector="Button.count">
             <Setter Property="Background" Value="#0FFFFFFF"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="2"/>
             <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="Padding" Value="16,10"/>
             <Setter Property="MinWidth" Value="130"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        </Style>
+        <Style Selector="Button.count.picked">
+            <Setter Property="Background" Value="#26FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#B48CF0"/>
+        </Style>
+        <Style Selector="Button.link">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#B48CF0"/>
+            <Setter Property="Padding" Value="4,2"/>
         </Style>
     </UserControl.Styles>
 
@@ -31,20 +43,31 @@
         </Grid>
 
         <StackPanel Grid.Row="1" Spacing="14" Margin="0,18,0,14">
+            <!-- The counts are the filters: click one to show only those songs, click it again for all. -->
             <WrapPanel>
-                <Border Classes="count" Margin="0,0,10,8">
+                <Button Classes="count" Classes.picked="{Binding IsComing}" Command="{Binding ShowCommand}" CommandParameter="Coming" Margin="0,0,10,8"
+                        ToolTip.Tip="Show only songs being searched for or downloaded">
                     <StackPanel><TextBlock Text="{Binding ComingCount}" FontSize="24" FontWeight="Bold"/><TextBlock Text="on their way" Foreground="#9AA" FontSize="12"/></StackPanel>
-                </Border>
-                <Border Classes="count" Margin="0,0,10,8">
+                </Button>
+                <Button Classes="count" Classes.picked="{Binding IsMaking}" Command="{Binding ShowCommand}" CommandParameter="Making" Margin="0,0,10,8"
+                        ToolTip.Tip="Show only songs being made into karaoke songs">
                     <StackPanel><TextBlock Text="{Binding MakingCount}" FontSize="24" FontWeight="Bold" Foreground="#9BD"/><TextBlock Text="becoming karaoke" Foreground="#9AA" FontSize="12"/></StackPanel>
-                </Border>
-                <Border Classes="count" Margin="0,0,10,8">
+                </Button>
+                <Button Classes="count" Classes.picked="{Binding IsReadyFilter}" Command="{Binding ShowCommand}" CommandParameter="Ready" Margin="0,0,10,8"
+                        ToolTip.Tip="Show only songs ready to sing">
                     <StackPanel><TextBlock Text="{Binding ReadyCount}" FontSize="24" FontWeight="Bold" Foreground="#6C8"/><TextBlock Text="ready" Foreground="#9AA" FontSize="12"/></StackPanel>
-                </Border>
-                <Border Classes="count" Margin="0,0,10,8">
+                </Button>
+                <Button Classes="count" Classes.picked="{Binding IsFailedFilter}" Command="{Binding ShowCommand}" CommandParameter="Failed" Margin="0,0,10,8"
+                        ToolTip.Tip="Show only songs that failed">
                     <StackPanel><TextBlock Text="{Binding FailedCount}" FontSize="24" FontWeight="Bold" Foreground="#F77"/><TextBlock Text="failed" Foreground="#9AA" FontSize="12"/></StackPanel>
-                </Border>
+                </Button>
             </WrapPanel>
+            <Grid ColumnDefinitions="Auto,Auto,*" MaxWidth="1000" HorizontalAlignment="Left">
+                <TextBox Watermark="Find a song" Text="{Binding SearchText}" Width="320"/>
+                <TextBlock Grid.Column="1" Text="{Binding ShownText}" Foreground="#889" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                <Button Grid.Column="2" Classes="link" Content="Show all" Command="{Binding ShowCommand}" CommandParameter="All"
+                        IsVisible="{Binding !IsAll}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+            </Grid>
             <WrapPanel>
                 <Button Classes="quiet" Content="Pause" Command="{Binding PauseAllCommand}" Margin="0,0,8,0"/>
                 <Button Classes="quiet" Content="Resume" Command="{Binding ResumeAllCommand}" Margin="0,0,8,0"/>
@@ -56,8 +79,11 @@
         <TextBlock Grid.Row="2" Text="Nothing on its way. Add songs from a Spotify link or a list on the Add songs page."
                    Foreground="#778" IsVisible="{Binding !HasRows}"/>
 
-        <ListBox Grid.Row="2" ItemsSource="{Binding Rows}" Background="Transparent" MaxWidth="1000" HorizontalAlignment="Left"
-                 IsVisible="{Binding HasRows}">
+        <TextBlock Grid.Row="2" Text="No songs match. Click the highlighted card again, or clear the search, to see them all."
+                   Foreground="#778" IsVisible="{Binding NothingMatches}"/>
+
+        <ListBox Grid.Row="2" ItemsSource="{Binding Shown}" Background="Transparent" MaxWidth="1000" HorizontalAlignment="Left"
+                 IsVisible="{Binding HasShown}">
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:KaraokeDownloadRow">
                     <Border Background="#0DFFFFFF" CornerRadius="12" Padding="12,10" Width="940">

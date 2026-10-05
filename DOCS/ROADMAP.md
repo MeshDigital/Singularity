@@ -120,6 +120,9 @@ Still open:
 
 ### Known issues
 
+- When a download is slow, the download center starts the same file from a second peer as a backup; both can write to
+  the same `.part` file for a moment ("being used by another process" in the log). The file finishes correctly.
+
 - *Remove* on the found-by-itself song folder doesn't stick; add your own folder instead.
 - The default song folder `D:\KARAOKE\songs` is a fixed guess; other machines choose theirs in Settings.
 - Songs queued from "Make karaoke songs from my downloads" before 0.1.0-alpha weren't saved; click it again once.
