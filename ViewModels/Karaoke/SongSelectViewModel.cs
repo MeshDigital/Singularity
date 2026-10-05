@@ -254,7 +254,11 @@ public sealed class SongSelectViewModel : ReactiveObject
         });
         SingCommand = new RelayCommand<SongCardViewModel>(Sing, card => card?.Entry.IsPlayable == true);
         MakeAiChartCommand = new RelayCommand<SongCardViewModel>(card => Rechart(card, preferAi: true), card => card?.Entry.IsPlayable == true);
-        FindCommunityChartCommand = new RelayCommand<SongCardViewModel>(card => Rechart(card, preferAi: false), card => card?.Version.IsAi == true);
+        // An AI chart can look for a community one; so can any song Singularity made (its community chart is
+        // fetched and placed again, with the pitch check), but not a song from the user's own folders.
+        FindCommunityChartCommand = new RelayCommand<SongCardViewModel>(card => Rechart(card, preferAi: false),
+            card => card?.Version.IsAi == true
+                || card?.Entry is { IsPlayable: true } e && File.Exists(Path.Combine(e.Folder, Singularity.Contracts.Song.SongPackage.MetadataFileName)));
         PlayCommand = new RelayCommand<SongCardViewModel>(card => { if (card?.Entry.IsPlayable == true) Jukebox(card.Entry); });
         JukeboxCommand = new RelayCommand(() => { if (RandomSong() is { } first) Jukebox(first); });
         _sing.NextJukeboxSong = RandomSong;

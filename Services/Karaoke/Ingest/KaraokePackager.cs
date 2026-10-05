@@ -104,6 +104,9 @@ public sealed class KaraokePackager
     public const string Creator = "Singularity AI";
     private const int SyncSampleRate = 8000;
 
+    /// <summary>The pitch check needs at least 3 s of singing to judge a chart; with less it is skipped.</summary>
+    private const int MinPitchReadings = 300;
+
     private readonly ITrackAnalyzer _analyzer;
     private readonly ILyricsLookup _lyrics;
     private readonly IIngestMedia _media;
@@ -184,12 +187,37 @@ public sealed class KaraokePackager
                 await _analyzer.SeparateAsync(new SeparateStemsCommand($"ingest-{id}", audio, staging), workerProgress, ct);
                 var sung = await _media.DecodeMonoAsync(Path.Combine(staging, SongPackage.VocalsFileName), SyncSampleRate, ct);
                 var fit = ChartSync.Measure(community.Chart, sung, SyncSampleRate);
-                if (fit.Gap.IsValid)
+                var placed = fit.Gap.IsValid ? ChartSync.Shift(community.Chart, fit.Gap.VideoGapMs) : null;
+                _logger.LogInformation("Ingest: {Source} for {Artist} - {Title}: #GAP {Gap} ms, placement {Valid} {Offset:+0;-0} ms",
+                    community.SourceId, source.Artist, source.Title, community.Chart.GapMs, fit.Gap.IsValid, fit.Gap.VideoGapMs);
+                string? correction = null;
+                if (placed is not null)
                 {
-                    chart = ChartSync.Shift(community.Chart, fit.Gap.VideoGapMs);
+                    // Then the notes themselves: does the singer actually sing them, there and in that key?
+                    var sungPitch = ChartPitchCheck.Readings(
+                        await _media.DecodeMonoAsync(Path.Combine(staging, SongPackage.VocalsFileName), ChartPitchCheck.SampleRate, ct),
+                        ChartPitchCheck.SampleRate);
+                    if (sungPitch.Count >= MinPitchReadings)
+                    {
+                        var check = ChartPitchCheck.Check(placed, sungPitch);
+                        _logger.LogInformation("Ingest: {Source} pitch check: {Share:P0} of the singing on its notes; best {Best:P0} with {Gap:+0;-0} ms, {Transpose:+0;-0} semitones",
+                            community.SourceId, check.Share, check.BestShare, check.GapCorrectionMs, check.Transpose);
+                        if (check.Fixable)
+                        {
+                            placed = ChartPitchCheck.Transpose(ChartSync.Shift(placed, check.GapCorrectionMs), check.Transpose);
+                            correction = (check.GapCorrectionMs != 0 ? $" moved {check.GapCorrectionMs:+0;-0} ms" : "")
+                                + (check.Transpose != 0 ? $" transposed {check.Transpose:+0;-0} semitones" : "");
+                        }
+                        else if (!check.Fits) placed = null;
+                    }
+                }
+                if (placed is not null)
+                {
+                    chart = placed;
                     chartSource = community.SourceId;
                     models = new Dictionary<string, string> { ["chart"] = community.SourceId, ["separation"] = "htdemucs_ft" };
-                    notes.Add($"Community chart{(string.IsNullOrWhiteSpace(chart.Creator) ? "" : " by " + chart.Creator.Trim())} from USDB, placed on this recording ({fit.Gap.VideoGapMs:+0;-0} ms).");
+                    notes.Add($"Community chart{(string.IsNullOrWhiteSpace(chart.Creator) ? "" : " by " + chart.Creator.Trim())} from USDB, placed on this recording ({fit.Gap.VideoGapMs:+0;-0} ms)"
+                        + (correction is null ? "." : $"; its notes didn't match the singer until{correction}."));
                 }
                 else
                 {

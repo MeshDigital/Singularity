@@ -157,6 +157,42 @@ public sealed class KaraokePackagerTests : IDisposable
     }
 
     [Fact]
+    public async Task ACommunityChartInAnotherKey_IsTransposedToTheSinger()
+    {
+        var chart = ChartSyncTests.Chart() with { Creator = "Someone" };
+        _media.Sound["vocals"] = ChartSyncTests.Vocals(chart, shiftMs: 0, transpose: -3); // the singer sings 3 semitones lower
+        var community = new FakeCommunity { Chart = new CommunityChart(chart, "usdb:295", null) };
+        var packager = new KaraokePackager(_analyzer, _lyrics, _media, Staging, NullLogger.Instance, community: community);
+
+        var result = await packager.BuildAsync(Source(Download()), Output);
+
+        Assert.Equal("usdb:295", result.ChartSource);
+        var song = UltraStarSerializer.ReadFile(Path.Combine(result.PackageFolder, SongPackage.UltraStarFileName));
+        var first = chart.Voices[0].Notes.First(n => n.Type != NoteType.LineBreak);
+        Assert.Equal(first.MidiTone - 3, song.Voices[0].Notes.First(n => n.Type != NoteType.LineBreak).MidiTone);
+        Assert.Contains(result.Notes, n => n.Contains("transposed -3 semitones"));
+    }
+
+    [Fact]
+    public async Task ACommunityChartWithTheRightRhythmButOtherNotes_FallsBackToTheAi()
+    {
+        // The singer sings at the chart's moments, but other notes: the timing fits, the notes don't.
+        var chart = ChartSyncTests.Chart(seed: 4);
+        var other = chart with
+        {
+            Voices = new[] { new UltraStarVoice(chart.Voices[0].Notes.Select((n, i) => n with { MidiTone = (n.MidiTone + 1 + i * 5) % 12 }).ToArray()) },
+        };
+        _media.Sound["vocals"] = ChartSyncTests.Vocals(other, 0);
+        var community = new FakeCommunity { Chart = new CommunityChart(chart, "usdb:7", null) };
+        var packager = new KaraokePackager(_analyzer, _lyrics, _media, Staging, NullLogger.Instance, community: community);
+
+        var result = await packager.BuildAsync(Source(Download()), Output);
+
+        Assert.Null(result.ChartSource);
+        Assert.Equal(1, _analyzer.Runs);
+    }
+
+    [Fact]
     public async Task ACommunityChartThatDoesNotFit_FallsBackToTheAi()
     {
         var chart = ChartSyncTests.Chart(seed: 1);
@@ -353,8 +389,23 @@ internal sealed class FakeMedia : IIngestMedia
 
     public Task<int> ProbeDurationMsAsync(string path, CancellationToken ct) => Task.FromResult(222_000);
 
-    public Task<float[]> DecodeMonoAsync(string path, int sampleRate, CancellationToken ct) =>
-        Task.FromResult(Sound.GetValueOrDefault(Path.GetFileNameWithoutExtension(path)) ?? Array.Empty<float>());
+    /// <summary>The rate the sounds above are at; other rates are resampled (linearly), as ffmpeg would.</summary>
+    public const int SoundRate = 8000;
+
+    public Task<float[]> DecodeMonoAsync(string path, int sampleRate, CancellationToken ct)
+    {
+        var sound = Sound.GetValueOrDefault(Path.GetFileNameWithoutExtension(path)) ?? Array.Empty<float>();
+        if (sampleRate == SoundRate || sound.Length == 0) return Task.FromResult(sound);
+        var resampled = new float[(int)((long)sound.Length * sampleRate / SoundRate)];
+        for (int i = 0; i < resampled.Length; i++)
+        {
+            double at = (double)i * SoundRate / sampleRate;
+            int k = Math.Min((int)at, sound.Length - 2);
+            double f = at - k;
+            resampled[i] = (float)(sound[k] * (1 - f) + sound[k + 1] * f);
+        }
+        return Task.FromResult(resampled);
+    }
 
     public Task StripAudioAsync(string videoIn, string videoOut, CancellationToken ct)
     {

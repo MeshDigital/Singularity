@@ -30,7 +30,9 @@ public class ChartSyncTests
     }
 
     /// <summary>A vocal stem for the chart: voice-like noise while a note sounds, <paramref name="shiftMs"/> later than the chart says.</summary>
-    internal static float[] Vocals(UltraStarSong chart, int shiftMs, int seconds = 200, int seed = 8)
+    /// <summary>A singer singing <paramref name="chart"/>'s notes (in the octave above middle C's below), <paramref name="shiftMs"/> late.</summary>
+    /// <param name="transpose">Sing every note this many semitones off the chart.</param>
+    internal static float[] Vocals(UltraStarSong chart, int shiftMs, int seconds = 200, int seed = 8, int transpose = 0)
     {
         var rng = new Random(seed);
         var v = new float[seconds * Rate];
@@ -40,10 +42,14 @@ public class ChartSyncTests
             int from = (int)((chart.BeatToMs(n.StartBeat) + shiftMs) * Rate / 1000);
             int to = (int)((chart.BeatToMs(n.StartBeat + n.DurationBeats) + shiftMs) * Rate / 1000);
             double amp = 0.2 + rng.NextDouble() * 0.3;
-            for (int i = Math.Max(0, from); i < Math.Min(v.Length, to); i++) v[i] += (float)(amp * Math.Sin(i * 0.07) * (0.7 + 0.3 * rng.NextDouble()));
+            int midi = 48 + ((n.MidiTone + transpose) % 12 + 12) % 12; // the test charts use pitch classes 0..11
+            double step = 2 * Math.PI * 440 * Math.Pow(2, (midi - 69) / 12.0) / Rate;
+            for (int i = Math.Max(0, from); i < Math.Min(v.Length, to); i++) v[i] += (float)(amp * Math.Sin(i * step) * (0.85 + 0.15 * rng.NextDouble()));
         }
         return v;
     }
+
+    internal const int VocalsRate = Rate;
 
     [Theory]
     [InlineData(0)]
