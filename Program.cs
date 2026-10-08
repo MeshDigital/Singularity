@@ -28,7 +28,11 @@ namespace Singularity
             // Determine a deterministic log directory
             var currentDirectory = Directory.GetCurrentDirectory();
             var csprojInCurrentDir = File.Exists(Path.Combine(currentDirectory, "Singularity.csproj"));
-            var isDevelopment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") == "Development" || csprojInCurrentDir;
+            // A development run: the source folder is the current directory and this build runs from inside it
+            // (bin\...). An installed copy merely started from the source folder logs where installed copies do.
+            var runsFromSource = csprojInCurrentDir && AppContext.BaseDirectory.StartsWith(
+                Path.GetFullPath(currentDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            var isDevelopment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") == "Development" || runsFromSource;
 
             var logDirectory = isDevelopment
                 ? Path.Combine(currentDirectory, "logs")

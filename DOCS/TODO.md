@@ -49,10 +49,10 @@ The working list, in the order it will be done. Ticked items stay for a release 
 
 ## Small fixes
 
-- [ ] *Remove* on the song folder Singularity found by itself doesn't stick.
+- [x] *Remove* on the song folder Singularity found by itself doesn't stick.
 - [ ] A slow download's backup transfer from a second peer can write to the same `.part` file for a moment.
 - [ ] README screenshots with one singer (the current ones show two: the screenshot machine has two set up).
-- [ ] An installed copy started from inside the source folder logs to the source folder's `logs` (it takes it for a
+- [x] An installed copy started from inside the source folder logs to the source folder's `logs` (it takes it for a
   development run).
 
 ## Decisions for the owner

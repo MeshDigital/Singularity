@@ -37,4 +37,20 @@ public sealed class KaraokeLibraryTests : IDisposable
         Assert.True(await library.HasSongAsync("The Killers", "Mr. Brightside", includeImported: true));
         Assert.False(await library.HasSongAsync("Queen", "Bohemian Rhapsody", includeImported: true));
     }
+
+    [Fact]
+    public void RemovingEveryFolder_IsRespected_TheUsualFolderDoesNotComeBack()
+    {
+        var made = Path.Combine(_root.FullName, "made");
+        Directory.CreateDirectory(made);
+        var none = new KaraokeLibrary(new AppConfig { KaraokeSongFolders = KaraokeLibrary.NoFoldersChosen, KaraokeIngestFolder = made },
+            NullLogger<KaraokeLibrary>.Instance);
+        Assert.DoesNotContain(KaraokeLibrary.DefaultCollectionFolder, none.Folders, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(made, none.Folders, StringComparer.OrdinalIgnoreCase);
+
+        // Nothing set at all: the usual folder is found by itself (where this machine has one).
+        var unset = new KaraokeLibrary(new AppConfig { KaraokeIngestFolder = made }, NullLogger<KaraokeLibrary>.Instance);
+        Assert.Equal(Directory.Exists(KaraokeLibrary.DefaultCollectionFolder),
+            unset.Folders.Contains(KaraokeLibrary.DefaultCollectionFolder, StringComparer.OrdinalIgnoreCase));
+    }
 }

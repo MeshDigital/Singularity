@@ -35,6 +35,12 @@ public sealed class KaraokeLibrary
     /// <summary>Where an UltraStar collection usually lives; used when no song folder is configured.</summary>
     public const string DefaultCollectionFolder = @"D:\KARAOKE\songs";
 
+    /// <summary>
+    /// The song-folders setting when the user removed every folder, including the one found by itself: an empty
+    /// setting means "find it", so "none" says they chose to have none.
+    /// </summary>
+    public const string NoFoldersChosen = "none";
+
     /// <summary>Whether the last scan has this song (any folder); null before the first scan.</summary>
     public bool? HasSongNow(string artist, string title) => Last is null ? null : _allKeys.Contains(SongClusters.KeyOf(artist, title));
 
@@ -46,11 +52,12 @@ public sealed class KaraokeLibrary
     {
         get
         {
-            var folders = (_config.KaraokeSongFolders ?? "")
-                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            var setting = _config.KaraokeSongFolders ?? "";
+            var folders = setting.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(f => !f.Equals(NoFoldersChosen, StringComparison.OrdinalIgnoreCase))
                 .ToList();
-            // Nothing configured: an UltraStar collection in the usual place is found by itself.
-            if (folders.Count == 0 && OperatingSystem.IsWindows() && Directory.Exists(DefaultCollectionFolder)) folders.Add(DefaultCollectionFolder);
+            // Nothing configured: an UltraStar collection in the usual place is found by itself (unless the user removed it).
+            if (string.IsNullOrWhiteSpace(setting) && OperatingSystem.IsWindows() && Directory.Exists(DefaultCollectionFolder)) folders.Add(DefaultCollectionFolder);
             if (Environment.GetEnvironmentVariable(SongsDirEnvironmentVariable) is { Length: > 0 } dev)
                 folders.AddRange(dev.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
             folders.Add(IngestFolder);

@@ -90,7 +90,8 @@ public sealed class KaraokeSettingsViewModel : ReactiveObject
 
     private void SaveFolders()
     {
-        _config.KaraokeSongFolders = string.Join(";", SongFolders);
+        // No folders left: say so, or an empty setting would find the usual folder again.
+        _config.KaraokeSongFolders = SongFolders.Count == 0 ? KaraokeLibrary.NoFoldersChosen : string.Join(";", SongFolders);
         Save();
         this.RaisePropertyChanged(nameof(UsesDefaultFolder));
         _library.NotifySongsAdded(); // rescan
@@ -98,7 +99,8 @@ public sealed class KaraokeSettingsViewModel : ReactiveObject
 
     private string[] ConfiguredFolders() => UsesDefaultFolder
         ? (Directory.Exists(KaraokeLibrary.DefaultCollectionFolder) ? new[] { KaraokeLibrary.DefaultCollectionFolder } : Array.Empty<string>())
-        : _config.KaraokeSongFolders.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        : _config.KaraokeSongFolders.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(f => !f.Equals(KaraokeLibrary.NoFoldersChosen, StringComparison.OrdinalIgnoreCase)).ToArray();
 
     /// <summary>Where songs Singularity makes go.</summary>
     public string IngestFolder
