@@ -66,7 +66,7 @@ Sources: UltraStar Deluxe and UltraStar Play.
 
 The working list, in order, with what "done" means for each item: [TODO.md](TODO.md).
 
-Released: **0.2.1-alpha** (installer on GitHub Releases). Ordered by value for the effort.
+Released: **0.2.2-alpha** (installer on GitHub Releases). Ordered by value for the effort.
 
 ### Quick wins (hours each)
 

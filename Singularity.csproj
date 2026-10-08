@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Singularity</AssemblyName>
     <RootNamespace>Singularity</RootNamespace>
-    <Version>0.2.1-alpha</Version>
+    <Version>0.2.2-alpha</Version>
     <Authors>MeshDigital</Authors>
     <Description>Singularity: an all-in-one karaoke system built on Soulseek music acquisition and library management.</Description>
     <!-- Embeds the icon into the compiled exe itself (Explorer, Alt-Tab, and the taskbar's

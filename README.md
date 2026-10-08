@@ -5,7 +5,7 @@
 <h1 align="center">Singularity</h1>
 
 <p align="center"><b>A karaoke system that finds the songs, makes the charts and puts them on the big screen.</b><br>
-Windows · .NET 9 · Avalonia · UltraStar-compatible · <code>0.2.1-alpha</code></p>
+Windows · .NET 9 · Avalonia · UltraStar-compatible · <code>0.2.2-alpha</code></p>
 
 ---
 
