@@ -191,6 +191,9 @@ public sealed class KaraokeIngestService : IDisposable
         return null;
     }
 
+    /// <summary>What the last list import set going: new downloads, and downloaded songs becoming karaoke songs.</summary>
+    public (int Downloading, int Making) LastImport { get; private set; }
+
     private async Task<string?> ImportListAsync(IImportProvider provider, string input)
     {
         var result = await _orchestrator.SilentImportWithResultAsync(provider, input);
@@ -212,10 +215,14 @@ public sealed class KaraokeIngestService : IDisposable
         }
         foreach (var track in result.Queued)
             Queue.Track(track.TrackUniqueHash, track.Artist, track.Title);
+        // Downloaded before: made into a song only if the collection doesn't have it yet (a playlist imported again,
+        // or re-checked as a watched playlist, must not remake every song).
+        int made = 0;
         foreach (var track in result.AlreadyDownloaded)
-            EnqueueDownloaded(track, DetailsFor(track.TrackUniqueHash));
-        _logger.LogInformation("Karaoke import of {Link}: {Queued} to download, {Present} already downloaded",
-            link, result.Queued.Count, result.AlreadyDownloaded.Count);
+            if (await EnqueueIfNewAsync(track, DetailsFor(track.TrackUniqueHash), includeImported: true)) made++;
+        LastImport = (result.Queued.Count, made);
+        _logger.LogInformation("Karaoke import of {Link}: {Queued} to download, {Present} already downloaded ({Made} becoming songs, the rest already are)",
+            link, result.Queued.Count, result.AlreadyDownloaded.Count, made);
         return null;
     }
 

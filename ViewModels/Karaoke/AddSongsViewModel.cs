@@ -110,8 +110,14 @@ public sealed class AddSongsViewModel : ReactiveObject
     private bool _isImporting;
     private bool _refreshPosted;
 
-    public AddSongsViewModel(KaraokeIngestService ingest, AppConfig config, ConfigManager configManager, ILogger<AddSongsViewModel> logger)
+    public AddSongsViewModel(KaraokeIngestService ingest, AppConfig config, ConfigManager configManager, ILogger<AddSongsViewModel> logger,
+        WatchedPlaylistService? watched = null)
     {
+        _watched = watched;
+        if (watched is not null) watched.Changed += () => Avalonia.Threading.Dispatcher.UIThread.Post(RefreshWatched);
+        UnwatchCommand = new RelayCommand<WatchedPlaylistRow>(row => { if (row is not null) _watched?.Unwatch(row.Url); });
+        CheckWatchedCommand = new AsyncRelayCommand(async () => { if (_watched is not null) await _watched.CheckAllAsync(); });
+        RefreshWatched();
         _config = config;
         _configManager = configManager;
         CatchUpCommand = new AsyncRelayCommand(CatchUpAsync, () => !_isCatchingUp);
@@ -132,7 +138,31 @@ public sealed class AddSongsViewModel : ReactiveObject
             this.RaiseAndSetIfChanged(ref _link, value);
             ((AsyncRelayCommand)ImportCommand).RaiseCanExecuteChanged();
             this.RaisePropertyChanged(nameof(DetectedText));
+            this.RaisePropertyChanged(nameof(IsPlaylistLink));
         }
+    }
+
+    // ── Watched playlists ───────────────────────────────────────────────────
+    private readonly WatchedPlaylistService? _watched;
+    private bool _watchThis;
+
+    /// <summary>The box holds a Spotify playlist link: it can be watched.</summary>
+    public bool IsPlaylistLink => _watched is not null && WatchedPlaylistService.PlaylistId(Link) is not null;
+
+    /// <summary>Keep checking the playlist being added for new songs.</summary>
+    public bool WatchThis { get => _watchThis; set => this.RaiseAndSetIfChanged(ref _watchThis, value); }
+
+    public ObservableCollection<WatchedPlaylistRow> Watched { get; } = new();
+    public bool HasWatched => Watched.Count > 0;
+    public ICommand UnwatchCommand { get; }
+    public ICommand CheckWatchedCommand { get; }
+
+    private void RefreshWatched()
+    {
+        Watched.Clear();
+        if (_watched is not null)
+            foreach (var w in _watched.Playlists) Watched.Add(new WatchedPlaylistRow(w));
+        this.RaisePropertyChanged(nameof(HasWatched));
     }
 
     /// <summary>What the pasted text is ("Spotify playlist", "12 songs"), shown before adding it.</summary>
@@ -210,8 +240,11 @@ public sealed class AddSongsViewModel : ReactiveObject
         Message = "Reading the link…";
         try
         {
-            var error = await _ingest.ImportAsync(Link);
+            var link = Link;
+            var error = await _ingest.ImportAsync(link);
             Message = error ?? "Added. Each song appears below as it is found and made.";
+            if (error is null && WatchThis && _watched?.Watch(link) == true)
+                Message += $" The playlist is checked every {WatchedPlaylistService.IntervalMinutes} minutes for songs added on Spotify.";
             if (error is null) Link = "";
         }
         catch (Exception ex)
@@ -277,4 +310,17 @@ public sealed class AddSongsViewModel : ReactiveObject
         this.RaisePropertyChanged(nameof(HasRows));
         this.RaisePropertyChanged(nameof(HeldText));
     }
+}
+
+/// <summary>A watched playlist on the Add songs page.</summary>
+public sealed class WatchedPlaylistRow
+{
+    public WatchedPlaylistRow(WatchedPlaylist playlist) => Playlist = playlist;
+
+    public WatchedPlaylist Playlist { get; }
+    public string Url => Playlist.Url;
+
+    public string Status => Playlist.LastCheckedUtc is { } at
+        ? $"{Playlist.LastResult} · checked {at.ToLocalTime():HH:mm}"
+        : $"Checked every {WatchedPlaylistService.IntervalMinutes} minutes";
 }

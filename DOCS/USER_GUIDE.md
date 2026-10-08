@@ -173,6 +173,12 @@ Connect the projector or TV as a second display (Windows: *Extend*), then choose
 
 Both screens share the same selection, so the laptop and the room can take turns choosing.
 
+**Watched playlists.** When you add a Spotify playlist on *Add songs*, tick **Keep checking this playlist for new
+songs**: every 30 minutes (and shortly after Singularity starts) the playlist is checked again, and songs added to it
+on Spotify are downloaded and made into karaoke songs by themselves. Handy for a shared "karaoke" playlist before a
+party. Songs the collection already has are skipped. The playlists are listed on *Add songs* with **Check now** and
+**Stop watching**.
+
 **The party queue.** Who sings what next. Right-click a song and choose **Add to the queue** (under the name typed in
 the *Up next* panel on the Sing page), or let guests add themselves from their phones. The projector shows the next
 three singers; **Sing next** starts the top one, under that singer's name (results and high scores say who sang).

@@ -52,6 +52,9 @@
                             <TextBlock Text="{Binding DetectedText}" Foreground="{DynamicResource BrushAccent}" FontSize="12" FontWeight="SemiBold"/>
                         </Border>
                         <TextBlock Text="Songs · albums · playlists · lists" Foreground="#667" FontSize="12" VerticalAlignment="Center"/>
+                        <CheckBox Content="Keep checking this playlist for new songs" IsChecked="{Binding WatchThis}" IsVisible="{Binding IsPlaylistLink}"
+                                  FontSize="12" Margin="8,0,0,0"
+                                  ToolTip.Tip="Songs added to the playlist on Spotify become karaoke songs by themselves (checked every 30 minutes)."/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -69,6 +72,30 @@
                           ToolTip.Tip="Downloads from Search and other pages too. Songs the collection already has are skipped."/>
             </WrapPanel>
             <TextBlock Text="{Binding FolderText}" Foreground="#667" FontSize="12"/>
+
+            <!-- Playlists checked now and then for songs added on Spotify. -->
+            <Border Background="#0AFFFFFF" CornerRadius="12" Padding="14,10" Width="920" HorizontalAlignment="Left" IsVisible="{Binding HasWatched}">
+                <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Watched playlists" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Classes="quiet" Content="Check now" Command="{Binding CheckWatchedCommand}"/>
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Watched}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:WatchedPlaylistRow">
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Url}" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Status}" Foreground="#889" FontSize="12"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Classes="quiet" Content="Stop watching" VerticalAlignment="Center"
+                                            Command="{Binding $parent[ItemsControl].((vm:AddSongsViewModel)DataContext).UnwatchCommand}" CommandParameter="{Binding}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
             <TextBlock Text="{Binding HeldText}" Foreground="#FC6" FontSize="12"
                        IsVisible="{Binding HeldText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
         </StackPanel>

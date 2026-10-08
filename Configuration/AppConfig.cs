@@ -70,6 +70,9 @@ public class AppConfig
     /// <summary>Phones on this network may browse the songs and queue themselves (a QR code shows on the projector). Off by default.</summary>
     public bool KaraokePhoneRemote { get; set; }
 
+    /// <summary>Spotify playlists checked now and then for new songs, as "https://open.spotify.com/playlist/{id}" joined with " | ".</summary>
+    public string KaraokeWatchedPlaylists { get; set; } = "";
+
     /// <summary>Look for the music video on YouTube (yt-dlp) for new songs.</summary>
     public bool KaraokeDownloadVideos { get; set; } = true;
 

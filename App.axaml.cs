@@ -267,6 +267,7 @@ public partial class App : Application
 
                             Services.GetRequiredService<UiStallWatchdog>().Start();
                             OpenDevelopmentShortcuts();
+                            Services.GetRequiredService<Singularity.Services.Karaoke.Ingest.WatchedPlaylistService>().Start();
                             if (Singularity.Configuration.RuntimeOptions.PhonesLocal)
                                 Services.GetRequiredService<Singularity.Services.Karaoke.Party.PhoneRemoteServer>().Start(localOnly: true);
                             else if (Services.GetRequiredService<AppConfig>().KaraokePhoneRemote)
@@ -742,6 +743,7 @@ public partial class App : Application
         services.AddSingleton<Services.Karaoke.KaraokeWorker>();
         services.AddSingleton<Services.Karaoke.HighScoreStore>();
         services.AddSingleton<Services.Karaoke.Party.PhoneRemoteServer>();
+        services.AddSingleton<Singularity.Services.Karaoke.Ingest.WatchedPlaylistService>();
         services.AddSingleton(_ => new Singularity.Karaoke.Party.PartyQueue(System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Singularity", "party-queue.json")));
         services.AddSingleton<Services.Karaoke.Ingest.KaraokeIngestService>();

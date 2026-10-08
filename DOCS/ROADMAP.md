@@ -94,7 +94,7 @@ Still open:
    towards phones as microphones.
 2. ✅ **Party queue**: singers' names, who's next, shown on the projector between songs; filled from phones, the laptop
    or the projector's song select.
-3. **Watched Spotify playlists**: a "karaoke" playlist that's re-synced now and then, so songs added on Spotify
+3. ✅ **Watched Spotify playlists**: a "karaoke" playlist that's re-synced now and then, so songs added on Spotify
    appear in Singularity by themselves (ORBIT's playlist sync does the work).
 4. **Fingerprint check** (Chromaprint and AcoustID) to confirm a download is the requested recording; it raises the
    audio part of the quality grade and catches wrong files.

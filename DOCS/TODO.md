@@ -31,8 +31,9 @@ The working list, in the order it will be done. Ticked items stay for a release 
   390 px browser frame; a real phone over Wi-Fi is still to be tried.)
 - [x] **Party queue.** Singers' names and who's next, shown on the projector between songs; filled from phones, the
   laptop or the projector's song select.
-- [ ] **Watched Spotify playlist.** A "karaoke" playlist re-synced now and then, so songs added on Spotify appear by
-  themselves (ORBIT's playlist sync does the work).
+- [x] **Watched Spotify playlist.** A "karaoke" playlist re-synced now and then, so songs added on Spotify appear by
+  themselves (ORBIT's playlist sync does the work). (Built and unit-tested; not yet run against Spotify, which needs
+  the owner's accounts: try "Keep checking this playlist" on Add songs.)
 
 ## Larger work
 
