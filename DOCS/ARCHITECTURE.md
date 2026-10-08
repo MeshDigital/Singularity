@@ -166,6 +166,9 @@ accuracy against the human chart is 0.77 for A, 0.70 for B and 0.61 for "needs c
   background when a song starts, median-filtered) a sample earns the better of its credit against the note and
   against the singer, where the singer is within 2 semitones of the note. Measured on 8 songs with the artists' own
   vocals: +700 to +1,500 on AI charts; a singer 1.5 semitones off gains nothing.
+- **Timing.** The first sample of a note with half credit or better is its start; `SingScorer.OnTime` gives 1 up to
+  120 ms late, 0 from 400 ms. A line's bonus keeps `1 - 0.25 x (1 - timing)` of its share; note points don't change.
+  On the singers' own vocals timing is 97-100%; 150 ms late costs about 20-30 points.
 - **Chart note check.** `ChartNoteCheck` compares each note with the singer's median pitch over it: agreeing within
   half a semitone, steadily elsewhere (corrected in AI charts at import), lines where most notes disagree, and a
   mismatch below 40% agreement. The result is `metadata.json`'s `check`; song select shows it, and the Sing page runs

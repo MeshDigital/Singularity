@@ -178,6 +178,39 @@ public class SingScorerTests
     }
 
     [Fact]
+    public void OnTime_KeepsTheWholeLineBonus()
+    {
+        var s = Sing(Perfect, beatMs: 100);
+        Assert.Equal(10_000, s.Score.Total);
+        Assert.All(s.CompletedLines, l => Assert.Equal(1, l.Timing));
+    }
+
+    [Fact]
+    public void StartingNotesLate_CostsALittleOfTheLineBonus()
+    {
+        // Every note started 2 beats (200 ms) late, then sung right: the notes' own points are mostly kept.
+        // Notes start at beats 0, 4 and 10; the singer comes in 2 beats into each.
+        double? Late(double b) => (b < 8 ? b % 4 : b - 10) < 2 ? null : Perfect(b);
+        var onTime = Sing(Perfect, beatMs: 100);
+        var late = Sing(Late, beatMs: 100);
+
+        Assert.All(late.CompletedLines, l => Assert.InRange(l.Timing, 0.6, 0.75)); // 200 ms: 1 - (200-120)/280
+        // Each line's bonus: its share for how well it was sung, less up to a quarter for coming in late.
+        Assert.All(late.CompletedLines, l =>
+            Assert.Equal(500 * l.Perfection * (1 - SingScorer.TimingShareOfBonus * (1 - l.Timing)), l.Bonus, 6));
+        Assert.True(late.Score.LineBonus < onTime.Score.LineBonus);
+    }
+
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(120, 1)]
+    [InlineData(260, 0.5)]
+    [InlineData(400, 0)]
+    [InlineData(900, 0)]
+    public void OnTime_FallsOffBetween120And400Ms(double lateMs, double credit) =>
+        Assert.Equal(credit, SingScorer.OnTime(lateMs), 6);
+
+    [Fact]
     public void WithoutLineBonus_NotesAreWorthTenThousand()
     {
         var s = Sing(Perfect, lineBonus: false);

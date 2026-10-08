@@ -33,7 +33,8 @@ public enum LineRating
 }
 
 /// <param name="Perfection">Share of the line's scored weight that was hit, 0..1.</param>
-public sealed record LineResult(int LineIndex, double Perfection, LineRating Rating, double Bonus);
+/// <param name="Timing">How promptly the line's notes were started, 0..1 (1 = every note on time; 1 when not judged).</param>
+public sealed record LineResult(int LineIndex, double Perfection, LineRating Rating, double Bonus, double Timing = 1);
 
 /// <summary>Points so far. <see cref="Total"/> is what the game shows: rounded down to tens, as UltraStar does.</summary>
 public sealed record ScoreBreakdown(double Notes, double Golden, double LineBonus)
@@ -69,6 +70,18 @@ public sealed class SingScorer
 
     /// <summary>The start of a note where an off-pitch attack isn't held against the singer.</summary>
     public const double OnsetGraceMs = 80;
+
+    /// <summary>A note started within this long after its start is on time.</summary>
+    public const double OnTimeMs = 120;
+
+    /// <summary>A note first sung this late earns nothing for timing.</summary>
+    public const double LateMs = 400;
+
+    /// <summary>The share of a line's bonus that depends on starting its notes on time (the rest on how well they were sung).</summary>
+    public const double TimingShareOfBonus = 0.25;
+
+    /// <summary>A note's timing credit for first being sung <paramref name="lateMs"/> after its start: 1 on time, 0 from <see cref="LateMs"/>.</summary>
+    public static double OnTime(double lateMs) => Math.Clamp(1 - (lateMs - OnTimeMs) / (LateMs - OnTimeMs), 0, 1);
 
     /// <summary>The distance in semitones at which a sample stops earning anything.</summary>
     public static double ToleranceFor(Difficulty difficulty) => difficulty switch
@@ -113,6 +126,8 @@ public sealed class SingScorer
     private int _beatSamples, _beatVoiced, _beatSkipped;
     private double _beatCredit, _beatOffset;
     private readonly double _graceBeats;
+    private readonly double _beatMs;
+    private ScoredNote? _onsetJudged; // the last note whose start was judged
     private readonly List<int> _deferred = new(); // grace-only beats of the current note, judged with its next beat
     private double _notesScore, _goldenScore, _bonusScore;
 
@@ -121,6 +136,7 @@ public sealed class SingScorer
     {
         _difficulty = difficulty;
         _graceBeats = beatMs > 0 ? OnsetGraceMs / beatMs : 0;
+        _beatMs = beatMs;
 
         int line = 0;
         foreach (var n in voice.Notes)
@@ -183,6 +199,15 @@ public sealed class SingScorer
             return;
         }
         _beatSamples++;
+        // Timing: the first moment a note is sung (half credit or better) is its start; how late that is goes into
+        // the line bonus. Notes never sung aren't judged for timing (they already cost their points).
+        if (_beatMs > 0 && credit >= 0.5 && !ReferenceEquals(note, _onsetJudged))
+        {
+            _onsetJudged = note;
+            var line = _lines[note.Line];
+            line.TimingSum += OnTime((beat - note.Note.StartBeat) * _beatMs);
+            line.TimingCount++;
+        }
         if (midi is not null && !double.IsNaN(midi.Value))
         {
             _beatVoiced++;
@@ -293,9 +318,10 @@ public sealed class SingScorer
             var line = _lines[_lineCursor++];
             if (line.MaxWeight <= 0) continue;
             double perfection = Math.Clamp(line.HitWeight / line.MaxWeight, 0, 1);
-            double bonus = _bonusPerLine * perfection;
+            double timing = line.TimingCount > 0 ? line.TimingSum / line.TimingCount : 1;
+            double bonus = _bonusPerLine * perfection * (1 - TimingShareOfBonus * (1 - timing));
             _bonusScore += bonus;
-            var result = new LineResult(line.Index, perfection, RatingFor(perfection), bonus);
+            var result = new LineResult(line.Index, perfection, RatingFor(perfection), bonus, timing);
             _completed.Add(result);
             LineCompleted?.Invoke(result);
         }
@@ -324,5 +350,7 @@ public sealed class SingScorer
         public double MaxWeight { get; } = maxWeight;
         public int EndBeat { get; } = endBeat;
         public double HitWeight { get; set; }
+        public double TimingSum { get; set; }
+        public int TimingCount { get; set; }
     }
 }

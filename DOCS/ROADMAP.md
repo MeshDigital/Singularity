@@ -110,7 +110,7 @@ Still open:
 - [x] The progress bar as a map of the singing (per singer, duet partner, unscored vocals), a countdown in seconds
   before lines after long waits, "P2 sings this part" and "Backing vocals: not scored" in the lane, rap notes marked.
 - [x] Score against the original singer's own pitch curve, so AI chart errors don't cost points.
-- [ ] Timing credit: reward starting a note on time.
+- [x] Timing credit: a quarter of each line bonus depends on starting its notes on time (120-400 ms).
 - [x] Check charts against the singer: AI charts' steadily-wrong notes corrected at import, "lines may be off" and
   "chart doesn't match the recording" in song select and on the Sing page.
 

@@ -117,7 +117,9 @@ At the top of the page:
   cents of the note is always full marks, and the closer you sing, the more you earn. Octaves never matter, and the
   first moment of a note (a scoop onto it) isn't held against you. For songs with separated vocals you are also scored
   against what the original singer actually sang: where a chart's note is a semitone or two off, singing it the way the
-  artist did still counts.
+  artist did still counts. Starting notes on time matters a little too: a note first sung more than 0.12 s late
+  costs part of its line's bonus (at most a quarter of it, from 0.4 s late), and the results say how much of your
+  singing was on time.
 
 **Charts that may be wrong.** Each song Singularity makes is checked against the original singer: an AI chart's notes
 the singer clearly sings elsewhere are moved there, and a card says "7 lines may be off" or "Chart doesn't match the

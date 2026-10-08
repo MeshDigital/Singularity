@@ -19,7 +19,7 @@ The working list, in the order it will be done. Ticked items stay for a release 
 - [x] **Check AI charts against the singer.** The pitch check community charts get, per line, for AI charts: lines where
   the chart and the singer disagree are flagged ("needs checking" with the line numbers) and, where the singer's pitch is
   clear, the note is corrected. Done: measured on the songs with vocals, flagged lines visible in song select.
-- [ ] **Credit for timing.** A small bonus for starting a note on time, within the line bonus. Done: a late singer loses a
+- [x] **Credit for timing.** A small bonus for starting a note on time, within the line bonus. Done: a late singer loses a
   little, an on-time one nothing, tests.
 - [ ] **Best score on the projector's version badge.**
 

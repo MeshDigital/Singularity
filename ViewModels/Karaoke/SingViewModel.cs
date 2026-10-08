@@ -529,7 +529,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
             _players.Count > 1 || SingerName(p.Mic.Player) != $"Player {p.Mic.Player}" ? SingerName(p.Mic.Player) : "",
             shown.Total, ScoreTitles.For(shown.Total),
             $"{shown.Notes:N0}", $"{shown.Golden:N0}", $"{shown.LineBonus:N0}",
-            p.Session is null ? "No microphone" : lines.Count == 0 ? "" : $"{perfect} perfect, {great} great of {lines.Count} lines",
+            p.Session is null ? "No microphone" : lines.Count == 0 ? "" : $"{perfect} perfect, {great} great of {lines.Count} lines · {lines.Average(l => l.Timing):P0} on time",
             RecordHighScore(p, shown.Total), p.Mic.Player);
     }
 
