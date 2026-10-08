@@ -20,7 +20,7 @@ Singularity is a karaoke game in the spirit of UltraStar, with three things Ultr
    doesn't match plays dimmed in the background instead.
 
 <p align="center">
-  <img src="DOCS/images/singing.jpg" width="820" alt="Two singers on the stage: notes in a lane over the music video, sung parts filled in, lyrics below">
+  <img src="DOCS/images/singing.jpg" width="820" alt="The stage: notes in a lane over the music video, sung parts filled in, the lyrics below and a map of the song along the bottom">
 </p>
 
 Your existing UltraStar song folders work as they are, and songs Singularity makes are standard UltraStar folders
@@ -42,6 +42,8 @@ ORBIT's search, download, library and playlist engine and builds the karaoke gam
 - The music video behind the notes, in sync; or the cover, blurred into a glow of its own colour.
 - Real karaoke: remove the original vocals with one click, or for the whole collection overnight, then sing with
   them off, as a quiet guide, or full (V while singing).
+- A party queue, filled from guests' phones: they scan a QR code on the projector, pick a song and join; the
+  projector shows who's next.
 - A projector or TV as the stage: the singing goes full screen there while the laptop keeps the controls. Between
   songs the projector shows song select for the room, browsable with arrow keys.
 - Microphone setup with a live pitch view and a latency test.
@@ -66,10 +68,15 @@ ORBIT's search, download, library and playlist engine and builds the karaoke gam
 | Song select | Results |
 |---|---|
 | <img src="DOCS/images/song-select.jpg" alt="Song select: covers, versions, sort and filter"> | <img src="DOCS/images/results.jpg" alt="Results: a card per singer with score, rating and line stats"> |
-| **Add songs** | **Singing** |
-| <img src="DOCS/images/add-songs.jpg" alt="Add songs: one box for Spotify links or Artist - Title lines"> | <img src="DOCS/images/singing.jpg" alt="The stage while singing"> |
+| **Add songs** | **Party night: the projector** |
+| <img src="DOCS/images/add-songs.jpg" alt="Add songs: one box for Spotify links or Artist - Title lines"> | <img src="DOCS/images/party.jpg" alt="The projector between songs: who sings next, and a QR code for guests' phones"> |
 
-The singing shots were taken with `--demo-singer`: the song's separated original vocals sing into the scorer (player 2 drops out now and then, so the scores differ).
+<p align="center">
+  <img src="DOCS/images/phone.jpg" width="300" alt="A guest's phone: name, who's up next, and songs to pick with Sing this">
+</p>
+
+The singing shots were taken with `--demo-singer`: the song's separated original vocals sing into the scorer (in the
+results, player 2 drops out now and then, so the two scores differ).
 
 ## How a song is made
 

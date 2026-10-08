@@ -29,7 +29,10 @@ public static class RuntimeOptions
     /// <summary>Development shortcut: with --sing, start this many seconds into the song (<c>--sing-start 200</c>).</summary>
     public static double? SingStartSeconds { get; private set; }
 
-    /// <summary>Development shortcut: <c>--players 2</c> adds a second singer on player 1's microphone for this run only.</summary>
+    /// <summary>
+    /// Development shortcut: <c>--players 2</c> adds a second singer on player 1's microphone for this run only;
+    /// <c>--players 1</c> sings alone even when a second singer is set up.
+    /// </summary>
     public static int? Players { get; private set; }
 
     /// <summary>

@@ -15,7 +15,7 @@ public sealed record MicAssignment(int Player, string DeviceId, MicChannel Chann
     public static IReadOnlyList<MicAssignment> FromConfig(AppConfig config)
     {
         var players = new List<MicAssignment> { new(1, config.KaraokeMicDeviceId ?? "", Parse(config.KaraokeMicChannel)) };
-        if (config.KaraokeMic2Enabled)
+        if (config.KaraokeMic2Enabled && RuntimeOptions.Players != 1) // dev: --players 1 sings alone for this run
             players.Add(new MicAssignment(2, config.KaraokeMic2DeviceId ?? "", Parse(config.KaraokeMic2Channel)));
         else if (RuntimeOptions.Players >= 2)
             players.Add(players[0] with { Player = 2 }); // dev: --players 2
