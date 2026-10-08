@@ -284,12 +284,18 @@ public sealed class KaraokePackager
                 var singer = ReferencePitch.FromVocals(await _media.DecodeMonoAsync(vocalsInPackage, ChartPitchCheck.SampleRate, ct), ChartPitchCheck.SampleRate);
                 var result = ChartNoteCheck.Check(chart!, singer);
                 int corrected = 0;
-                if (chartSource is null && result.Corrections.Count > 0)
+                if (chartSource is null)
                 {
-                    corrected = result.Corrections.Count;
-                    chart = ChartNoteCheck.Apply(chart!, result.Corrections);
-                    result = ChartNoteCheck.Check(chart, singer);
-                    notes.Add($"{corrected} notes moved to where the singer sings them.");
+                    // An AI chart's notes from what the singer sings (the middle of each note, in the song's key):
+                    // ChartBench 65.1% -> 70.2% exact pitch class against human charts.
+                    var (fitted, changed) = ChartMelody.FitNotes(chart!, singer);
+                    if (changed > 0)
+                    {
+                        corrected = changed;
+                        chart = fitted;
+                        result = ChartNoteCheck.Check(chart, singer);
+                        notes.Add($"{corrected} notes set to where the singer sings them.");
+                    }
                 }
                 if (result.Judged > 0)
                 {

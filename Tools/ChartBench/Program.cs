@@ -25,6 +25,15 @@ if (args.Length < 2)
 }
 var songsDir = args[0];
 var outDir = Path.GetFullPath(args[1]);
+
+// --recheck: no worker. For each song already benchmarked (song.generated.txt and its vocals.wav in the output
+// folder), compare the generated chart with the human one as is, and after the import's correction against the
+// singer (ChartNoteCheck: notes the singer sings steadily elsewhere are moved there).
+if (args.Contains("--recheck"))
+{
+    Recheck.Run(songsDir, outDir);
+    return 0;
+}
 int limit = int.MaxValue;
 int? sample = null;
 string? filter = null;

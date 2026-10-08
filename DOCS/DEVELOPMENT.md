@@ -74,7 +74,9 @@ It reports per song and as medians:
 - pitch class and within-a-semitone accuracy, also after correcting for a reference in another key;
 - the raw lyric and pitch confidences that the quality grade is calibrated on.
 
-Stems are cached in the output folder, so a re-run after a pipeline change only redoes the cheap stages. The
+Stems are cached in the output folder, so a re-run after a pipeline change only redoes the cheap stages. With
+`--recheck` it doesn't run the worker at all: it compares the charts it made before, as they are and after the
+import's corrections from the singer's pitch (`ChartNoteCheck`, `ChartMelody`), to try changes to those in minutes. The
 collection is only read; the output folder must be outside it.
 
 The sync methods were checked the same way: `VideoSync` on the collection's videos with sound against their human

@@ -181,6 +181,10 @@ accuracy against the human chart is 0.77 for A, 0.70 for B and 0.61 for "needs c
   (no URL reservations or admin rights): only while switched on, only to private/loopback addresses, and every API
   call needs the key from the QR code (new per start; constant-time compare; 4 KB bodies). The page puts song text in
   with `textContent` only.
+- **AI chart notes from the singer.** At import an AI chart's notes are set by `ChartMelody`: the median of the
+  singer's pitch over the middle 60% of each note, in the note's octave; a reading between two semitones (over 0.35
+  from the nearer) takes the in-key one, the key estimated from the notes (Krumhansl-Kessler). ChartBench, 89 songs:
+  exact pitch class 65.1% -> 70.2%, within a semitone 84.9% -> 85.4%.
 - **Chart editor.** `ChartEdit` (Singularity.Karaoke/Editing) holds the corrections as pure operations on a chart:
   move all (the gap), move a line (clamped between its neighbours, line breaks kept between lines), transpose a
   line, set a note, take the singer's pitch for a line (`ChartNoteCheck.CorrectionFor`), and fit the whole chart to
