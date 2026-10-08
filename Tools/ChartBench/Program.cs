@@ -34,6 +34,18 @@ if (args.Contains("--recheck"))
     Recheck.Run(songsDir, outDir);
     return 0;
 }
+
+// --rebuild: no worker. Rebuilds each song's chart from the saved analysis.json with other builder settings
+// (--grid <minimum grid BPM>, several allowed) and compares with the human chart.
+if (args.Contains("--rebuild"))
+{
+    var grids = args.Select((a, i) => (a, i)).Where(x => x.a == "--grid").Select(x => double.Parse(args[x.i + 1], CultureInfo.InvariantCulture)).ToList();
+    Rebuild.Run(songsDir, outDir, grids.Count > 0 ? grids : new List<double> { UltraStarChartBuilder.MinimumGridBpm });
+    return 0;
+}
+
+// --cached: only songs whose stems are already in the output folder (no new Demucs runs).
+bool cachedOnly = args.Contains("--cached");
 int limit = int.MaxValue;
 int? sample = null;
 string? filter = null;
@@ -75,6 +87,7 @@ foreach (var folder in group)
     if (rows.Count >= limit) break;
     int rowsBefore = rows.Count;
     var name = Path.GetFileName(folder);
+    if (cachedOnly && !File.Exists(Path.Combine(outDir, name, "vocals.wav"))) continue;
     var txt = Directory.GetFiles(folder, "*.txt").FirstOrDefault();
     if (txt is null) continue;
 
@@ -108,6 +121,8 @@ foreach (var folder in group)
         var result = await host.ProcessTrackAsync(new ProcessTrackCommand(
             "bench", audio, songOut, forWorker.Value.Text, forWorker.Value.Kind, LanguageCode(reference.Language), ReuseStems: true), progress);
 
+        // The worker's raw output, so --rebuild can try builder settings without running it again.
+        File.WriteAllText(Path.Combine(songOut, "analysis.json"), System.Text.Json.JsonSerializer.Serialize(new SavedAnalysis(result.TempoBpm, result.Lines)));
         var (bpm, gap, voice) = UltraStarChartBuilder.Build(result.TempoBpm, result.Lines);
         var generated = new UltraStarSong { Title = reference.Title, Artist = reference.Artist, AudioFile = audio, Bpm = bpm, GapMs = gap, Voices = new[] { voice } };
         File.WriteAllText(Path.Combine(songOut, "song.generated.txt"), UltraStarSerializer.Write(generated));

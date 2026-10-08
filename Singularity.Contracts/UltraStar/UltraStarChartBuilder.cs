@@ -14,20 +14,21 @@ public static class UltraStarChartBuilder
     /// <summary>Below this the grid is too coarse for syllables; the tempo is doubled until it isn't.</summary>
     public const double MinimumGridBpm = 200;
 
-    /// <summary>Grid BPM for a musical tempo: the tempo doubled until beats are short enough (≤ 75 ms).</summary>
-    public static double GridBpmFor(double tempoBpm)
+    /// <summary>Grid BPM for a musical tempo: the tempo doubled until beats are short enough (≤ 75 ms by default).</summary>
+    public static double GridBpmFor(double tempoBpm, double minimumGridBpm = MinimumGridBpm)
     {
         if (tempoBpm <= 0 || double.IsNaN(tempoBpm)) throw new ArgumentOutOfRangeException(nameof(tempoBpm));
         var bpm = tempoBpm;
-        while (bpm < MinimumGridBpm) bpm *= 2;
+        while (bpm < minimumGridBpm) bpm *= 2;
         return Math.Round(bpm, 2);
     }
 
     /// <summary>Builds the single voice for <paramref name="lines"/>, with #GAP at the first syllable.</summary>
     /// <returns>The grid BPM, the gap and the notes; the caller fills in title, files and the rest of the headers.</returns>
-    public static (double Bpm, int GapMs, UltraStarVoice Voice) Build(double tempoBpm, IReadOnlyList<LyricLine> lines)
+    public static (double Bpm, int GapMs, UltraStarVoice Voice) Build(double tempoBpm, IReadOnlyList<LyricLine> lines,
+        double minimumGridBpm = MinimumGridBpm)
     {
-        var bpm = GridBpmFor(tempoBpm);
+        var bpm = GridBpmFor(tempoBpm, minimumGridBpm);
         var msPerBeat = 60000.0 / (bpm * 4.0);
         var allSyllables = lines.SelectMany(l => l.Syllables).ToArray();
         if (allSyllables.Length == 0) return (bpm, 0, new UltraStarVoice(Array.Empty<UltraStarNote>()));
