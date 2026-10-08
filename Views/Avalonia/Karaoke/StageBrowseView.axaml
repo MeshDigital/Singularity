@@ -60,9 +60,16 @@
                                TextTrimming="CharacterEllipsis" MaxWidth="1100" HorizontalAlignment="Center"/>
                     <TextBlock Text="{Binding Current.Artist}" FontSize="40" Foreground="#DDE" TextAlignment="Center"
                                TextTrimming="CharacterEllipsis" MaxWidth="1100" HorizontalAlignment="Center" Margin="0,-12,0,0"/>
-                    <Border Background="#33FFFFFF" CornerRadius="26" Padding="28,10" HorizontalAlignment="Center">
-                        <TextBlock Text="{Binding VersionBadge}" FontSize="30" Foreground="#E8ECFF"/>
-                    </Border>
+                    <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center">
+                        <Border Background="#33FFFFFF" CornerRadius="26" Padding="28,10">
+                            <TextBlock Text="{Binding VersionBadge}" FontSize="30" Foreground="#E8ECFF"/>
+                        </Border>
+                        <!-- The best score so far: something for the room to beat. -->
+                        <Border Background="#33FFD23C" BorderBrush="#FFD23C" BorderThickness="1" CornerRadius="26" Padding="24,10"
+                                IsVisible="{Binding HasBestScore}">
+                            <TextBlock Text="{Binding BestScoreBadge}" FontSize="30" FontWeight="SemiBold" Foreground="#FFD23C"/>
+                        </Border>
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- The songs after, fading out to the right. -->

@@ -65,6 +65,11 @@ public sealed class StageBrowseViewModel : ReactiveObject
     public Color Glow { get => _glow; private set => this.RaiseAndSetIfChanged(ref _glow, value); }
 
     /// <summary>"▲  2 of 3 · Duet · Community chart  ▼", or just the label for a song with one version.</summary>
+    /// <summary>"Best 8,700": the song's best score at any difficulty, for the room to beat; null when never sung.</summary>
+    public string? BestScoreBadge => _current?.BestScore is { } best ? $"Best {best:N0}" : null;
+
+    public bool HasBestScore => BestScoreBadge is not null;
+
     public string VersionBadge => _current is null ? "" : _current.HasVersions ? $"▲   {_current.VersionText}   ▼" : _current.VersionText;
 
     /// <summary>How many cards peek out behind the cover: one per extra version, at most two.</summary>
@@ -120,7 +125,7 @@ public sealed class StageBrowseViewModel : ReactiveObject
 
     private void RaiseVersion()
     {
-        foreach (var name in new[] { nameof(VersionBadge), nameof(StackDepth), nameof(HasStack1), nameof(HasStack2), nameof(Position) })
+        foreach (var name in new[] { nameof(VersionBadge), nameof(BestScoreBadge), nameof(HasBestScore), nameof(StackDepth), nameof(HasStack1), nameof(HasStack2), nameof(Position) })
             this.RaisePropertyChanged(name);
     }
 

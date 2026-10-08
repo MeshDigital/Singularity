@@ -21,7 +21,7 @@ The working list, in the order it will be done. Ticked items stay for a release 
   clear, the note is corrected. Done: measured on the songs with vocals, flagged lines visible in song select.
 - [x] **Credit for timing.** A small bonus for starting a note on time, within the line bonus. Done: a late singer loses a
   little, an on-time one nothing, tests.
-- [ ] **Best score on the projector's version badge.**
+- [x] **Best score on the projector's version badge.**
 
 ## Party night
 

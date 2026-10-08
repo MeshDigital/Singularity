@@ -84,7 +84,7 @@ Done after 0.1.0-alpha:
 
 Still open:
 
-- [ ] The best score on the projector's version badge.
+- [x] The best score on the projector's version badge.
 - [ ] **Licence file** (needs the owner's choice), and later a code-signing certificate so SmartScreen doesn't warn.
 
 ### Integrations (days each)
