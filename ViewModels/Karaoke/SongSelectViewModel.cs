@@ -253,9 +253,16 @@ public sealed class SongSelectViewModel : ReactiveObject
     public SongSelectViewModel(KaraokeLibrary library, SingViewModel sing, SongPreviewPlayer preview, StageScreenService stage,
         StemStore stems, StemSeparationService separation, StemBatchQueue batch, INavigationService navigation, ILogger<SongSelectViewModel> logger,
         Singularity.Configuration.AppConfig config, HighScoreStore? highScores = null,
-        Services.Karaoke.Ingest.KaraokeIngestService? ingest = null)
+        Services.Karaoke.Ingest.KaraokeIngestService? ingest = null, Singularity.Karaoke.Party.PartyQueue? party = null)
     {
         _ingest = ingest;
+        Party = party ?? new Singularity.Karaoke.Party.PartyQueue();
+        Party.Changed += () => Avalonia.Threading.Dispatcher.UIThread.Post(RefreshQueue);
+        AddToQueueCommand = new RelayCommand<SongCardViewModel>(AddToQueue, card => card?.Entry.IsPlayable == true);
+        SingNextCommand = new RelayCommand(SingNext);
+        RemoveQueuedCommand = new RelayCommand<QueuedSongViewModel>(q => { if (q is not null) Party.Remove(q.Item.Id); });
+        MoveUpQueuedCommand = new RelayCommand<QueuedSongViewModel>(q => { if (q is not null) Party.MoveUp(q.Item.Id); });
+        RefreshQueue();
         _config = config;
         _highScores = highScores;
         // A new high score shows on the song's card the next time the list is loaded.
@@ -632,6 +639,60 @@ public sealed class SongSelectViewModel : ReactiveObject
         if (!Languages.Contains(_language)) Language = AnyLanguage;
     }
 
+    // ── Party queue ───────────────────────────────────────────────────────
+    public Singularity.Karaoke.Party.PartyQueue Party { get; }
+
+    /// <summary>Who sings what next, top first.</summary>
+    public ObservableCollection<QueuedSongViewModel> UpNext { get; } = new();
+
+    public bool HasQueue => UpNext.Count > 0;
+
+    private string _queueName = "";
+
+    /// <summary>The name a song is queued under from the laptop.</summary>
+    public string QueueName { get => _queueName; set => this.RaiseAndSetIfChanged(ref _queueName, value ?? ""); }
+
+    private string? _queueMessage;
+    public string? QueueMessage { get => _queueMessage; private set => this.RaiseAndSetIfChanged(ref _queueMessage, value); }
+
+    public ICommand AddToQueueCommand { get; }
+    public ICommand SingNextCommand { get; }
+    public ICommand RemoveQueuedCommand { get; }
+    public ICommand MoveUpQueuedCommand { get; }
+
+    private void RefreshQueue()
+    {
+        UpNext.Clear();
+        int i = 0;
+        foreach (var item in Party.Items) UpNext.Add(new QueuedSongViewModel(item, ++i));
+        this.RaisePropertyChanged(nameof(HasQueue));
+    }
+
+    private void AddToQueue(SongCardViewModel? card)
+    {
+        if (card is null) return;
+        var name = string.IsNullOrWhiteSpace(QueueName) ? _config.KaraokePlayer1Name : QueueName;
+        var (added, refused) = Party.Add(card.Entry.Folder, card.Title, card.Artist, name);
+        QueueMessage = refused ?? $"{added!.Singer}: {added.Title} is in the queue.";
+    }
+
+    /// <summary>Starts the top of the queue (a song no longer in the collection is dropped with a note).</summary>
+    private void SingNext()
+    {
+        if (Party.Next is not { } next) return;
+        var entry = _all.SelectMany(c => c.Cluster.Versions).Select(v => v.Entry)
+            .FirstOrDefault(e => string.Equals(e.Folder, next.Folder, StringComparison.OrdinalIgnoreCase) && e.IsPlayable);
+        Party.Take(next.Id);
+        if (entry is null)
+        {
+            QueueMessage = $"{next.Title} isn't in the collection any more; skipped.";
+            return;
+        }
+        _preview.Stop();
+        _sing.StartQueued(entry, next.Singer);
+        _navigation.NavigateTo("Sing");
+    }
+
     private void Sing(SongCardViewModel? card)
     {
         if (card is null || !card.Entry.IsPlayable) return;
@@ -639,4 +700,20 @@ public sealed class SongSelectViewModel : ReactiveObject
         _sing.Start(card.Entry);
         _navigation.NavigateTo("Sing");
     }
+}
+
+/// <summary>A line in the "Up next" list.</summary>
+public sealed class QueuedSongViewModel
+{
+    public QueuedSongViewModel(Singularity.Karaoke.Party.QueuedSong item, int place)
+    {
+        Item = item;
+        Place = place;
+    }
+
+    public Singularity.Karaoke.Party.QueuedSong Item { get; }
+    public int Place { get; }
+    public string Singer => Item.Singer;
+    public string Song => $"{Item.Title} · {Item.Artist}";
+    public bool FromPhone => Item.From == "phone";
 }

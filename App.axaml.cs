@@ -737,6 +737,8 @@ public partial class App : Application
         services.AddSingleton<Services.Karaoke.StemStore>();
         services.AddSingleton<Services.Karaoke.KaraokeWorker>();
         services.AddSingleton<Services.Karaoke.HighScoreStore>();
+        services.AddSingleton(_ => new Singularity.Karaoke.Party.PartyQueue(System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Singularity", "party-queue.json")));
         services.AddSingleton<Services.Karaoke.Ingest.KaraokeIngestService>();
         services.AddSingleton<Services.Karaoke.StemSeparationService>();
         services.AddSingleton<Services.Karaoke.IStemSeparator>(sp => sp.GetRequiredService<Services.Karaoke.StemSeparationService>());

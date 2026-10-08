@@ -44,8 +44,19 @@ public sealed class StageBrowseViewModel : ReactiveObject
             else if (e.PropertyName == nameof(SongSelectViewModel.HasPreviewVideo)) this.RaisePropertyChanged(nameof(HasPreviewVideo));
         };
         _songs.Songs.CollectionChanged += (_, _) => Follow();
+        _songs.UpNext.CollectionChanged += (_, _) =>
+        {
+            this.RaisePropertyChanged(nameof(UpNextText));
+            this.RaisePropertyChanged(nameof(HasUpNext));
+        };
         Follow();
     }
+
+    /// <summary>The next three singers for the room: "Alice · Mr. Brightside     Bob · Hot N Cold".</summary>
+    public string UpNextText => string.Join("      ", _songs.UpNext.Take(3).Select(q => $"{q.Place}. {q.Singer} · {q.Item.Title}"))
+        + (_songs.UpNext.Count > 3 ? $"      +{_songs.UpNext.Count - 3} more" : "");
+
+    public bool HasUpNext => _songs.UpNext.Count > 0;
 
     public SongCardViewModel? Current => _current;
 

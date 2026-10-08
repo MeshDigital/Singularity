@@ -124,7 +124,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         _logger = logger;
         BackCommand = new RelayCommand(Back);
         PauseCommand = new RelayCommand(TogglePause);
-        RestartCommand = new RelayCommand(() => { if (_entry is { } e) Start(e); });
+        RestartCommand = new RelayCommand(() => { if (_entry is { } e) Start(e, null, jukebox: false); }); // keeps a queued singer's name
         SkipIntroCommand = new RelayCommand(SkipIntro);
         NextJukeboxCommand = new RelayCommand(() => { if (IsJukebox) PlayNextJukeboxSong(); });
         CycleVocalsCommand = new RelayCommand(CycleVocals);
@@ -259,7 +259,20 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     public ObservableCollection<PlayerResult> Results { get; } = new();
 
     /// <param name="startMs">Where to start playing; null = the song's #START (or the beginning).</param>
-    public void Start(SongEntry entry, double? startMs = null) => Start(entry, startMs, jukebox: false);
+    public void Start(SongEntry entry, double? startMs = null)
+    {
+        _queuedSinger = null;
+        Start(entry, startMs, jukebox: false);
+    }
+
+    /// <summary>Sings a song from the party queue: player 1 is the singer who queued it (results, high scores).</summary>
+    public void StartQueued(SongEntry entry, string singer)
+    {
+        _queuedSinger = singer;
+        Start(entry, null, jukebox: false);
+    }
+
+    private string? _queuedSinger;
 
     /// <summary>
     /// Plays a song for listening: lyrics and video, the original vocals, no microphones or scoring; when it
@@ -483,7 +496,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
     public string TopScoresTitle => $"Best on this song · {Difficulty}";
 
-    private string SingerName(int player) => player == 2 ? _config.KaraokePlayer2Name : _config.KaraokePlayer1Name;
+    private string SingerName(int player) => player == 2 ? _config.KaraokePlayer2Name : _queuedSinger ?? _config.KaraokePlayer1Name;
 
     /// <summary>Keeps the score when it makes the song's top ten; says how it placed.</summary>
     private bool _countsForHighScores;
