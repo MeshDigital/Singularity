@@ -36,6 +36,9 @@ public sealed class SingerSession
 
     public SingScorer Scorer { get; }
 
+    /// <summary>Scores also against what the original singer sang (see <see cref="SingScorer.Reference"/>).</summary>
+    public void UseReference(ReferencePitch reference) => Scorer.Reference = beat => reference.At(_song.BeatToMs(beat));
+
     /// <summary>Time from the singer's voice to the samples reaching <see cref="Push"/>; set by calibration.</summary>
     public double LatencyMs { get; set; }
 

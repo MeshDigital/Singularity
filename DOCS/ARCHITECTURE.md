@@ -162,7 +162,10 @@ accuracy against the human chart is 0.77 for A, 0.70 for B and 0.61 for "needs c
   bonus. A beat earns credit by how close it was sung: full within 20 cents, falling off quadratically to nothing at
   the difficulty's tolerance (Easy 1.75, Medium 1.0, Hard 0.65 semitones); gaps up to half a beat are forgiven, and
   the first 80 ms of a note forgive the attack. Each judged beat reports its offset, which the stage shows as sharp
-  or flat.
+  or flat. With a `ReferencePitch` (the original singer's pitch every 10 ms, read from the separated vocals in the
+  background when a song starts, median-filtered) a sample earns the better of its credit against the note and
+  against the singer, where the singer is within 2 semitones of the note. Measured on 8 songs with the artists' own
+  vocals: +700 to +1,500 on AI charts; a singer 1.5 semitones off gains nothing.
 - **Note lane.** `NoteLaneLayout` keeps one pitch scale per song (its widest line plus a margin) and gives each line
   a centre the stage glides to. The singer's pitch is folded to the octave of the note being sung and steadied by
   `PitchSmoother` (3-reading median, EMA) for display only.

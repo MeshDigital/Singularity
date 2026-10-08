@@ -349,7 +349,8 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
         _map = null;
         _unscored = null;
-        FindUnscoredVocals(entry, song);
+        _reference = null;
+        AnalyseVocals(entry, song);
 
         ApplyVocals();
         IsPaused = false;
@@ -385,6 +386,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                     var player = p;
                     p.Session = new SingerSession(song, p.Voice, capture.SampleRate, Difficulty, _config.KaraokeMicLatencyMs);
                     p.Session.Scorer.BeatJudged += judged => { if (judged.Hit) player.Hits.Add(judged); };
+                    if (_reference is { } reference) p.Session.UseReference(reference);
                     p.Session.Scorer.LineCompleted += line => { player.LastLine = line; player.LastLineBeat = song.MsToBeat(_audio.PositionMs); };
                 }
             }
@@ -606,12 +608,14 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
     private SongMap? _map;
     private volatile IReadOnlyList<TimeSpanMs>? _unscored;
+    private volatile ReferencePitch? _reference;
 
     /// <summary>
-    /// In the background: where the separated original vocals sing with no notes in the chart (heard, never scored),
-    /// for the progress bar and the lane. Songs without separated vocals have none to find.
+    /// In the background, from the separated original vocals: where they sing with no notes in the chart (heard, never
+    /// scored), for the progress bar and the lane; and the singer's pitch curve, which every singer is then also scored
+    /// against (so a chart note that is a little off doesn't cost points). Songs without separated vocals get neither.
     /// </summary>
-    private void FindUnscoredVocals(SongEntry entry, UltraStarSong song)
+    private void AnalyseVocals(SongEntry entry, UltraStarSong song)
     {
         string? vocals = song.VocalsFile is { } name && File.Exists(Path.Combine(entry.Folder, name))
             ? Path.Combine(entry.Folder, name)
@@ -625,6 +629,16 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                 var found = SongMap.FindUnscoredVocals(song, mono, rate);
                 if (ReferenceEquals(_song, song)) _unscored = found;
                 _logger.LogInformation("Sing: {Count} stretches of unscored vocals ({Seconds:0.0} s)", found.Count, found.Sum(f => f.ToMs - f.FromMs) / 1000);
+
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                var reference = ReferencePitch.FromVocals(mono, rate);
+                lock (_sync)
+                {
+                    if (!ReferenceEquals(_song, song)) return;
+                    _reference = reference;
+                    foreach (var p in _players) p.Session?.UseReference(reference);
+                }
+                _logger.LogInformation("Sing: scoring also against the original singer's pitch ({Ms} ms to read it)", watch.ElapsedMilliseconds);
             }
             catch (Exception ex) when (ex is IOException or InvalidOperationException or FormatException or UnauthorizedAccessException)
             {
@@ -672,6 +686,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                 var player = p;
                 p.Session = new SingerSession(song, p.Voice, rate, Difficulty);
                 p.Session.Scorer.BeatJudged += judged => { if (judged.Hit) player.Hits.Add(judged); };
+                    if (_reference is { } reference) p.Session.UseReference(reference);
                 p.Session.Scorer.LineCompleted += line => { player.LastLine = line; player.LastLineBeat = song.MsToBeat(_audio.PositionMs); };
             }
         }

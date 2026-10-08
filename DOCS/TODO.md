@@ -11,7 +11,7 @@ The working list, in the order it will be done. Ticked items stay for a release 
 
 ## Singing feel
 
-- [ ] **Score against the original singer.** At import (and in the background for older songs) save the singer's pitch
+- [x] **Score against the original singer.** At import (and in the background for older songs) save the singer's pitch
   curve from the separated vocals next to the chart. While singing, a beat also counts when it matches what the singer
   actually sang there, so a wrong note in an AI chart no longer costs points. Done: the artist's own vocals score
   clearly higher on AI charts than today (measured with the score bench on the songs with vocals), human charts don't

@@ -78,6 +78,19 @@ public sealed class SingScorer
         _ => 1.0,
     };
 
+    /// <summary>
+    /// The original singer's pitch is only trusted where it is within this many semitones of the chart's note: enough to
+    /// cover a chart that is a semitone or two off, not enough to replace the chart where the reference is noise.
+    /// </summary>
+    public const double ReferenceWithinSemitones = 2;
+
+    /// <summary>
+    /// What the original singer sang, by beat (null where they don't sing). When set, a sample earns the better of its
+    /// credit against the chart's note and against the singer's pitch, where that is within
+    /// <see cref="ReferenceWithinSemitones"/> of the note. Can be set while singing (it's found in the background).
+    /// </summary>
+    public Func<double, double?>? Reference { get; set; }
+
     /// <summary>A sample's credit for singing <paramref name="semitonesOff"/> away from the note.</summary>
     public static double CreditFor(double semitonesOff, Difficulty difficulty)
     {
@@ -162,7 +175,7 @@ public sealed class SingScorer
 
         var note = NoteAt(b);
         if (note is null) return;
-        var (credit, offset) = Judge(note.Note, midi);
+        var (credit, offset) = Judge(note.Note, midi, beat);
         // The attack: a miss here is a scoop onto the note, not counted (capped at half the note).
         if (credit <= 0 && beat - note.Note.StartBeat < Math.Min(_graceBeats, note.Note.DurationBeats / 2.0))
         {
@@ -187,14 +200,29 @@ public sealed class SingScorer
     }
 
     /// <summary>A sample's credit and its distance from the note's pitch class (positive = sharp).</summary>
-    private (double Credit, double Offset) Judge(UltraStarNote note, double? midi)
+    private (double Credit, double Offset) Judge(UltraStarNote note, double? midi, double beat)
     {
         if (midi is not { } sung || double.IsNaN(sung)) return (0, 0);
         if (note.IsRap) return (1, 0);
-        double diff = (sung - note.MidiTone) % 12;
+        double diff = PitchClassDistance(sung, note.MidiTone);
+        double credit = CreditFor(diff, _difficulty);
+        // Where the chart's note is a little off, singing what the artist sang counts too.
+        if (credit < 1 && Reference?.Invoke(beat) is { } artist && Math.Abs(PitchClassDistance(artist, note.MidiTone)) <= ReferenceWithinSemitones)
+        {
+            double toArtist = PitchClassDistance(sung, artist);
+            double artistCredit = CreditFor(toArtist, _difficulty);
+            if (artistCredit > credit) return (artistCredit, toArtist);
+        }
+        return (credit, diff);
+    }
+
+    /// <summary>The distance from <paramref name="target"/> to <paramref name="sung"/> in semitones, octaves ignored (-6..6].</summary>
+    private static double PitchClassDistance(double sung, double target)
+    {
+        double diff = (sung - target) % 12;
         if (diff > 6) diff -= 12;
         if (diff < -6) diff += 12;
-        return (CreditFor(diff, _difficulty), diff);
+        return diff;
     }
 
     private ScoredNote? NoteAt(int beat)

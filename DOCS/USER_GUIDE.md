@@ -115,7 +115,9 @@ At the top of the page:
 
 - **Difficulty**: how far off still earns points: Easy up to 1¾ semitones, Medium up to 1, Hard up to ⅔. Within 20
   cents of the note is always full marks, and the closer you sing, the more you earn. Octaves never matter, and the
-  first moment of a note (a scoop onto it) isn't held against you.
+  first moment of a note (a scoop onto it) isn't held against you. For songs with separated vocals you are also scored
+  against what the original singer actually sang: where a chart's note is a semitone or two off, singing it the way the
+  artist did still counts.
 - **Sing on**: this window, or a projector or TV (see below).
 - **Text size**: the size of lyrics, notes and scores on the stage.
 

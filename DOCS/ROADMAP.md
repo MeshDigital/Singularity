@@ -109,7 +109,7 @@ Still open:
 - [x] Community charts checked against the original singer's pitch; wrong timing or key corrected, or an AI chart made.
 - [x] The progress bar as a map of the singing (per singer, duet partner, unscored vocals), a countdown in seconds
   before lines after long waits, "P2 sings this part" and "Backing vocals: not scored" in the lane, rap notes marked.
-- [ ] Score against the original singer's own pitch curve (saved at import), so AI chart errors don't cost points.
+- [x] Score against the original singer's own pitch curve, so AI chart errors don't cost points.
 - [ ] Timing credit: reward starting a note on time.
 - [ ] Check AI charts with the same pitch check and flag the lines where the singer and chart disagree.
 
