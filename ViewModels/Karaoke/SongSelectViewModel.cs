@@ -28,8 +28,10 @@ public sealed class SongCardViewModel : ReactiveObject
     private bool _coverRequested;
     private int _versionIndex;
 
-    public SongCardViewModel(SongCluster cluster, Func<SongEntry, bool> hasStems, Func<SongEntry, bool> isNew)
+    public SongCardViewModel(SongCluster cluster, Func<SongEntry, bool> hasStems, Func<SongEntry, bool> isNew,
+        Func<SongEntry, Singularity.Contracts.Song.ChartCheck?>? checkOf = null)
     {
+        _checkOf = checkOf;
         Cluster = cluster;
         _hasStemsFor = hasStems;
         _isNewFor = isNew;
@@ -44,6 +46,36 @@ public sealed class SongCardViewModel : ReactiveObject
     }
 
     private bool _hasStems;
+    private readonly Func<SongEntry, Singularity.Contracts.Song.ChartCheck?>? _checkOf;
+    private readonly Dictionary<SongEntry, string?> _warnings = new();
+
+    /// <summary>A line or more that probably doesn't match the singer: from this many on, a card says so.</summary>
+    public const int LinesWorthAWarning = 5;
+
+    /// <summary>
+    /// Why this version's chart may be wrong, from the check against the original singer when Singularity made it:
+    /// "Chart doesn't match the recording", or "7 lines may be off"; null when it's fine or wasn't checked.
+    /// </summary>
+    public string? ChartWarning
+    {
+        get
+        {
+            if (_checkOf is null) return null;
+            if (!_warnings.TryGetValue(Entry, out var warning))
+            {
+                warning = _checkOf(Entry) switch
+                {
+                    { Mismatch: true } => "Chart doesn't match the recording",
+                    { LinesToCheck.Count: >= LinesWorthAWarning } c => $"{c.LinesToCheck.Count} lines may be off",
+                    _ => null,
+                };
+                _warnings[Entry] = warning;
+            }
+            return warning;
+        }
+    }
+
+    public bool HasChartWarning => ChartWarning is not null;
     private string? _separating;
 
     public SongCluster Cluster { get; }
@@ -61,7 +93,7 @@ public sealed class SongCardViewModel : ReactiveObject
         _versionIndex = ((_versionIndex + step) % Cluster.Versions.Count + Cluster.Versions.Count) % Cluster.Versions.Count;
         _coverRequested = false;
         _hasStems = _hasStemsFor(Entry);
-        foreach (var name in new[] { nameof(Version), nameof(Entry), nameof(VersionText), nameof(Details), nameof(Cover), nameof(HasStems), nameof(CanSeparate), nameof(IsNew), nameof(Artist) })
+        foreach (var name in new[] { nameof(Version), nameof(Entry), nameof(VersionText), nameof(Details), nameof(Cover), nameof(HasStems), nameof(CanSeparate), nameof(IsNew), nameof(Artist), nameof(ChartWarning), nameof(HasChartWarning) })
             this.RaisePropertyChanged(name);
     }
 
@@ -521,7 +553,7 @@ public sealed class SongSelectViewModel : ReactiveObject
             var result = await _library.ScanAsync();
             // One card per song; charts of the same song are its versions.
             var clusters = await Task.Run(() => SongClusters.Build(result.Songs, _library.TierOf, twoPlayers: _config.KaraokeMic2Enabled));
-            _all = clusters.Select(c => new SongCardViewModel(c, e => _stems.Find(e) is not null, _library.IsNew)
+            _all = clusters.Select(c => new SongCardViewModel(c, e => _stems.Find(e) is not null, _library.IsNew, _library.CheckOf)
             {
                 BestScore = _highScores?.Best(Singularity.Karaoke.Scoring.HighScoreTable.SongKey(c.Artist, c.Title))?.Score,
             }).ToList();
@@ -544,7 +576,7 @@ public sealed class SongSelectViewModel : ReactiveObject
 
     // ── Sort and filter ────────────────────────────────────────────────────
     public string[] SortOptions { get; } = { "Artist", "Title", "Recently added", "Year", "Best score" };
-    public string[] ShowOptions { get; } = { "All songs", "New", "With video", "Duets", "Community charts", "AI charts", "Not sung yet" };
+    public string[] ShowOptions { get; } = { "All songs", "New", "With video", "Duets", "Community charts", "AI charts", "Not sung yet", "Charts to check" };
     public const string AnyLanguage = "Any language";
 
     private string _sort = "Artist";
@@ -566,6 +598,7 @@ public sealed class SongSelectViewModel : ReactiveObject
         "Community charts" => c.Cluster.Versions.Any(v => !v.IsAi),
         "AI charts" => c.Cluster.Versions.Any(v => v.IsAi),
         "Not sung yet" => c.BestScore is null,
+        "Charts to check" => c.Cluster.Versions.Any(v => _library.CheckOf(v.Entry) is { } k && (k.Mismatch || k.LinesToCheck.Count >= SongCardViewModel.LinesWorthAWarning)),
         _ => true,
     };
 

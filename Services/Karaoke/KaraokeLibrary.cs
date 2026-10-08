@@ -105,6 +105,21 @@ public sealed class KaraokeLibrary
         }
     }
 
+    /// <summary>The chart against the original singer, for songs Singularity made since the check exists; else null.</summary>
+    public ChartCheck? CheckOf(SongEntry entry)
+    {
+        var path = Path.Combine(entry.Folder, SongPackage.MetadataFileName);
+        if (!File.Exists(path)) return null;
+        try
+        {
+            return SongPackage.Deserialize(File.ReadAllText(path)).Check;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// The music video that goes with an audio file, for players outside the sing screen: a karaoke song
     /// whose audio is that very file, or a song Singularity made from it (its audio is a copy: same size).

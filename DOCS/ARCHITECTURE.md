@@ -166,6 +166,10 @@ accuracy against the human chart is 0.77 for A, 0.70 for B and 0.61 for "needs c
   background when a song starts, median-filtered) a sample earns the better of its credit against the note and
   against the singer, where the singer is within 2 semitones of the note. Measured on 8 songs with the artists' own
   vocals: +700 to +1,500 on AI charts; a singer 1.5 semitones off gains nothing.
+- **Chart note check.** `ChartNoteCheck` compares each note with the singer's median pitch over it: agreeing within
+  half a semitone, steadily elsewhere (corrected in AI charts at import), lines where most notes disagree, and a
+  mismatch below 40% agreement. The result is `metadata.json`'s `check`; song select shows it, and the Sing page runs
+  it again from the reference curve for every song with separated vocals.
 - **Note lane.** `NoteLaneLayout` keeps one pitch scale per song (its widest line plus a margin) and gives each line
   a centre the stage glides to. The singer's pitch is folded to the octave of the note being sung and steadied by
   `PitchSmoother` (3-reading median, EMA) for display only.

@@ -16,7 +16,7 @@ The working list, in the order it will be done. Ticked items stay for a release 
   actually sang there, so a wrong note in an AI chart no longer costs points. Done: the artist's own vocals score
   clearly higher on AI charts than today (measured with the score bench on the songs with vocals), human charts don't
   get easier for a singer who is off, tests.
-- [ ] **Check AI charts against the singer.** The pitch check community charts get, per line, for AI charts: lines where
+- [x] **Check AI charts against the singer.** The pitch check community charts get, per line, for AI charts: lines where
   the chart and the singer disagree are flagged ("needs checking" with the line numbers) and, where the singer's pitch is
   clear, the note is corrected. Done: measured on the songs with vocals, flagged lines visible in song select.
 - [ ] **Credit for timing.** A small bonus for starting a note on time, within the line bonus. Done: a late singer loses a

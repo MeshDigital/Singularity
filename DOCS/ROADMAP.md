@@ -111,7 +111,8 @@ Still open:
   before lines after long waits, "P2 sings this part" and "Backing vocals: not scored" in the lane, rap notes marked.
 - [x] Score against the original singer's own pitch curve, so AI chart errors don't cost points.
 - [ ] Timing credit: reward starting a note on time.
-- [ ] Check AI charts with the same pitch check and flag the lines where the singer and chart disagree.
+- [x] Check charts against the singer: AI charts' steadily-wrong notes corrected at import, "lines may be off" and
+  "chart doesn't match the recording" in song select and on the Sing page.
 
 ### Larger work
 

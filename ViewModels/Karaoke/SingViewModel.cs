@@ -350,6 +350,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
         _map = null;
         _unscored = null;
         _reference = null;
+        ChartWarning = null;
         AnalyseVocals(entry, song);
 
         ApplyVocals();
@@ -606,6 +607,21 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
 
     private System.Threading.Timer? _demoTimer;
 
+    private string? _chartWarning;
+
+    /// <summary>Set when the chart turns out not to fit the original singer (checked in the background as the song starts).</summary>
+    public string? ChartWarning
+    {
+        get => _chartWarning;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _chartWarning, value);
+            this.RaisePropertyChanged(nameof(HasChartWarning));
+        }
+    }
+
+    public bool HasChartWarning => _chartWarning is not null;
+
     private SongMap? _map;
     private volatile IReadOnlyList<TimeSpanMs>? _unscored;
     private volatile ReferencePitch? _reference;
@@ -639,6 +655,17 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
                     foreach (var p in _players) p.Session?.UseReference(reference);
                 }
                 _logger.LogInformation("Sing: scoring also against the original singer's pitch ({Ms} ms to read it)", watch.ElapsedMilliseconds);
+
+                // Does the chart fit the singer at all? (A wrong #GAP, another edit of the song.)
+                var notes = Singularity.Karaoke.Sync.ChartNoteCheck.Check(song, reference);
+                _logger.LogInformation("Sing: notes against the singer: {Agreement:P0} agree, {Lines} of {Total} lines to check",
+                    notes.Agreement, notes.LinesToCheck.Count, notes.Lines);
+                if (notes.Mismatch)
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        if (ReferenceEquals(_song, song))
+                            ChartWarning = $"This chart doesn't match the recording: only {notes.Agreement:P0} of its notes are where the singer sings.";
+                    });
             }
             catch (Exception ex) when (ex is IOException or InvalidOperationException or FormatException or UnauthorizedAccessException)
             {

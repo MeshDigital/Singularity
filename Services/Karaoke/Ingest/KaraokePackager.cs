@@ -11,6 +11,7 @@ using Singularity.Contracts.Inference;
 using Singularity.Contracts.Quality;
 using Singularity.Contracts.Song;
 using Singularity.Contracts.UltraStar;
+using Singularity.Karaoke.Scoring;
 using Singularity.Karaoke.Sync;
 
 namespace Singularity.Services.Karaoke.Ingest;
@@ -273,6 +274,32 @@ public sealed class KaraokePackager
                 models = analysis.Models;
             }
 
+            // The notes against what the singer sang (from the vocals the song now has): an AI chart's notes the singer
+            // sings steadily elsewhere are moved there; a community chart is only measured (people chart the intended
+            // melody). The result is kept in metadata.json for song select.
+            ChartCheck? noteCheck = null;
+            var vocalsInPackage = Path.Combine(staging, vocals);
+            if (File.Exists(vocalsInPackage))
+            {
+                var singer = ReferencePitch.FromVocals(await _media.DecodeMonoAsync(vocalsInPackage, ChartPitchCheck.SampleRate, ct), ChartPitchCheck.SampleRate);
+                var result = ChartNoteCheck.Check(chart!, singer);
+                int corrected = 0;
+                if (chartSource is null && result.Corrections.Count > 0)
+                {
+                    corrected = result.Corrections.Count;
+                    chart = ChartNoteCheck.Apply(chart!, result.Corrections);
+                    result = ChartNoteCheck.Check(chart, singer);
+                    notes.Add($"{corrected} notes moved to where the singer sings them.");
+                }
+                if (result.Judged > 0)
+                {
+                    noteCheck = new ChartCheck(Math.Round(result.Agreement, 3), result.LinesToCheck, corrected, result.Mismatch);
+                    if (result.Mismatch) notes.Add("The chart's notes don't match the singer: check it before singing.");
+                    _logger.LogInformation("Ingest: notes against the singer: {Agreement:P0} agree, {Lines} of {Total} lines to check, {Corrected} corrected",
+                        result.Agreement, result.LinesToCheck.Count, result.Lines, corrected);
+                }
+            }
+
             string? cover = null;
             if (source.CoverUrl is { Length: > 0 } coverUrl)
             {
@@ -363,6 +390,7 @@ public sealed class KaraokePackager
                 Language = languageCode ?? song.Language,
                 DurationMs = durationMs,
                 Timing = new TimingDescriptor(song.Bpm, song.GapMs, videoGap.VideoGapMs, videoGap.IsValid),
+                Check = noteCheck,
                 Quality = quality,
                 Provenance = new PipelineProvenance(
                     Generator, InferenceEngine: null, models, DateTime.UtcNow, sw.ElapsedMilliseconds),

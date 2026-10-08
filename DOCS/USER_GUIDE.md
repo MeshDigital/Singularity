@@ -118,6 +118,11 @@ At the top of the page:
   first moment of a note (a scoop onto it) isn't held against you. For songs with separated vocals you are also scored
   against what the original singer actually sang: where a chart's note is a semitone or two off, singing it the way the
   artist did still counts.
+
+**Charts that may be wrong.** Each song Singularity makes is checked against the original singer: an AI chart's notes
+the singer clearly sings elsewhere are moved there, and a card says "7 lines may be off" or "Chart doesn't match the
+recording" when something is wrong (Show → *Charts to check* lists them). Any song with separated vocals is checked
+again when you sing it, and the Sing page says so if the chart doesn't fit. Right-click a song to make a new chart.
 - **Sing on**: this window, or a projector or TV (see below).
 - **Text size**: the size of lyrics, notes and scores on the stage.
 

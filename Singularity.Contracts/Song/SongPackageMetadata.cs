@@ -33,7 +33,17 @@ public sealed record SongPackageMetadata
     public required TimingDescriptor Timing { get; init; }
     public required QualityAssessment Quality { get; init; }
     public required PipelineProvenance Provenance { get; init; }
+
+    /// <summary>How the chart's notes compare with the original singer (null for packages made before the check).</summary>
+    public ChartCheck? Check { get; init; }
 }
+
+/// <summary>The chart against the original singer's pitch, from the separated vocals.</summary>
+/// <param name="Agreement">Share of the notes the singer sings within half a semitone (of those they sing enough of).</param>
+/// <param name="LinesToCheck">1-based line numbers where fewer than half the notes agree.</param>
+/// <param name="NotesCorrected">Notes of an AI chart moved to where the singer sings them steadily.</param>
+/// <param name="Mismatch">The chart doesn't fit the recording at all.</param>
+public sealed record ChartCheck(double Agreement, IReadOnlyList<int> LinesToCheck, int NotesCorrected, bool Mismatch);
 
 /// <param name="Chromaprint">Raw fpcalc fingerprint of the master audio.</param>
 /// <param name="AcoustId">AcoustID track id, when the lookup matched.</param>

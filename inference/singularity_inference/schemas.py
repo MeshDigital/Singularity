@@ -73,6 +73,15 @@ class PipelineProvenance(Contract):
     processing_duration_ms: int
 
 
+class ChartCheck(Contract):
+    """The chart against the original singer's pitch (written by the app; mirrored for completeness)."""
+
+    agreement: float
+    lines_to_check: list[int] = []
+    notes_corrected: int = 0
+    mismatch: bool = False
+
+
 class SongPackageMetadata(Contract):
     schema_version: int = Field(default=METADATA_SCHEMA_VERSION, le=METADATA_SCHEMA_VERSION)
     track_id: str
@@ -87,6 +96,7 @@ class SongPackageMetadata(Contract):
     timing: TimingDescriptor
     quality: QualityAssessment
     provenance: PipelineProvenance
+    check: ChartCheck | None = None
 
 
 # ── Worker protocol ──────────────────────────────────────────────────────────────────────────────
