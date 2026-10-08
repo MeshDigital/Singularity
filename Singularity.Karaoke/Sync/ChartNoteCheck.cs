@@ -94,6 +94,19 @@ public static class ChartNoteCheck
         return new ChartNoteResult(judged, agreeing, lines, linesToCheck, corrections);
     }
 
+    /// <summary>
+    /// Where the singer sings this note: the semitones to move it (0 when they sing it, or when they don't sing it clearly
+    /// enough to say: too little voiced, or not held steady).
+    /// </summary>
+    public static int CorrectionFor(UltraStarSong chart, UltraStarNote note, ReferencePitch singer)
+    {
+        if (!note.IsScored || note.IsRap || note.DurationBeats <= 0 || Sung(chart, note, singer) is not { } offsets) return 0;
+        offsets.Sort();
+        double median = offsets[offsets.Count / 2];
+        if (Math.Abs(median) < AgreeSemitones) return 0;
+        return offsets[offsets.Count * 3 / 4] - offsets[offsets.Count / 4] < SteadySemitones ? (int)Math.Round(median) : 0;
+    }
+
     /// <summary>The singer's distance from the note (semitones, -6..6) every 10 ms, or null when too little is sung.</summary>
     private static List<double>? Sung(UltraStarSong chart, UltraStarNote note, ReferencePitch singer)
     {
