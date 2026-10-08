@@ -5,7 +5,7 @@ The working list, in the order it will be done. Ticked items stay for a release 
 
 ## Now
 
-- [ ] **Release 0.2.2-alpha.** The download queue no longer stalls after a stalled download; "Separating the vocals" and
+- [x] **Release 0.2.2-alpha.** The download queue no longer stalls after a stalled download; "Separating the vocals" and
   "Placing the community chart" instead of "Generating AI chart"; Downloads filters (the counts are filters, a search,
   songs still moving first). Done: installed, smoke-tested, a screenshot of the Downloads page, released on GitHub.
 
