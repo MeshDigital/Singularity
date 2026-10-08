@@ -36,12 +36,14 @@ public sealed class StageBrowseViewModel : ReactiveObject
     public StageBrowseViewModel(SongSelectViewModel songs)
     {
         _songs = songs;
+        WatchPhones(songs.Phones);
         _songs.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(SongSelectViewModel.SelectedSong)) Follow();
             else if (e.PropertyName == nameof(SongSelectViewModel.PreviewVideoPath)) this.RaisePropertyChanged(nameof(PreviewVideoPath));
             else if (e.PropertyName == nameof(SongSelectViewModel.PreviewVideoGapMs)) this.RaisePropertyChanged(nameof(PreviewVideoGapMs));
             else if (e.PropertyName == nameof(SongSelectViewModel.HasPreviewVideo)) this.RaisePropertyChanged(nameof(HasPreviewVideo));
+            else if (e.PropertyName == nameof(SongSelectViewModel.Phones)) WatchPhones(_songs.Phones);
         };
         _songs.Songs.CollectionChanged += (_, _) => Follow();
         _songs.UpNext.CollectionChanged += (_, _) =>
@@ -57,6 +59,29 @@ public sealed class StageBrowseViewModel : ReactiveObject
         + (_songs.UpNext.Count > 3 ? $"      +{_songs.UpNext.Count - 3} more" : "");
 
     public bool HasUpNext => _songs.UpNext.Count > 0;
+
+    private Singularity.Services.Karaoke.Party.PhoneRemoteServer? _phones;
+    private Bitmap? _phoneQr;
+
+    private void WatchPhones(Singularity.Services.Karaoke.Party.PhoneRemoteServer? phones)
+    {
+        if (phones is null || ReferenceEquals(phones, _phones)) return;
+        _phones = phones;
+        phones.StateChanged += () => Avalonia.Threading.Dispatcher.UIThread.Post(PhonesChanged);
+        PhonesChanged();
+    }
+
+    private void PhonesChanged()
+    {
+        _phoneQr = null;
+        this.RaisePropertyChanged(nameof(PhoneQr));
+        this.RaisePropertyChanged(nameof(HasPhoneQr));
+    }
+
+    /// <summary>The phones' QR code while they are allowed in: "scan to pick a song".</summary>
+    public Bitmap? PhoneQr => _phones?.Url is { } url ? _phoneQr ??= Singularity.Services.Karaoke.Party.PhoneQr.Render(url) : null;
+
+    public bool HasPhoneQr => _phones?.Url is not null;
 
     public SongCardViewModel? Current => _current;
 

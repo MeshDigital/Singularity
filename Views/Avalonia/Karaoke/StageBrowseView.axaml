@@ -17,6 +17,17 @@
             </Grid.Background>
             <Border Background="#40000000"/>
 
+            <!-- Phones join here: the QR code, bottom right (clear of the covers and the title). -->
+            <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,60,110" Background="#59000000" CornerRadius="18" Padding="14"
+                    IsVisible="{Binding HasPhoneQr}">
+                <StackPanel Spacing="8">
+                    <Border Background="White" CornerRadius="10" Padding="8">
+                        <Image Source="{Binding PhoneQr}" Width="200" Height="200"/>
+                    </Border>
+                    <TextBlock Text="Scan to pick a song" FontSize="22" FontWeight="SemiBold" Foreground="#E8ECFF" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
             <!-- Who sings next, for the room. -->
             <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="60,28,0,0" Background="#59000000" CornerRadius="22" Padding="22,10"
                     IsVisible="{Binding HasUpNext}">

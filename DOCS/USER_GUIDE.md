@@ -173,6 +173,16 @@ Connect the projector or TV as a second display (Windows: *Extend*), then choose
 
 Both screens share the same selection, so the laptop and the room can take turns choosing.
 
+**The party queue.** Who sings what next. Right-click a song and choose **Add to the queue** (under the name typed in
+the *Up next* panel on the Sing page), or let guests add themselves from their phones. The projector shows the next
+three singers; **Sing next** starts the top one, under that singer's name (results and high scores say who sang).
+Each singer can have three songs waiting. The queue survives a restart.
+
+**Phones.** Turn on Settings → Phones → *Guests pick songs and join the queue from their phone*. A QR code appears on
+the projector: guests on the same Wi-Fi scan it, type their name once, search the songs and tap **Sing this**. Nothing
+to install. Only phones on your network with the code's key get in, and the key changes every time Singularity starts.
+The first time, Windows asks whether Singularity may use the network: allow it for private networks.
+
 ## 5. Downloads
 
 **Downloads** lists every song on its way, with one status from *Searching Soulseek* to *Ready to sing*, and counts

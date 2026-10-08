@@ -154,6 +154,7 @@ the phone companion (singing into your phone), a chart editor and party modes. S
 - [LRCLIB](https://lrclib.net) for synced lyrics.
 - [Demucs](https://github.com/facebookresearch/demucs), [faster-whisper](https://github.com/SYSTRAN/faster-whisper),
   [torchaudio's MMS forced aligner](https://pytorch.org/audio/) and SwiftF0 in the AI worker; [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://ffmpeg.org) for media.
+- [EmbedIO](https://github.com/unosquare/embedio) (MIT) for the phones' web server and [QRCoder](https://github.com/codebude/QRCoder) (MIT) for the QR code.
 - UltraStarKaraokeMaker (MIT) for the chart-making pipeline it is modelled on, and
   [UltraStar-CLI](https://github.com/martiinii/UltraStar-CLI) (MIT) for how USDB pages are read.
 

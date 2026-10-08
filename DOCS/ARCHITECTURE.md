@@ -176,6 +176,11 @@ accuracy against the human chart is 0.77 for A, 0.70 for B and 0.61 for "needs c
 - **Note lane.** `NoteLaneLayout` keeps one pitch scale per song (its widest line plus a margin) and gives each line
   a centre the stage glides to. The singer's pitch is folded to the octave of the note being sung and steadied by
   `PitchSmoother` (3-reading median, EMA) for display only.
+- **Party queue and phones.** `PartyQueue` (Singularity.Karaoke) holds who sings what next (3 per singer, kept in
+  `party-queue.json`). `PhoneRemoteServer` serves the phone page and a small JSON API with EmbedIO's own listener
+  (no URL reservations or admin rights): only while switched on, only to private/loopback addresses, and every API
+  call needs the key from the QR code (new per start; constant-time compare; 4 KB bodies). The page puts song text in
+  with `textContent` only.
 - **Song map.** `SongMap` holds each voice's stretches of notes and, found in the background from the separated
   vocals (50 ms loudness, within 20 dB of their loud end, at least 1.2 s, clear of every voice's notes), the singing
   the chart doesn't score. The stage draws it as the progress bar and uses it for the lane's labels.

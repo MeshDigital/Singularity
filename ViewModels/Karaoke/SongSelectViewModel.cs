@@ -245,6 +245,9 @@ public sealed class SongSelectViewModel : ReactiveObject
     private readonly HighScoreStore? _highScores;
     private readonly Services.Karaoke.Ingest.KaraokeIngestService? _ingest;
     private List<SongCardViewModel> _all = new();
+
+    /// <summary>Every song card (all versions grouped), as last scanned: for the phones' search. Replaced, never changed.</summary>
+    public IReadOnlyList<SongCardViewModel> AllSongs => _all;
     private string _searchText = "";
     private string _statusText = "";
     private bool _isLoading;
@@ -469,6 +472,15 @@ public sealed class SongSelectViewModel : ReactiveObject
 
     /// <summary>Song select as the projector shows it.</summary>
     public StageBrowseViewModel Browse => _browse ??= new StageBrowseViewModel(this);
+
+    private Singularity.Services.Karaoke.Party.PhoneRemoteServer? _phones;
+
+    /// <summary>The phone server, once it exists (it registers itself): the projector shows its QR code.</summary>
+    public Singularity.Services.Karaoke.Party.PhoneRemoteServer? Phones
+    {
+        get => _phones;
+        set => this.RaiseAndSetIfChanged(ref _phones, value);
+    }
 
     /// <summary>Puts song select on the stage display, when one is chosen (and takes it down otherwise).</summary>
     public void ShowOnStage() => _stage.ShowIdle(_stage.SelectedKey == StageScreenService.MainWindowKey ? null : Browse);

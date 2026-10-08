@@ -89,10 +89,10 @@ Still open:
 
 ### Integrations (days each)
 
-1. **Phones as remote controls, in the browser**: a small local web server and a QR code on the projector; guests
+1. ✅ **Phones as remote controls, in the browser**: a small local web server and a QR code on the projector; guests
    browse the collection and queue songs from their phone without installing anything. This is the first step
    towards phones as microphones.
-2. **Party queue**: singers' names, who's next, shown on the projector between songs; filled from phones, the laptop
+2. ✅ **Party queue**: singers' names, who's next, shown on the projector between songs; filled from phones, the laptop
    or the projector's song select.
 3. **Watched Spotify playlists**: a "karaoke" playlist that's re-synced now and then, so songs added on Spotify
    appear in Singularity by themselves (ORBIT's playlist sync does the work).

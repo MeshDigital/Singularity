@@ -33,8 +33,15 @@ public sealed class KaraokeSettingsViewModel : ReactiveObject
     private string _usdbStatus = "";
 
     public KaraokeSettingsViewModel(SettingsViewModel orbit, AppConfig config, ConfigManager configManager, KaraokeLibrary library,
-        SingViewModel sing, INavigationService navigation)
+        SingViewModel sing, INavigationService navigation, Services.Karaoke.Party.PhoneRemoteServer? phones = null)
     {
+        _phones = phones;
+        if (phones is not null)
+            phones.StateChanged += () => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                foreach (var name in new[] { nameof(PhoneUrl), nameof(PhoneQr), nameof(HasPhoneQr), nameof(PhoneStatus) })
+                    this.RaisePropertyChanged(name);
+            });
         Orbit = orbit;
         _config = config;
         InferenceWorkerOptions.ChosenDirectory = string.IsNullOrWhiteSpace(config.KaraokeInferenceFolder) ? null : config.KaraokeInferenceFolder;
@@ -111,6 +118,30 @@ public sealed class KaraokeSettingsViewModel : ReactiveObject
     public bool IngestAllDownloads { get => _config.KaraokeIngestAllDownloads; set => Set(v => _config.KaraokeIngestAllDownloads = v, value); }
     public bool UseCommunityCharts { get => _config.KaraokeUseCommunityCharts; set => Set(v => _config.KaraokeUseCommunityCharts = v, value); }
     public bool DownloadVideos { get => _config.KaraokeDownloadVideos; set => Set(v => _config.KaraokeDownloadVideos = v, value); }
+
+    // ── Phones ─────────────────────────────────────────────────────────────
+
+    private readonly Services.Karaoke.Party.PhoneRemoteServer? _phones;
+
+    /// <summary>Guests' phones may browse the songs and join the queue (on this network, with the QR code's key).</summary>
+    public bool PhoneRemote
+    {
+        get => _config.KaraokePhoneRemote;
+        set
+        {
+            Set(v => _config.KaraokePhoneRemote = v, value);
+            if (value) _phones?.Start();
+            else _phones?.Stop();
+        }
+    }
+
+    public string? PhoneUrl => _phones?.Url;
+    public Avalonia.Media.Imaging.Bitmap? PhoneQr => _phones?.Url is { } url ? Services.Karaoke.Party.PhoneQr.Render(url, 6) : null;
+    public bool HasPhoneQr => _phones?.Url is not null;
+
+    public string PhoneStatus => _phones is null ? "" : _phones.IsRunning
+        ? "Phones on this Wi-Fi scan the code on the projector (or this one) to pick songs and join the queue."
+        : _config.KaraokePhoneRemote ? "No local network found: connect to Wi-Fi and switch this off and on." : "Off.";
 
     // ── USDB account ───────────────────────────────────────────────────────
 

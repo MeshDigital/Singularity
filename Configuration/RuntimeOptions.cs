@@ -47,6 +47,12 @@ public static class RuntimeOptions
     /// </summary>
     public static bool DemoSinger { get; private set; }
 
+    /// <summary>
+    /// Development shortcut: <c>--phones-local</c> starts the phone server on this computer only (127.0.0.1), whatever the
+    /// setting: to test the phone page in a browser here without Windows asking about network access.
+    /// </summary>
+    public static bool PhonesLocal { get; private set; }
+
     public static void Initialize(IEnumerable<string> args)
     {
         var list = args.ToList();
@@ -63,6 +69,7 @@ public static class RuntimeOptions
         StageScreen = ValueAfter("--stage");
         ImportLink = ValueAfter("--import");
         DemoSinger = list.Any(a => a.Equals("--demo-singer", StringComparison.OrdinalIgnoreCase));
+        PhonesLocal = list.Any(a => a.Equals("--phones-local", StringComparison.OrdinalIgnoreCase));
         Players = int.TryParse(ValueAfter("--players"), out var players) ? players : null;
         SingStartSeconds = double.TryParse(ValueAfter("--sing-start"), System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var start) ? start : null;

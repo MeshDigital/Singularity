@@ -172,6 +172,23 @@
                 </StackPanel>
             </Border>
 
+            <!-- Phones -->
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="section" Text="Phones"/>
+                    <CheckBox IsChecked="{Binding PhoneRemote}" Content="Guests pick songs and join the queue from their phone"/>
+                    <TextBlock Text="Only phones on this network, with the QR code shown on the projector. Windows asks once whether Singularity may use the network: allow it for private networks."
+                               Foreground="#889" FontSize="12" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding PhoneStatus}" Foreground="#9BD" FontSize="13" TextWrapping="Wrap"/>
+                    <StackPanel Orientation="Horizontal" Spacing="16" IsVisible="{Binding HasPhoneQr}">
+                        <Border Background="White" CornerRadius="8" Padding="6">
+                            <Image Source="{Binding PhoneQr}" Width="150" Height="150"/>
+                        </Border>
+                        <SelectableTextBlock Text="{Binding PhoneUrl}" VerticalAlignment="Center" Foreground="#DDE" FontSize="13"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- System -->
             <Border Classes="card">
                 <StackPanel Spacing="8">

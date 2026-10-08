@@ -267,6 +267,10 @@ public partial class App : Application
 
                             Services.GetRequiredService<UiStallWatchdog>().Start();
                             OpenDevelopmentShortcuts();
+                            if (Singularity.Configuration.RuntimeOptions.PhonesLocal)
+                                Services.GetRequiredService<Singularity.Services.Karaoke.Party.PhoneRemoteServer>().Start(localOnly: true);
+                            else if (Services.GetRequiredService<AppConfig>().KaraokePhoneRemote)
+                                Services.GetRequiredService<Singularity.Services.Karaoke.Party.PhoneRemoteServer>().Start();
                         });
 
                         // --- THE BARRIER: WE ARE NOW DATA-SAFE ---
@@ -737,6 +741,7 @@ public partial class App : Application
         services.AddSingleton<Services.Karaoke.StemStore>();
         services.AddSingleton<Services.Karaoke.KaraokeWorker>();
         services.AddSingleton<Services.Karaoke.HighScoreStore>();
+        services.AddSingleton<Services.Karaoke.Party.PhoneRemoteServer>();
         services.AddSingleton(_ => new Singularity.Karaoke.Party.PartyQueue(System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Singularity", "party-queue.json")));
         services.AddSingleton<Services.Karaoke.Ingest.KaraokeIngestService>();

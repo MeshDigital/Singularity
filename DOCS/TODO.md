@@ -25,10 +25,11 @@ The working list, in the order it will be done. Ticked items stay for a release 
 
 ## Party night
 
-- [ ] **Phones as remotes, in the browser.** A small local web server and a QR code on the projector; guests browse the
+- [x] **Phones as remotes, in the browser.** A small local web server and a QR code on the projector; guests browse the
   collection and queue songs from their phone, nothing to install. Done: works on an Android and an iPhone on the same
-  Wi-Fi, only on the local network, nothing exposed to the internet.
-- [ ] **Party queue.** Singers' names and who's next, shown on the projector between songs; filled from phones, the
+  Wi-Fi, only on the local network, nothing exposed to the internet. (Tested here end to end on 127.0.0.1 and in a
+  390 px browser frame; a real phone over Wi-Fi is still to be tried.)
+- [x] **Party queue.** Singers' names and who's next, shown on the projector between songs; filled from phones, the
   laptop or the projector's song select.
 - [ ] **Watched Spotify playlist.** A "karaoke" playlist re-synced now and then, so songs added on Spotify appear by
   themselves (ORBIT's playlist sync does the work).

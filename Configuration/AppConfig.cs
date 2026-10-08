@@ -67,6 +67,9 @@ public class AppConfig
     /// <summary>Use a community chart from USDB when there is a good one, before making an AI chart.</summary>
     public bool KaraokeUseCommunityCharts { get; set; } = true;
 
+    /// <summary>Phones on this network may browse the songs and queue themselves (a QR code shows on the projector). Off by default.</summary>
+    public bool KaraokePhoneRemote { get; set; }
+
     /// <summary>Look for the music video on YouTube (yt-dlp) for new songs.</summary>
     public bool KaraokeDownloadVideos { get; set; } = true;
 
