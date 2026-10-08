@@ -145,7 +145,7 @@ Alpha. The whole path from a Spotify link to a sung song with video works and ha
 on a sample of 50 human-charted songs, AI charts get about 70% of the notes within 100 ms of the human chart and
 about 85% of pitches within a semitone; community charts from USDB are better wherever they exist. Not built yet:
 the phone companion (singing into your phone), a chart editor and party modes. See the
-[roadmap](DOCS/ROADMAP.md).
+[roadmap](DOCS/ROADMAP.md) and the [to-do list](DOCS/TODO.md).
 
 ## Credits
 
