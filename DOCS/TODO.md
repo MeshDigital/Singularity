@@ -50,7 +50,10 @@ The working list, in the order it will be done. Ticked items stay for a release 
 ## Small fixes
 
 - [x] *Remove* on the song folder Singularity found by itself doesn't stick.
-- [ ] A slow download's backup transfer from a second peer can write to the same `.part` file for a moment.
+- [ ] A slow download's backup transfer from a second peer can write to the same `.part` file for a moment. Looked
+  into: the backup ("hedge") starts when the first transfer stalls, but the stalled Soulseek transfer isn't stopped
+  before it; the first one then finished and the file was right. Fixing it means changing how ORBIT's download engine
+  cancels a peer's transfer: left until it causes real harm.
 - [x] README screenshots with one singer (the current ones show two: the screenshot machine has two set up).
 - [x] An installed copy started from inside the source folder logs to the source folder's `logs` (it takes it for a
   development run).
