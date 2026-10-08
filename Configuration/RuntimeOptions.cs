@@ -56,6 +56,9 @@ public static class RuntimeOptions
     /// </summary>
     public static bool PhonesLocal { get; private set; }
 
+    /// <summary>Development shortcut: <c>--edit "D:\Songs\Artist - Title"</c> opens the chart editor on that song.</summary>
+    public static string? EditFolder { get; private set; }
+
     public static void Initialize(IEnumerable<string> args)
     {
         var list = args.ToList();
@@ -73,6 +76,7 @@ public static class RuntimeOptions
         ImportLink = ValueAfter("--import");
         DemoSinger = list.Any(a => a.Equals("--demo-singer", StringComparison.OrdinalIgnoreCase));
         PhonesLocal = list.Any(a => a.Equals("--phones-local", StringComparison.OrdinalIgnoreCase));
+        EditFolder = ValueAfter("--edit");
         Players = int.TryParse(ValueAfter("--players"), out var players) ? players : null;
         SingStartSeconds = double.TryParse(ValueAfter("--sing-start"), System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var start) ? start : null;

@@ -37,7 +37,9 @@ The working list, in the order it will be done. Ticked items stay for a release 
 
 ## Larger work
 
-- [ ] **A simple chart editor.** Shift the gap, nudge a line, fix a pitch; opened from songs that need checking.
+- [x] **A simple chart editor.** Shift the gap, nudge a line, fix a pitch; opened from songs that need checking.
+  (Right-click → *Fix the chart…* on songs Singularity made. Still to do: duets' second voice, moving or resizing
+  single notes, editing the lyrics.)
 - [ ] **Better AI charts,** measured with ChartBench (today: about 70% of notes within 100 ms, 85% of pitches within a
   semitone).
 - [ ] **Phones as microphones** (the companion app): pitch on the phone, clock sync, per-phone latency calibration.

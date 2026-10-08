@@ -1,0 +1,90 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Singularity.ViewModels.Karaoke"
+             xmlns:k="clr-namespace:Singularity.Views.Avalonia.Karaoke"
+             x:Class="Singularity.Views.Avalonia.Karaoke.ChartEditorPage"
+             x:DataType="vm:ChartEditorViewModel"
+             x:CompileBindings="True"
+             Background="{DynamicResource BrushBg1}" Foreground="White" Focusable="True">
+    <UserControl.Styles>
+        <Style Selector="Button.tool">
+            <Setter Property="Background" Value="#1AFFFFFF"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Margin" Value="0,0,6,6"/>
+        </Style>
+        <Style Selector="TextBlock.group">
+            <Setter Property="Foreground" Value="#9AA"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,10,6"/>
+            <Setter Property="MinWidth" Value="90"/>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Fixing a chart: the lines on the left (to check marked), the selected line with the singer's pitch, the fixes. -->
+    <Grid RowDefinitions="Auto,*" Margin="28,22">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+            <Button Classes="tool" Content="&#x2190; Back" Command="{Binding BackCommand}" VerticalAlignment="Top"/>
+            <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="2">
+                <TextBlock Text="{Binding Title}" FontSize="26" FontWeight="Bold"/>
+                <TextBlock Text="{Binding Artist}" Foreground="#AAB"/>
+                <TextBlock Text="{Binding Summary}" Foreground="#9BD" FontSize="13" Margin="0,4,0,0"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+                <Button Classes="tool" Content="Undo" Command="{Binding UndoCommand}"/>
+                <Button Classes="accent" Content="Save" Command="{Binding SaveCommand}" IsEnabled="{Binding IsDirty}" Padding="18,6" Margin="0,0,0,6"/>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" ColumnDefinitions="330,*" Margin="0,16,0,0">
+            <ListBox ItemsSource="{Binding Lines}" SelectedItem="{Binding SelectedLine}" Background="#0AFFFFFF" CornerRadius="12">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:EditorLineRow">
+                        <Grid ColumnDefinitions="34,*,Auto">
+                            <TextBlock Text="{Binding Number}" Foreground="#778" FontSize="12" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Text}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            <Border Grid.Column="2" Background="#33FFB347" CornerRadius="6" Padding="6,1" Margin="6,0,0,0" IsVisible="{Binding ToCheck}"
+                                    ToolTip.Tip="Most of this line's notes aren't where the original singer sings them">
+                                <TextBlock Text="check" Foreground="#FFB347" FontSize="11"/>
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <Grid Grid.Column="1" RowDefinitions="*,Auto,Auto" Margin="16,0,0,0">
+                <k:ChartLineView x:Name="LineView" Frame="{Binding Frame}" MinHeight="300"/>
+                <TextBlock Grid.Row="1" Text="{Binding Status}" Foreground="#CCD" Margin="2,10,0,10" TextWrapping="Wrap"/>
+                <StackPanel Grid.Row="2" Spacing="2">
+                    <WrapPanel>
+                        <TextBlock Classes="group" Text="This line"/>
+                        <Button Classes="tool" Content="&#x25B6; Play" Command="{Binding PlayLineCommand}" ToolTip.Tip="Play the line (again to stop)"/>
+                        <Button Classes="tool" Content="Use the singer's pitch" Command="{Binding UseSingerCommand}"
+                                ToolTip.Tip="Move the notes the original singer clearly sings elsewhere to where they sing them"/>
+                        <Button Classes="tool" Content="&#x25C0; Earlier" Command="{Binding ShiftLineCommand}" CommandParameter="-1" ToolTip.Tip="One beat earlier"/>
+                        <Button Classes="tool" Content="Later &#x25B6;" Command="{Binding ShiftLineCommand}" CommandParameter="1" ToolTip.Tip="One beat later"/>
+                        <Button Classes="tool" Content="&#x25B2; Up" Command="{Binding TransposeLineCommand}" CommandParameter="1" ToolTip.Tip="Every note a semitone higher"/>
+                        <Button Classes="tool" Content="&#x25BC; Down" Command="{Binding TransposeLineCommand}" CommandParameter="-1" ToolTip.Tip="Every note a semitone lower"/>
+                    </WrapPanel>
+                    <WrapPanel>
+                        <TextBlock Classes="group" Text="Selected note"/>
+                        <Button Classes="tool" Content="&#x25B2; Higher" Command="{Binding NoteToneCommand}" CommandParameter="1"/>
+                        <Button Classes="tool" Content="&#x25BC; Lower" Command="{Binding NoteToneCommand}" CommandParameter="-1"/>
+                        <TextBlock Text="Click a note to select it." Foreground="#778" FontSize="12" VerticalAlignment="Center" Margin="6,0,0,6"/>
+                    </WrapPanel>
+                    <WrapPanel>
+                        <TextBlock Classes="group" Text="Whole chart"/>
+                        <Button Classes="tool" Content="Fit to the singer" Command="{Binding FitToSingerCommand}"
+                                ToolTip.Tip="Find where (and in which key) the whole chart matches the original singer best, up to 10 s either way"/>
+                        <Button Classes="tool" Content="&#x2212;100 ms" Command="{Binding ShiftAllCommand}" CommandParameter="-100"/>
+                        <Button Classes="tool" Content="&#x2212;20 ms" Command="{Binding ShiftAllCommand}" CommandParameter="-20"/>
+                        <Button Classes="tool" Content="+20 ms" Command="{Binding ShiftAllCommand}" CommandParameter="20"/>
+                        <Button Classes="tool" Content="+100 ms" Command="{Binding ShiftAllCommand}" CommandParameter="100"/>
+                        <TextBlock Text="Earlier or later: every line moves together." Foreground="#778" FontSize="12" VerticalAlignment="Center" Margin="6,0,0,6"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

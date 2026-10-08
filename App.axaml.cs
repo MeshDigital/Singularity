@@ -504,6 +504,17 @@ public partial class App : Application
             Services.GetRequiredService<ViewModels.Karaoke.SingViewModel>().Start(entry, Singularity.Configuration.RuntimeOptions.SingStartSeconds * 1000);
             navigation.NavigateTo("Sing");
         }
+        else if (Singularity.Configuration.RuntimeOptions.EditFolder is { } editFolder)
+        {
+            var entry = Singularity.Karaoke.Library.SongScanner.Scan(new[] { editFolder }).Songs.FirstOrDefault();
+            if (entry is null || !ViewModels.Karaoke.ChartEditorViewModel.CanEdit(entry))
+            {
+                Serilog.Log.Warning("--edit: no song Singularity made in {Folder}", editFolder);
+                return;
+            }
+            Services.GetRequiredService<ViewModels.Karaoke.ChartEditorViewModel>().Open(entry);
+            navigation.NavigateTo("ChartEditor");
+        }
         else if (Singularity.Configuration.RuntimeOptions.OpenPage is { } page)
         {
             navigation.NavigateTo(page);
@@ -758,6 +769,8 @@ public partial class App : Application
         services.AddSingleton<ViewModels.Karaoke.MicSetupViewModel>();
         services.AddTransient<Views.Avalonia.Karaoke.MicSetupPage>();
         services.AddSingleton<ViewModels.Karaoke.AddSongsViewModel>();
+        services.AddSingleton<ViewModels.Karaoke.ChartEditorViewModel>();
+        services.AddTransient<Views.Avalonia.Karaoke.ChartEditorPage>();
         services.AddSingleton<ViewModels.Karaoke.KaraokeDownloadsViewModel>();
         services.AddSingleton<ViewModels.Karaoke.KaraokeSettingsViewModel>();
         services.AddTransient<Views.Avalonia.Karaoke.AddSongsPage>();

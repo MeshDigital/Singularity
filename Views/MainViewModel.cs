@@ -417,6 +417,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _navigationService.RegisterPage("Sing", typeof(Avalonia.Karaoke.SingPage));
         _navigationService.RegisterPage("MicSetup", typeof(Avalonia.Karaoke.MicSetupPage));
         _navigationService.RegisterPage("AddSongs", typeof(Avalonia.Karaoke.AddSongsPage));
+        _navigationService.RegisterPage("ChartEditor", typeof(Avalonia.Karaoke.ChartEditorPage));
 
         // Subscribe to navigation events
         _navigationService.Navigated += OnNavigated;
@@ -794,6 +795,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (typeof(Avalonia.SettingsPage).IsAssignableFrom(pageType)) return PageType.Settings;
         if (typeof(Avalonia.UsersPage).IsAssignableFrom(pageType)) return PageType.Users;
         if (typeof(Avalonia.Karaoke.SongSelectPage).IsAssignableFrom(pageType)) return PageType.Karaoke;
+        if (typeof(Avalonia.Karaoke.ChartEditorPage).IsAssignableFrom(pageType)) return PageType.Karaoke; // opened from Sing
         if (typeof(Avalonia.Karaoke.SingPage).IsAssignableFrom(pageType)) return PageType.Sing;
         if (typeof(Avalonia.Karaoke.MicSetupPage).IsAssignableFrom(pageType)) return PageType.MicSetup;
         if (typeof(Avalonia.Karaoke.AddSongsPage).IsAssignableFrom(pageType)) return PageType.AddSongs;

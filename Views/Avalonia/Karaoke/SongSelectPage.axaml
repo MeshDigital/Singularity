@@ -119,6 +119,7 @@
                         <Grid.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Add to the queue" Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).AddToQueueCommand}" CommandParameter="{Binding}"/>
+                                <MenuItem Header="Fix the chart…" Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).FixChartCommand}" CommandParameter="{Binding}"/>
                                 <MenuItem Header="Make an AI chart" Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).MakeAiChartCommand}" CommandParameter="{Binding}"/>
                                 <MenuItem Header="Look for a community chart" Command="{Binding $parent[ListBox].((vm:SongSelectViewModel)DataContext).FindCommunityChartCommand}" CommandParameter="{Binding}"/>
                             </ContextMenu>

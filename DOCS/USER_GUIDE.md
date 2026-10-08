@@ -125,6 +125,17 @@ At the top of the page:
 the singer clearly sings elsewhere are moved there, and a card says "7 lines may be off" or "Chart doesn't match the
 recording" when something is wrong (Show → *Charts to check* lists them). Any song with separated vocals is checked
 again when you sing it, and the Sing page says so if the chart doesn't fit. Right-click a song to make a new chart.
+
+**Fixing a chart.** Right-click a song Singularity made and choose **Fix the chart…**. The lines are listed on the
+left (*check* marks those that don't match the original singer) and the selected line is drawn with the singer as
+blue dots: the notes should sit on them. **Play** plays the line. Fixes:
+- **Fit to the singer** finds where (and in which key) the whole chart matches the singer best, up to 10 s either way.
+- **−100 / −20 / +20 / +100 ms** move the whole chart a little.
+- For the selected line: **Use the singer's pitch** (moves the notes the singer clearly sings elsewhere), **Earlier /
+  Later** by a beat, **Up / Down** a semitone.
+- Click a note, then **Higher / Lower** to change just that one.
+Every change can be undone. **Save** writes the chart and keeps the first version next to it as `song.txt.orig`.
+Songs in your own folders aren't edited.
 - **Sing on**: this window, or a projector or TV (see below).
 - **Text size**: the size of lyrics, notes and scores on the stage.
 

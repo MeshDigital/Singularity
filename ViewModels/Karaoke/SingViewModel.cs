@@ -688,7 +688,7 @@ public sealed class SingViewModel : ReactiveObject, IDisposable
     }
 
     /// <summary>A WAV (or other NAudio-readable file) as mono samples, with its sample rate.</summary>
-    private static (float[] Samples, int Rate) ReadMono(string path)
+    internal static (float[] Samples, int Rate) ReadMono(string path)
     {
         using var reader = new NAudio.Wave.AudioFileReader(path);
         int rate = reader.WaveFormat.SampleRate, channels = reader.WaveFormat.Channels;

@@ -117,7 +117,8 @@ Still open:
 ### Larger work
 
 - **Better AI charts**, measured with ChartBench: recall is about 70% at 100 ms and pitch within a semitone about 85%.
-- **A simple correction editor**: shift the gap, nudge lines, fix a pitch; opened from songs that need checking.
+- ✅ **A simple correction editor**: shift the gap, nudge lines, fix a pitch; opened from songs that need checking
+  (next: the second voice of duets, moving single notes, lyrics).
 - **Phones as microphones** (the companion): pitch on the phone, clock sync and per-phone latency calibration.
 - **Party modes**: teams, rounds, duel, blind, until-5000.
 

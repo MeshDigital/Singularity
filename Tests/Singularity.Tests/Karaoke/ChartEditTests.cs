@@ -99,4 +99,37 @@ public class ChartEditTests
         var again = UltraStarSerializer.Read(UltraStarSerializer.Write(edited));
         Assert.Equal(edited.Voices[0].Notes.Select(n => (n.Type, n.StartBeat, n.MidiTone)), again.Voices[0].Notes.Select(n => (n.Type, n.StartBeat, n.MidiTone)));
     }
+
+    /// <summary>A singer who sings <paramref name="chart"/>'s notes exactly where they are.</summary>
+    private static ReferencePitch SingerOf(UltraStarSong chart)
+    {
+        var readings = new List<(double, double)>();
+        foreach (var n in chart.Voices[0].Notes.Where(n => n.Type != NoteType.LineBreak))
+            for (double ms = chart.BeatToMs(n.StartBeat); ms < chart.BeatToMs(n.StartBeat + n.DurationBeats); ms += 10)
+                readings.Add((ms, 48 + ((n.MidiTone % 12) + 12) % 12));
+        return ReferencePitch.FromReadings(readings, chart.BeatToMs(4000));
+    }
+
+    [Fact]
+    public void FitToSinger_MovesALateChartBack()
+    {
+        var chart = ChartSyncTests.Chart();
+        var late = ChartEdit.ShiftAll(chart, 2000);
+
+        var (fitted, ms, semitones, before, after) = ChartEdit.FitToSinger(late, SingerOf(chart));
+
+        Assert.InRange(ms, -2030, -1970);
+        Assert.Equal(0, semitones);
+        Assert.True(after > before + 0.3, $"{before:P0} -> {after:P0}");
+        Assert.InRange(fitted.GapMs, chart.GapMs - 30, chart.GapMs + 30);
+    }
+
+    [Fact]
+    public void FitToSinger_LeavesAFittingChartAlone()
+    {
+        var chart = ChartSyncTests.Chart();
+        var (fitted, ms, _, _, _) = ChartEdit.FitToSinger(chart, SingerOf(chart));
+        Assert.Same(chart, fitted);
+        Assert.Equal(0, ms);
+    }
 }

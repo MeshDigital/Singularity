@@ -256,8 +256,17 @@ public sealed class SongSelectViewModel : ReactiveObject
     public SongSelectViewModel(KaraokeLibrary library, SingViewModel sing, SongPreviewPlayer preview, StageScreenService stage,
         StemStore stems, StemSeparationService separation, StemBatchQueue batch, INavigationService navigation, ILogger<SongSelectViewModel> logger,
         Singularity.Configuration.AppConfig config, HighScoreStore? highScores = null,
-        Services.Karaoke.Ingest.KaraokeIngestService? ingest = null, Singularity.Karaoke.Party.PartyQueue? party = null)
+        Services.Karaoke.Ingest.KaraokeIngestService? ingest = null, Singularity.Karaoke.Party.PartyQueue? party = null,
+        ChartEditorViewModel? editor = null)
     {
+        _editor = editor;
+        FixChartCommand = new RelayCommand<SongCardViewModel>(card =>
+        {
+            if (card is null || _editor is null || !ChartEditorViewModel.CanEdit(card.Entry)) return;
+            _preview.Stop();
+            _editor.Open(card.Entry);
+            _navigation.NavigateTo("ChartEditor");
+        }, card => card is not null && ChartEditorViewModel.CanEdit(card.Entry));
         _ingest = ingest;
         Party = party ?? new Singularity.Karaoke.Party.PartyQueue();
         Party.Changed += () => Avalonia.Threading.Dispatcher.UIThread.Post(RefreshQueue);
@@ -650,6 +659,11 @@ public sealed class SongSelectViewModel : ReactiveObject
         this.RaisePropertyChanged(nameof(Languages));
         if (!Languages.Contains(_language)) Language = AnyLanguage;
     }
+
+    private readonly ChartEditorViewModel? _editor;
+
+    /// <summary>Opens the correction editor for a song Singularity made.</summary>
+    public ICommand FixChartCommand { get; }
 
     // ── Party queue ───────────────────────────────────────────────────────
     public Singularity.Karaoke.Party.PartyQueue Party { get; }

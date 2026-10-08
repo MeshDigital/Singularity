@@ -74,6 +74,13 @@ public sealed class ReferencePitch
         return FromReadings(readings, vocals.Length * 1000.0 / sampleRate);
     }
 
+    /// <summary>Every sung frame as (time in ms, MIDI): what <see cref="Sync.ChartPitchCheck"/> searches over.</summary>
+    public IEnumerable<(double Ms, double Midi)> Readings()
+    {
+        for (int f = 0; f < _midi.Length; f++)
+            if (!float.IsNaN(_midi[f])) yield return (f * (double)FrameMs, _midi[f]);
+    }
+
     /// <summary>The singer's pitch at <paramref name="ms"/> (song time), or null where they don't sing.</summary>
     public double? At(double ms)
     {

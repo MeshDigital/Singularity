@@ -31,6 +31,20 @@ public static class ChartEdit
         return lines;
     }
 
+    /// <summary>
+    /// The whole chart moved (and transposed) to where the original singer sings it best, searching ±10 s and every
+    /// key (<see cref="ChartPitchCheck"/>). Only taken when it clearly helps (5 points more of the singing on the notes).
+    /// Returns the chart, the correction, and the share of the singing on the notes before and after.
+    /// </summary>
+    public static (UltraStarSong Song, int Ms, int Semitones, double Before, double After) FitToSinger(UltraStarSong song, ReferencePitch singer)
+    {
+        var fit = ChartPitchCheck.Check(song, singer.Readings().ToList());
+        if (fit.BestShare - fit.Share < 0.05 || (fit.GapCorrectionMs == 0 && fit.Transpose == 0))
+            return (song, 0, 0, fit.Share, fit.Share);
+        var moved = ChartPitchCheck.Transpose(ChartSync.Shift(song, fit.GapCorrectionMs), fit.Transpose);
+        return (moved, fit.GapCorrectionMs, fit.Transpose, fit.Share, fit.BestShare);
+    }
+
     /// <summary>The whole chart <paramref name="ms"/> later (negative: earlier).</summary>
     public static UltraStarSong ShiftAll(UltraStarSong song, int ms) => ChartSync.Shift(song, ms);
 
