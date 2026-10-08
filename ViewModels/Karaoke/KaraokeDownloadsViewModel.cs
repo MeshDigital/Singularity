@@ -114,7 +114,11 @@ public sealed class KaraokeDownloadRow : ReactiveObject, IDisposable
             Progress = d.Progress;
             IsReady = d.Status == DownloadRowStatus.Completed && _inLibrary(Artist, Title) == true;
             IsFailed = d.Status is DownloadRowStatus.Failed or DownloadRowStatus.Cancelled;
-            Detail = IsFailed && !string.IsNullOrWhiteSpace(d.StatusText) ? d.StatusText : null;
+            // The download center's reason, unless it only repeats the status ("Failed", "Cancelled").
+            Detail = IsFailed && !string.IsNullOrWhiteSpace(d.StatusText)
+                     && !d.StatusText.Trim().Equals("Failed", StringComparison.OrdinalIgnoreCase)
+                     && !d.StatusText.Trim().Equals("Cancelled", StringComparison.OrdinalIgnoreCase)
+                ? d.StatusText : null;
             Phase = IsFailed ? Stage.Failed : d.Status == DownloadRowStatus.Completed ? Stage.Ready : Stage.Coming;
         }
         this.RaisePropertyChanged(nameof(RetryCommand));
